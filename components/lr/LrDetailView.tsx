@@ -1,13 +1,15 @@
+import Link from "next/link";
 import { LrStatusChip } from "@/components/LrStatusChip";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { cx } from "@/lib/cx";
 import { Chip } from "@/components/ui/Chip";
 import { PageHeader } from "@/components/ui/PageHeader";
 import type { LrDetail } from "@/lib/data/lr-detail";
 import { formatDate, formatRupees } from "@/lib/format";
 import { chargedAsLabel, joinAnd, paymentModeLabel } from "@/lib/labels";
-import { lrChargeBreakdown } from "@/lib/lr-charges";
+import { lrChargeBreakdown, lrTotalWeight } from "@/lib/lr-charges";
 import { ewayUrgency } from "@/lib/lr-status";
 import type { GstPayer } from "@/lib/types";
 import { CANCELLABLE, lrPrimaryAction } from "./LrActions";
@@ -76,7 +78,9 @@ function PartiesCard({ detail }: { detail: LrDetail }) {
       <DetailRow label="Consignee GSTIN" mono>
         {dash(consignee?.gstin)}
       </DetailRow>
-      <DetailRow label="Billed to">{nameOf(billedTo)}</DetailRow>
+      <DetailRow label="Billed to">
+        {billedTo?.sameAsConsignee ? `${billedTo.name} (same as consignee)` : nameOf(billedTo)}
+      </DetailRow>
       <DetailRow label="Billed to GSTIN" mono>
         {dash(billedTo?.gstin)}
       </DetailRow>
@@ -88,26 +92,56 @@ function PartiesCard({ detail }: { detail: LrDetail }) {
   );
 }
 
+/** Goods as a compact table: item, packages, weight / size, then the totals. */
+function GoodsTable({ items }: { items: LrDetail["lr"]["items"] }) {
+  if (items.length === 0) return <DetailRow label="Goods">—</DetailRow>;
+  const th = "border-b border-border py-2 text-[13px] font-semibold text-muted";
+  const td = "border-b border-border-row py-2 align-top";
+  const packages = items.reduce((sum, i) => sum + i.packages, 0);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-left text-sm">
+        <thead>
+          <tr>
+            <th className={th}>Item</th>
+            <th className={cx(th, "px-3 text-right")}>Pkgs</th>
+            <th className={cx(th, "text-right")}>Weight / size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id}>
+              <td className={td}>{item.description}</td>
+              <td className={cx(td, "px-3 text-right")}>{item.packages}</td>
+              <td className={cx(td, "text-right")}>
+                {[item.size, item.chargedWeight ?? item.actualWeight].filter(Boolean).join(" · ") ||
+                  "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        {
+          <tfoot>
+            <tr className="font-semibold">
+              <td className="border-b border-border-row py-2">Total</td>
+              <td className="border-b border-border-row px-3 py-2 text-right">{packages}</td>
+              <td className="border-b border-border-row py-2 text-right">
+                {lrTotalWeight(items) ?? "—"}
+              </td>
+            </tr>
+          </tfoot>
+        }
+      </table>
+    </div>
+  );
+}
+
 function ShipmentCard({ detail, nowMs }: { detail: LrDetail; nowMs: number }) {
   const { lr, driver, invoices } = detail;
   const charges = lrChargeBreakdown(lr.charges, lr.gstPaidBy);
   return (
     <Card title="Shipment" className="min-w-0 flex-[1_1_380px]">
-      {lr.items.length === 0 ? (
-        <DetailRow label="Goods">—</DetailRow>
-      ) : (
-        lr.items.map((item) => (
-          <div key={item.id}>
-            <DetailRow label="Goods">
-              {item.description} · {item.packages} pkgs
-            </DetailRow>
-            <DetailRow label="Weight / size">
-              {[item.size, item.chargedWeight ?? item.actualWeight].filter(Boolean).join(" · ") ||
-                "—"}
-            </DetailRow>
-          </div>
-        ))
-      )}
+      <GoodsTable items={lr.items} />
       <DetailRow label="Charged as">{lr.chargedAs ? chargedAsLabel[lr.chargedAs] : "—"}</DetailRow>
       <DetailRow label="Value">
         {lr.totalValuePaise === null ? "—" : formatRupees(lr.totalValuePaise)}
@@ -165,7 +199,15 @@ function ShipmentCard({ detail, nowMs }: { detail: LrDetail; nowMs: number }) {
         )}
       </DetailRow>
       {charges.empty ? (
-        <DetailRow label="Freight">Not entered</DetailRow>
+        <DetailRow label="Freight">
+          Not entered
+          {lr.status !== "Cancelled" && (
+            <>
+              {" · "}
+              <Link href={`/lr/${lr.id}/edit#freight`}>Add freight</Link>
+            </>
+          )}
+        </DetailRow>
       ) : (
         <>
           {charges.lines.map((l) => (
@@ -205,24 +247,23 @@ function DocumentsCard({ detail }: { detail: LrDetail }) {
           </DocTile>
         )}
         {invoices.length === 0 ? (
-          <DocTile title="Tax invoice" note="not yet" />
+          <DocTile title="Goods invoice" note="not yet" />
         ) : (
-          invoices.map((inv, i) =>
-            inv.taxInvoice ? (
-              <DocTile
-                key={i}
-                href={`/invoices/${inv.taxInvoice.id}`}
-                title="Tax invoice"
-                note={inv.invoiceNo}
-              >
-                {inv.taxInvoice.hasSourceFile ? "source file attached" : "no source file"}
-              </DocTile>
-            ) : (
-              <DocTile key={i} title="Tax invoice" note={`${inv.invoiceNo} · not yet`}>
-                typed on the LR; no invoice made here
-              </DocTile>
-            ),
-          )
+          invoices.map((inv) => (
+            <DocTile
+              key={inv.id}
+              href={inv.taxInvoice ? `/invoices/${inv.taxInvoice.id}` : undefined}
+              title={`Goods invoice ${inv.invoiceNo}`}
+              note={inv.invoiceDate ? formatDate(inv.invoiceDate) : undefined}
+              action={
+                inv.taxInvoice?.hasSourceFile ? undefined : (
+                  <Link href={`/import?lr=${lr.id}`}>Attach</Link>
+                )
+              }
+            >
+              {inv.taxInvoice?.hasSourceFile ? "source file attached" : "no copy attached"}
+            </DocTile>
+          ))
         )}
         <DocTile
           href={`/lr/${lr.id}/pod`}

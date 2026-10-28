@@ -74,6 +74,13 @@ describe("lrTimeline", () => {
     expect(lrTimeline(inTransit)[1].at).toBe(T);
   });
 
+  it("a draft shows one current Draft step, then grey steps with no dates", () => {
+    const steps = lrTimeline({ ...draft, dispatchedAt: T });
+    expect(steps[0]).toEqual({ stage: "Draft", at: null, state: "current" });
+    expect(steps.slice(1).every((s) => s.state === "upcoming" && s.at === null)).toBe(true);
+    expect(steps).toHaveLength(7);
+  });
+
   it("has no current stage once cancelled", () => {
     expect(states({ ...booked, cancelledAt: T })).not.toContain("current");
   });

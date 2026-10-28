@@ -541,94 +541,98 @@ export function LrForm({
               />
             </Card>
 
-            <Card title="Freight & payment">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {FORM_CHARGES.map(({ key, label }) => {
-                  const isGst = key === "gst";
-                  const off = isGst && !gstOn;
-                  return (
-                    <Field
-                      key={key}
-                      id={`charges.${key}`}
-                      label={label}
-                      inputMode="decimal"
-                      placeholder={
-                        off
-                          ? values.gstPaidBy
-                            ? `Paid by ${values.gstPaidBy}`
-                            : "Pick GST payer"
-                          : "₹"
-                      }
-                      disabled={off}
-                      value={off ? "" : values.charges[key]}
-                      onChange={(e) =>
-                        set({ charges: { ...values.charges, [key]: e.target.value } })
-                      }
-                      onBlur={(e) =>
-                        set({
-                          charges: { ...values.charges, [key]: tidyRupees(e.target.value) },
-                        })
-                      }
-                      error={errors[`charges.${key}`]}
-                    />
-                  );
-                })}
-                <Field
-                  id="balance"
-                  label="Balance"
-                  readOnly
-                  tabIndex={-1}
-                  placeholder="Auto = total − advance"
-                  value={
-                    totals.totalPaise || totals.advancePaise ? formatPaise(totals.balancePaise) : ""
-                  }
-                  hint={
-                    totals.totalPaise
-                      ? `Total ${formatRupees(totals.totalPaise)} − advance ${formatRupees(totals.advancePaise)}`
-                      : undefined
-                  }
-                  className="[&_input]:bg-page"
-                />
-              </div>
-              <fieldset
-                className="m-0 mt-4 flex flex-wrap gap-3 border-0 p-0"
-                aria-invalid={errors.paymentMode ? true : undefined}
-                aria-describedby={errors.paymentMode ? "paymentMode-msg" : undefined}
-              >
-                <legend className="mb-2 p-0 text-[13px] font-semibold text-label">
-                  Payment mode
-                </legend>
-                {PAYMENT_MODES.map((m) => {
-                  const on = values.paymentMode === m;
-                  return (
-                    <label
-                      key={m}
-                      className={cx(
-                        "inline-flex h-control cursor-pointer items-center gap-2 rounded-control px-4 text-sm",
-                        on
-                          ? "border-2 border-primary bg-primary-soft px-[15px] font-semibold"
-                          : "border border-border-input font-medium",
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMode"
-                        id={m === PAYMENT_MODES[0] ? "paymentMode" : undefined}
-                        value={m}
-                        checked={on}
-                        onChange={() => set({ paymentMode: m })}
+            <div id="freight" className="scroll-mt-4">
+              <Card title="Freight & payment">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {FORM_CHARGES.map(({ key, label }) => {
+                    const isGst = key === "gst";
+                    const off = isGst && !gstOn;
+                    return (
+                      <Field
+                        key={key}
+                        id={`charges.${key}`}
+                        label={label}
+                        inputMode="decimal"
+                        placeholder={
+                          off
+                            ? values.gstPaidBy
+                              ? `Paid by ${values.gstPaidBy}`
+                              : "Pick GST payer"
+                            : "₹"
+                        }
+                        disabled={off}
+                        value={off ? "" : values.charges[key]}
+                        onChange={(e) =>
+                          set({ charges: { ...values.charges, [key]: e.target.value } })
+                        }
+                        onBlur={(e) =>
+                          set({
+                            charges: { ...values.charges, [key]: tidyRupees(e.target.value) },
+                          })
+                        }
+                        error={errors[`charges.${key}`]}
                       />
-                      {paymentModeText(m)}
-                    </label>
-                  );
-                })}
-              </fieldset>
-              {errors.paymentMode && (
-                <div id="paymentMode-msg" className="mt-1.5 text-[13px] text-danger">
-                  {errors.paymentMode}
+                    );
+                  })}
+                  <Field
+                    id="balance"
+                    label="Balance"
+                    readOnly
+                    tabIndex={-1}
+                    placeholder="Auto = total − advance"
+                    value={
+                      totals.totalPaise || totals.advancePaise
+                        ? formatPaise(totals.balancePaise)
+                        : ""
+                    }
+                    hint={
+                      totals.totalPaise
+                        ? `Total ${formatRupees(totals.totalPaise)} − advance ${formatRupees(totals.advancePaise)}`
+                        : undefined
+                    }
+                    className="[&_input]:bg-page"
+                  />
                 </div>
-              )}
-            </Card>
+                <fieldset
+                  className="m-0 mt-4 flex flex-wrap gap-3 border-0 p-0"
+                  aria-invalid={errors.paymentMode ? true : undefined}
+                  aria-describedby={errors.paymentMode ? "paymentMode-msg" : undefined}
+                >
+                  <legend className="mb-2 p-0 text-[13px] font-semibold text-label">
+                    Payment mode
+                  </legend>
+                  {PAYMENT_MODES.map((m) => {
+                    const on = values.paymentMode === m;
+                    return (
+                      <label
+                        key={m}
+                        className={cx(
+                          "inline-flex h-control cursor-pointer items-center gap-2 rounded-control px-4 text-sm",
+                          on
+                            ? "border-2 border-primary bg-primary-soft px-[15px] font-semibold"
+                            : "border border-border-input font-medium",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentMode"
+                          id={m === PAYMENT_MODES[0] ? "paymentMode" : undefined}
+                          value={m}
+                          checked={on}
+                          onChange={() => set({ paymentMode: m })}
+                        />
+                        {paymentModeText(m)}
+                      </label>
+                    );
+                  })}
+                </fieldset>
+                {errors.paymentMode && (
+                  <div id="paymentMode-msg" className="mt-1.5 text-[13px] text-danger">
+                    {errors.paymentMode}
+                  </div>
+                )}
+              </Card>
+            </div>
           </div>
 
           <aside className="flex flex-[1_1_300px] flex-col gap-4">

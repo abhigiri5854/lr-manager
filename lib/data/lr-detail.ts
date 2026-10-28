@@ -2,13 +2,21 @@ import { describeAudit } from "@/lib/lr-activity";
 import { lrTimeline, type TimelineStep } from "@/lib/lr-status";
 import type { FreightBillView, LrView, Paise, Pod, PartySnapshot } from "@/lib/types";
 import { billForLr, billPaidOn, toLrView } from "./_derive";
+import { billingPartyFor } from "./billing-party";
 import { db, findById, scoped } from "./_store";
 import { getFreightBillById } from "./bills";
 import { listPodPending } from "./pod";
 
-export type DetailParty = { name: string; place: string | null; gstin: string | null };
+export type DetailParty = {
+  name: string;
+  place: string | null;
+  gstin: string | null;
+  /** Billed-to only: the LR has no billed-to party, so the consignee pays. */
+  sameAsConsignee?: boolean;
+};
 
 export type DetailInvoice = {
+  id: string;
   invoiceNo: string;
   invoiceDate: string | null;
   valuePaise: Paise | null;
@@ -110,10 +118,11 @@ export async function getLrDetail(companyId: string, id: string): Promise<LrDeta
     lr,
     consignor: detailParty(raw.snapshot?.consignor, raw.consignorId, companyId),
     consignee: detailParty(raw.snapshot?.consignee, raw.consigneeId, companyId),
-    billedTo: detailParty(raw.snapshot?.billedTo, raw.billedToId, companyId),
+    billedTo: billingPartyFor(raw),
     invoices: raw.lrInvoices.map((i) => {
       const ti = i.taxInvoiceId ? findById(db.taxInvoices, companyId, i.taxInvoiceId) : undefined;
       return {
+        id: i.id,
         invoiceNo: i.invoiceNo,
         invoiceDate: i.invoiceDate,
         valuePaise: i.valuePaise,

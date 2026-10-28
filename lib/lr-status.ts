@@ -50,7 +50,8 @@ export const LR_STAGES = [
 export type LrStage = (typeof LR_STAGES)[number];
 
 export type TimelineStep = {
-  stage: LrStage;
+  /** "Draft" only appears, alone and first, on an LR that isn't booked yet. */
+  stage: LrStage | "Draft";
   /** ISO date or timestamp the stage was reached, null if not yet. */
   at: string | null;
   /** "current" is the next stage to happen; a cancelled LR has none. */
@@ -67,6 +68,12 @@ export function lrTimeline(lr: LrStatusInput): TimelineStep[] {
     Billed: lr.billedAt,
     Paid: lr.paidAt,
   };
+  if (!lr.cancelledAt && !lr.bookedAt) {
+    return [
+      { stage: "Draft", at: null, state: "current" },
+      ...LR_STAGES.map((stage) => ({ stage, at: null, state: "upcoming" as const })),
+    ];
+  }
   let currentTaken = !!lr.cancelledAt;
   return LR_STAGES.map((stage) => {
     if (at[stage]) return { stage, at: at[stage], state: "done" };

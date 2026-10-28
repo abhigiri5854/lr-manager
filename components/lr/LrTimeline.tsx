@@ -7,12 +7,16 @@ const DAY_MS = 86_400_000;
 /** The note under each stage: when it happened, or what it is waiting for. */
 function note(step: LrDetail["timeline"][number], d: LrDetail): string {
   const { lr } = d;
+  if (lr.status === "Draft") return "—";
   switch (step.stage) {
+    case "Draft":
+      return "";
     case "Booked":
       return step.at ? formatDate(step.at) : "not booked";
     case "In transit": {
+      // The truck is only part of the story once the LR has been dispatched.
+      if (!step.at) return "pending";
       const truck = lr.truckNumber ? `truck ${lr.truckNumber}` : null;
-      if (!step.at) return truck ?? "pending";
       return [formatDate(step.at), truck].filter(Boolean).join(" · ");
     }
     case "Delivered":
@@ -52,10 +56,16 @@ export function LrTimeline({ detail }: { detail: LrDetail }) {
             state[step.state],
           )}
         >
-          <b>{step.stage}</b>
-          <span className="sr-only">{stateWord[step.state]}</span>
-          <br />
-          <span className="text-xs">{note(step, detail)}</span>
+          {step.stage === "Draft" ? (
+            <b>Draft — not booked yet</b>
+          ) : (
+            <>
+              <b>{step.stage}</b>
+              <span className="sr-only">{stateWord[step.state]}</span>
+              <br />
+              <span className="text-xs">{note(step, detail)}</span>
+            </>
+          )}
         </li>
       ))}
     </ol>

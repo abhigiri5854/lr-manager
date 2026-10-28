@@ -1,3 +1,4 @@
+import { billingPartyFor } from "./billing-party";
 import { formatPaise } from "@/lib/format";
 import { financialYear } from "@/lib/fy";
 import { companySnapshot, partySnapshot } from "@/lib/snapshots";
@@ -147,7 +148,7 @@ export async function getFreightBillById(
 export async function listUnbilledLrs(companyId: string, partyId?: string): Promise<LrView[]> {
   return scoped(db.lrs, companyId)
     .filter((lr) => lr.bookedAt && !billForLr(companyId, lr.id))
-    .filter((lr) => !partyId || [lr.consignorId, lr.consigneeId, lr.billedToId].includes(partyId))
+    .filter((lr) => !partyId || billingPartyFor(lr)?.id === partyId)
     .map(toLrView);
 }
 

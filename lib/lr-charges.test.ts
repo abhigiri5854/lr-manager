@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lrChargeBreakdown } from "./lr-charges";
+import { lrChargeBreakdown, lrTotalWeight } from "./lr-charges";
 import type { LrCharges } from "./types";
 
 const none: LrCharges = {
@@ -33,5 +33,20 @@ describe("lrChargeBreakdown", () => {
     const charges = { ...none, freight: 100000, gst: 5000 };
     expect(lrChargeBreakdown(charges, "consignor").totalPaise).toBe(100000);
     expect(lrChargeBreakdown(charges, "transporter").totalPaise).toBe(105000);
+  });
+});
+
+describe("lrTotalWeight", () => {
+  it("adds charged weights, falling back to actual", () => {
+    expect(
+      lrTotalWeight([
+        { chargedWeight: "564.000", actualWeight: null },
+        { chargedWeight: null, actualWeight: "10.5" },
+      ]),
+    ).toBe("574.500");
+  });
+
+  it("is null when no item has a weight", () => {
+    expect(lrTotalWeight([{ chargedWeight: null, actualWeight: null }])).toBeNull();
   });
 });

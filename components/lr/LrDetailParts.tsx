@@ -22,12 +22,16 @@ export function DetailRow({
   );
 }
 
-/** Bordered tile in "Linked documents". Without `href` it is a plain box (document not made yet). */
+/**
+ * Bordered tile in "Linked documents". With `href` the whole tile opens it (the title is a
+ * stretched link, so `action` can hold its own link); without, the document doesn't exist yet.
+ */
 export function DocTile({
   href,
   newTab,
   title,
   note,
+  action,
   children,
 }: {
   href?: string;
@@ -35,31 +39,47 @@ export function DocTile({
   newTab?: boolean;
   title: ReactNode;
   note?: ReactNode;
+  /** A link inside the tile, e.g. "Attach". */
+  action?: ReactNode;
   children?: ReactNode;
 }) {
-  const body = (
-    <>
-      <b>{title}</b>
+  const stretch = "text-text no-underline after:absolute after:inset-0 hover:text-text";
+  const heading = href ? (
+    newTab ? (
+      <a href={href} target="_blank" rel="noopener" className={stretch}>
+        <b>{title}</b>
+      </a>
+    ) : (
+      <Link href={href} className={stretch}>
+        <b>{title}</b>
+      </Link>
+    )
+  ) : (
+    <b>{title}</b>
+  );
+  return (
+    <div
+      className={cx(
+        "relative rounded-control border border-border p-3 text-sm leading-normal",
+        href && "hover:bg-page",
+      )}
+    >
+      {heading}
       {note && <> · {note}</>}
-      {children && (
+      {(children || action) && (
         <>
           <br />
-          <span className="text-muted">{children}</span>
+          <span className="text-muted">
+            {children}
+            {action && (
+              <>
+                {" · "}
+                <span className="relative z-10">{action}</span>
+              </>
+            )}
+          </span>
         </>
       )}
-    </>
-  );
-  const cls =
-    "block rounded-control border border-border p-3 text-sm leading-normal text-text no-underline";
-  if (!href) return <div className={cls}>{body}</div>;
-  const linkCls = cx(cls, "hover:bg-page hover:text-text");
-  return newTab ? (
-    <a href={href} target="_blank" rel="noopener" className={linkCls}>
-      {body}
-    </a>
-  ) : (
-    <Link href={href} className={linkCls}>
-      {body}
-    </Link>
+    </div>
   );
 }

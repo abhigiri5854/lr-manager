@@ -1,5 +1,5 @@
 import { gstApplies } from "@/lib/lr-form";
-import type { GstPayer, LrCharges, Paise } from "@/lib/types";
+import type { GstPayer, LrCharges, LrItem, Paise } from "@/lib/types";
 
 const LABELS: [keyof Omit<LrCharges, "advance">, string][] = [
   ["freight", "Freight"],
@@ -37,4 +37,16 @@ export function lrChargeBreakdown(charges: LrCharges, gstPaidBy: GstPayer | null
     balancePaise: totalPaise - advancePaise,
     empty: lines.length === 0 && charges.advance === null,
   };
+}
+
+/** Sum of charged weights (actual where none was charged), as "564.000"; null if no item has a weight. */
+export function lrTotalWeight(
+  items: Pick<LrItem, "actualWeight" | "chargedWeight">[],
+): string | null {
+  const weights = items
+    .map((i) => i.chargedWeight ?? i.actualWeight)
+    .filter((w): w is string => w !== null)
+    .map(Number);
+  if (weights.length === 0) return null;
+  return (Math.round(weights.reduce((a, b) => a + b, 0) * 1000) / 1000).toFixed(3);
 }
