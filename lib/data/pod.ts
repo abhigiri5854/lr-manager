@@ -1,6 +1,7 @@
 import { daysBetween, todayInIndia } from "@/lib/fy";
+import { can } from "@/lib/permissions";
 import { podLateDays, podPenaltyPaise } from "@/lib/pod-rules";
-import type { Company, LrView, Page, Pod, PodPendingRow } from "@/lib/types";
+import type { Company, Lr, LrView, Page, Pod, PodPendingRow } from "@/lib/types";
 import { podFields, type PodInput } from "@/lib/validators/pod";
 import {
   cancelRecord,
@@ -20,7 +21,8 @@ import {
   updateRecord,
   type ListParams,
 } from "./_store";
-import { ConflictError } from "./errors";
+import { assertCan, getCurrentUserId } from "./session";
+import { ConflictError, ForbiddenError } from "./errors";
 import { getLrById, listLrsForExport } from "./lrs";
 
 const podPatchSchema = podFields.omit({ lrId: true }).partial();
@@ -159,11 +161,31 @@ export async function getPodByLrId(companyId: string, lrId: string): Promise<Pod
   return p ? clone(p) : null;
 }
 
+/**
+ * Office roles ("pod.upload") may record POD on any LR; a driver ("pod.upload_own") only on
+ * their own trips: the LR's driver mobile is theirs, or its truck has them as driver.
+ */
+async function assertPodAccess(companyId: string, lr: Lr): Promise<void> {
+  const role = await assertCan(companyId, "pod.upload", "pod.upload_own");
+  if (can(role, "pod.upload")) return;
+  const userId = await getCurrentUserId();
+  const driver = scoped(db.drivers, companyId).find((d) => d.userId === userId);
+  const truck = lr.truckId ? findById(db.trucks, companyId, lr.truckId) : undefined;
+  const own =
+    driver !== undefined &&
+    ((lr.driverMobile !== null && lr.driverMobile === driver.mobile) ||
+      truck?.driverId === driver.id);
+  if (!own) throw new ForbiddenError("Drivers can only record POD for their own trips.");
+}
+
 /** POD screen save: records delivery (marks the LR Delivered) and any signed copy received. */
 export async function createPod(companyId: string, input: PodInput): Promise<Pod> {
+  // Role first; whether this LR is the driver's own trip is checked once it's loaded.
+  await assertCan(companyId, "pod.upload", "pod.upload_own");
   const v = parseInput(podFields, input);
   const lr = findById(db.lrs, companyId, v.lrId);
   if (!lr || lr.cancelledAt) fail("lrId", "LR not found in this company");
+  await assertPodAccess(companyId, lr);
   if (!lr.bookedAt) fail("lrId", "Book the LR before recording delivery");
   if (scoped(db.pods, companyId).some((p) => p.lrId === v.lrId)) {
     fail("lrId", "This LR already has a POD — edit it instead");
@@ -198,10 +220,12 @@ export async function updatePod(
   expectedVersion: number,
   patch: PodPatch,
 ): Promise<Pod> {
+  await assertCan(companyId, "pod.upload", "pod.upload_own");
   const p = parseInput(podPatchSchema, patch);
   const { deliveredOn, ...fields } = p;
   // Check the POD first so a conflict can't leave the LR half-updated (one transaction in Postgres).
   const existing = getOrThrow(db.pods, companyId, id, "POD");
+  await assertPodAccess(companyId, findById(db.lrs, companyId, existing.lrId)!);
   if (existing.cancelledAt) fail("", "This POD is cancelled and can't be changed");
   if (existing.version !== expectedVersion) throw new ConflictError();
   const lr = findById(db.lrs, companyId, existing.lrId);
@@ -231,6 +255,7 @@ export async function updatePod(
 
 /** Cancelling a POD also clears the LR's delivery date (it was recorded by mistake). */
 export async function cancelPod(companyId: string, id: string): Promise<Pod> {
+  await assertCan(companyId, "record.cancel");
   const pod = cancelRecord("pods", db.pods, companyId, id, "POD");
   setLrDelivered(companyId, pod.lrId, null);
   return pod;

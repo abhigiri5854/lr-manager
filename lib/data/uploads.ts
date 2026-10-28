@@ -1,6 +1,6 @@
 import { UPLOAD_MAX_BYTES } from "@/lib/image-upload";
 import { fail, newId } from "./_store";
-import { assertOwner } from "./session";
+import { assertCan } from "./session";
 
 // Uploaded files (signed LR copies, company logos and signatures). The mock keeps them in memory; when Supabase Storage is
 // wired up only this file changes — callers just get back a URL to store on the record.
@@ -19,6 +19,7 @@ export async function uploadPodFile(
   companyId: string,
   file: { name: string; type: string; bytes: Uint8Array },
 ): Promise<{ url: string; name: string }> {
+  await assertCan(companyId, "pod.upload", "pod.upload_own");
   if (!allowed(file.type))
     fail("documentUrls", `${file.name}: only photos and PDFs can be uploaded`);
   if (file.bytes.byteLength === 0) fail("documentUrls", `${file.name}: the file is empty`);
@@ -45,7 +46,7 @@ export async function uploadCompanyImage(
   kind: "logo" | "signature",
   file: { name: string; type: string; bytes: Uint8Array },
 ): Promise<{ url: string; name: string }> {
-  await assertOwner(companyId, "change the company logo or signature");
+  await assertCan(companyId, "company.manage");
   const path = kind === "logo" ? "logoUrl" : "signatureUrl";
   if (!(COMPANY_IMAGE_TYPES as readonly string[]).includes(file.type))
     fail(path, `${file.name}: use a PNG, SVG or JPG image`);

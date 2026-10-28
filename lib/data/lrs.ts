@@ -41,6 +41,7 @@ import {
   updateRecord,
   type ListParams,
 } from "./_store";
+import { assertCan } from "./session";
 
 export type LrListParams = ListParams & {
   partyId?: string;
@@ -302,6 +303,7 @@ export async function createLr(
   input: LrInput,
   options: SaveLrOptions = {},
 ): Promise<LrView> {
+  await assertCan(companyId, "lr.edit");
   const v = parseInput(lrFields, input);
   assertLrRefs(companyId, v);
   const company = db.companies.find((c) => c.id === companyId)!;
@@ -353,6 +355,7 @@ export async function updateLr(
   patch: LrPatch,
   options: SaveLrOptions = {},
 ): Promise<LrView> {
+  await assertCan(companyId, "lr.edit");
   assertNotOnFinalBill(companyId, id);
   const p = parseInput(lrPatchSchema, patch);
   assertLrRefs(companyId, p);
@@ -405,6 +408,7 @@ export async function bookLr(
   id: string,
   expectedVersion: number,
 ): Promise<LrView> {
+  await assertCan(companyId, "lr.edit");
   const saved = updateRecord(
     "lrs",
     db.lrs,
@@ -428,6 +432,7 @@ export async function dispatchLr(
   id: string,
   expectedVersion: number,
 ): Promise<LrView> {
+  await assertCan(companyId, "lr.edit");
   const saved = updateRecord(
     "lrs",
     db.lrs,
@@ -451,6 +456,7 @@ export async function cancelLr(
   id: string,
   input: LrCancelInput,
 ): Promise<LrView> {
+  await assertCan(companyId, "record.cancel");
   const { reason } = parseInput(lrCancelSchema, input);
   const bill = billForLr(companyId, id);
   if (bill)

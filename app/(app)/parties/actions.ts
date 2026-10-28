@@ -1,8 +1,8 @@
 "use server";
 
-// Server actions for the Parties screens. Role checks come with auth (Phase 4).
+// Server actions for the Parties screens. Role checks happen in lib/data (lib/permissions.ts).
 import { refresh } from "next/cache";
-import { ConflictError, NotFoundError, ValidationError } from "@/lib/data/errors";
+import { ConflictError, NotFoundError, ValidationError, ForbiddenError } from "@/lib/data/errors";
 import { cancelParty, createParty, findPartyByGstin, updateParty } from "@/lib/data/parties";
 import { getActiveCompanyId } from "@/lib/data/session";
 import type { RuleError } from "@/lib/validators/common";
@@ -17,7 +17,8 @@ function failure(e: unknown): PartyActionFailure {
   if (e instanceof ValidationError)
     return { ok: false, kind: "validation", issues: e.issues, message: e.message };
   if (e instanceof ConflictError) return { ok: false, kind: "conflict", message: e.message };
-  if (e instanceof NotFoundError) return { ok: false, kind: "error", message: e.message };
+  if (e instanceof NotFoundError || e instanceof ForbiddenError)
+    return { ok: false, kind: "error", message: e.message };
   throw e;
 }
 

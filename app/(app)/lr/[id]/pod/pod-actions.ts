@@ -1,8 +1,8 @@
 "use server";
 
-// Server action for the POD screen. Role checks come with auth (Phase 4).
+// Server action for the POD screen. Role checks happen in lib/data (lib/permissions.ts).
 import { refresh } from "next/cache";
-import { ConflictError, NotFoundError, ValidationError } from "@/lib/data/errors";
+import { ConflictError, NotFoundError, ValidationError, ForbiddenError } from "@/lib/data/errors";
 import { createPod, getPodByLrId, updatePod } from "@/lib/data/pod";
 import { getActiveCompanyId } from "@/lib/data/session";
 import { uploadPodFile } from "@/lib/data/uploads";
@@ -41,7 +41,8 @@ export async function uploadPodFileAction(
     });
     return { ok: true, url };
   } catch (e) {
-    if (e instanceof ValidationError) return { ok: false, message: e.message };
+    if (e instanceof ValidationError || e instanceof ForbiddenError)
+      return { ok: false, message: e.message };
     throw e;
   }
 }
@@ -80,7 +81,8 @@ export async function savePodAction(formData: FormData): Promise<SavePodResult> 
     if (e instanceof ValidationError)
       return { ok: false, kind: "validation", issues: e.issues, message: e.message };
     if (e instanceof ConflictError) return { ok: false, kind: "conflict", message: e.message };
-    if (e instanceof NotFoundError) return { ok: false, kind: "error", message: e.message };
+    if (e instanceof NotFoundError || e instanceof ForbiddenError)
+      return { ok: false, kind: "error", message: e.message };
     throw e;
   }
 }

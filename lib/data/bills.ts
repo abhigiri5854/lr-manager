@@ -40,6 +40,7 @@ import {
   updateRecord,
   type ListParams,
 } from "./_store";
+import { assertCan } from "./session";
 
 export type FreightBillListParams = ListParams & {
   partyId?: string;
@@ -157,6 +158,7 @@ export async function createFreightBill(
   companyId: string,
   input: FreightBillInput,
 ): Promise<FreightBillView> {
+  await assertCan(companyId, "bill.edit");
   const v = parseInput(freightBillFields, input);
   assertRef(db.parties, companyId, v.partyId, "partyId", "Party");
   assertBillableLrs(companyId, v.lines);
@@ -188,6 +190,7 @@ export async function updateFreightBill(
   expectedVersion: number,
   patch: FreightBillPatch,
 ): Promise<FreightBillView> {
+  await assertCan(companyId, "bill.edit");
   const p = parseInput(freightBillPatchSchema, patch);
   assertRef(db.parties, companyId, p.partyId, "partyId", "Party");
   if (p.lines) assertBillableLrs(companyId, p.lines, id);
@@ -217,6 +220,7 @@ export async function finaliseFreightBill(
   id: string,
   expectedVersion: number,
 ): Promise<FreightBillView> {
+  await assertCan(companyId, "bill.edit");
   const saved = updateRecord(
     "freight_bills",
     db.freightBills,
@@ -242,6 +246,7 @@ export async function finaliseFreightBill(
 
 /** A cancelled final bill keeps its number (shown as cancelled) so the series has no gaps. */
 export async function cancelFreightBill(companyId: string, id: string): Promise<FreightBillView> {
+  await assertCan(companyId, "record.cancel");
   if (receivedForBill(companyId, id) > 0) {
     fail("", "Payments are recorded against this bill — cancel or re-allocate them first");
   }
@@ -293,6 +298,7 @@ export async function getPaymentById(companyId: string, id: string): Promise<Pay
 
 /** Record a payment; allocations settle bills, none = on-account advance. */
 export async function createPayment(companyId: string, input: PaymentInput): Promise<Payment> {
+  await assertCan(companyId, "bill.edit");
   const v = parseInput(paymentFields, input);
   const allocations = checkPayment(companyId, v);
   const t = now();
@@ -320,6 +326,7 @@ export async function updatePayment(
   expectedVersion: number,
   input: PaymentInput,
 ): Promise<Payment> {
+  await assertCan(companyId, "bill.edit");
   const v = parseInput(paymentFields, input);
   const allocations = checkPayment(companyId, v, id);
   return updateRecord(
@@ -343,5 +350,6 @@ export async function updatePayment(
 }
 
 export async function cancelPayment(companyId: string, id: string): Promise<Payment> {
+  await assertCan(companyId, "record.cancel");
   return cancelRecord("payments", db.payments, companyId, id, "Payment");
 }

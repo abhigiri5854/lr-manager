@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { connection } from "next/server";
+import { can, deniedMessage, type Action } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 import { DEFAULT_SESSION, db } from "./_store";
 import { ForbiddenError, NotFoundError } from "./errors";
@@ -54,8 +55,13 @@ export async function getRole(companyId: string): Promise<Role | null> {
   return activeMembership(userId, companyId)?.role ?? null;
 }
 
-export async function assertOwner(companyId: string, action: string): Promise<void> {
-  if ((await getRole(companyId)) !== "owner") {
-    throw new ForbiddenError(`Only the company Owner can ${action}.`);
-  }
+/**
+ * Throws ForbiddenError unless the current user's role in this company allows the action
+ * (lib/permissions.ts). Every lib/data write calls this first. Returns the role.
+ */
+export async function assertCan(companyId: string, ...actions: Action[]): Promise<Role> {
+  const role = await getRole(companyId);
+  const allowed = actions.find((a) => can(role, a));
+  if (!role || !allowed) throw new ForbiddenError(deniedMessage(role, actions[0]));
+  return role;
 }

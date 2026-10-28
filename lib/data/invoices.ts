@@ -42,6 +42,7 @@ import {
   writeAudit,
   type ListParams,
 } from "./_store";
+import { assertCan } from "./session";
 
 export type TaxInvoiceListParams = ListParams & {
   status?: TaxInvoiceStatus;
@@ -203,6 +204,7 @@ export async function createTaxInvoice(
   companyId: string,
   input: TaxInvoiceInput,
 ): Promise<TaxInvoice> {
+  await assertCan(companyId, "invoice.edit");
   const v = parseInput(taxInvoiceFields, input);
   assertInvoiceRefs(companyId, v);
   const sellerPartyId = v.sellerPartyId ?? null;
@@ -253,6 +255,7 @@ export async function updateTaxInvoice(
   expectedVersion: number,
   patch: TaxInvoicePatch,
 ): Promise<TaxInvoice> {
+  await assertCan(companyId, "invoice.edit");
   const p = parseInput(taxInvoicePatchSchema, patch);
   assertInvoiceRefs(companyId, p);
   return updateRecord(
@@ -298,6 +301,7 @@ export async function finaliseTaxInvoice(
   id: string,
   expectedVersion: number,
 ): Promise<TaxInvoice> {
+  await assertCan(companyId, "invoice.edit");
   return updateRecord(
     "tax_invoices",
     db.taxInvoices,
@@ -352,6 +356,7 @@ export async function cancelTaxInvoice(
   id: string,
   reason: string,
 ): Promise<TaxInvoice> {
+  await assertCan(companyId, "record.cancel");
   const cancelReason = parseInput(cancelReasonSchema, reason);
   return cancelRecord("tax_invoices", db.taxInvoices, companyId, id, "Tax invoice", {
     cancelReason,

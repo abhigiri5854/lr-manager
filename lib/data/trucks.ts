@@ -41,6 +41,7 @@ import {
   updateRecord,
   type ListParams,
 } from "./_store";
+import { assertCan } from "./session";
 
 export type TruckListParams = ListParams & { includeCancelled?: boolean };
 
@@ -122,6 +123,7 @@ export async function findTruckByNumber(
 }
 
 export async function createTruck(companyId: string, input: TruckInput): Promise<TruckView> {
+  await assertCan(companyId, "master.edit");
   const v = parseInput(truckFields, input);
   assertRef(db.drivers, companyId, v.driverId, "driverId", "Driver");
   assertUniqueNumber(companyId, v.number);
@@ -149,6 +151,7 @@ export async function updateTruck(
   expectedVersion: number,
   patch: TruckPatch,
 ): Promise<TruckView> {
+  await assertCan(companyId, "master.edit");
   const p = parseInput(truckPatchSchema, patch);
   assertRef(db.drivers, companyId, p.driverId, "driverId", "Driver");
   if (p.number) assertUniqueNumber(companyId, p.number, id);
@@ -166,6 +169,7 @@ export async function updateTruck(
 
 /** Cancels a truck that isn't on an undelivered LR. */
 export async function cancelTruck(companyId: string, id: string): Promise<TruckView> {
+  await assertCan(companyId, "record.cancel");
   const truck = getOrThrow(db.trucks, companyId, id, "Truck");
   const blocked = cancelBlockedReason("truck", openLrsFor(companyId, { truckIds: [truck.id] }));
   if (blocked) fail("", blocked);
@@ -195,6 +199,7 @@ export async function getDriverById(companyId: string, id: string): Promise<Driv
 }
 
 export async function createDriver(companyId: string, input: DriverInput): Promise<DriverView> {
+  await assertCan(companyId, "master.edit");
   const v = parseInput(driverFields, input);
   assertUniqueMobile(companyId, v.mobile);
   const t = now();
@@ -220,6 +225,7 @@ export async function updateDriver(
   expectedVersion: number,
   patch: DriverPatch,
 ): Promise<DriverView> {
+  await assertCan(companyId, "master.edit");
   const p = parseInput(driverPatchSchema, patch);
   if (p.mobile) assertUniqueMobile(companyId, p.mobile, id);
   const saved = updateRecord(
@@ -236,6 +242,7 @@ export async function updateDriver(
 
 /** Cancels a driver who isn't on an undelivered LR, and unlinks them from their trucks. */
 export async function cancelDriver(companyId: string, id: string): Promise<DriverView> {
+  await assertCan(companyId, "record.cancel");
   const driver = getOrThrow(db.drivers, companyId, id, "Driver");
   const open = openLrsFor(companyId, driverMatch(companyId, driver));
   const blocked = cancelBlockedReason("driver", open);
@@ -249,6 +256,7 @@ export async function cancelDriver(companyId: string, id: string): Promise<Drive
 
 /** "Invite to driver app": records when it was sent. No SMS goes out until messaging is wired. */
 export async function inviteDriver(companyId: string, id: string): Promise<DriverView> {
+  await assertCan(companyId, "company.manage");
   const d = getOrThrow(db.drivers, companyId, id, "Driver");
   const stamp = (c: Driver): Driver => ({ ...c, invitedAt: now() });
   return toDriverView(

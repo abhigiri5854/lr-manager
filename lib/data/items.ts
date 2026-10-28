@@ -15,6 +15,7 @@ import {
   updateRecord,
   type ListParams,
 } from "./_store";
+import { assertCan } from "./session";
 
 function assertUniqueCode(companyId: string, code: string | null, exceptId?: string) {
   if (!code) return;
@@ -50,6 +51,7 @@ export async function getItemById(companyId: string, id: string): Promise<Item |
 }
 
 export async function createItem(companyId: string, input: ItemInput): Promise<Item> {
+  await assertCan(companyId, "master.edit");
   const v = parseInput(itemFields, input);
   const code = v.code ?? null;
   assertUniqueCode(companyId, code);
@@ -76,6 +78,7 @@ export async function updateItem(
   expectedVersion: number,
   patch: ItemPatch,
 ): Promise<Item> {
+  await assertCan(companyId, "master.edit");
   const p = parseInput(itemPatchSchema, patch);
   return updateRecord(
     "items",

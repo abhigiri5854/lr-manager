@@ -22,7 +22,7 @@ import {
 } from "./_store";
 import { ConflictError, NotFoundError } from "./errors";
 import { syncSelfParty } from "./parties";
-import { assertOwner, getCurrentUserId } from "./session";
+import { assertCan, getCurrentUserId } from "./session";
 
 /** nextLrNo always comes from the number series (single source of truth). */
 function withNextLrNo(c: Company): Company {
@@ -75,13 +75,13 @@ export async function getNumbering(companyId: string): Promise<NumberingState> {
   };
 }
 
-/** Company profile save (Owner only). Changing nextLrNo moves the LR series — never backwards. */
+/** Company profile save ("company.manage": Owner). Changing nextLrNo moves the LR series — never backwards. */
 export async function updateCompany(
   companyId: string,
   expectedVersion: number,
   patch: CompanyPatch,
 ): Promise<Company> {
-  await assertOwner(companyId, "change the company profile");
+  await assertCan(companyId, "company.manage");
   const current = db.companies.find((x) => x.id === companyId);
   if (!current) throw new NotFoundError("Company");
   if (current.version !== expectedVersion) throw new ConflictError();

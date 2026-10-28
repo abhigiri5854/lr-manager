@@ -26,6 +26,7 @@ import {
   writeAudit,
   type ListParams,
 } from "./_store";
+import { assertCan } from "./session";
 
 export type PartyListParams = ListParams & { includeCancelled?: boolean };
 
@@ -68,6 +69,7 @@ export async function findPartyByGstin(companyId: string, gstin: string): Promis
 }
 
 export async function createParty(companyId: string, input: PartyInput): Promise<Party> {
+  await assertCan(companyId, "master.edit");
   const v = parseInput(partyFields, input);
   const t = now();
   const party: Party = {
@@ -103,6 +105,7 @@ export async function updateParty(
   expectedVersion: number,
   patch: PartyPatch,
 ): Promise<Party> {
+  await assertCan(companyId, "master.edit");
   const p = parseInput(partyPatchSchema, patch);
   return updateRecord(
     "parties",
@@ -230,6 +233,7 @@ export async function listShipsTo(companyId: string, consignorId: string): Promi
  * because those documents (and their snapshots) point at it.
  */
 export async function cancelParty(companyId: string, id: string, reason?: string): Promise<Party> {
+  await assertCan(companyId, "record.cancel");
   if (findById(db.parties, companyId, id)?.isSelf) fail("", SELF_PARTY_LOCKED);
   const usage = await getPartyUsage(companyId, id);
   const blocked = partyBlockedReason(usage);
