@@ -1,0 +1,12 @@
+# Approved design and project docs — never reformat
+design/
+CLAUDE.md
+PROMPTS.md
+AGENTS.md
+
+.next/
+out/
+build/
+node_modules/
+pnpm-lock.yaml
+next-env.d.ts

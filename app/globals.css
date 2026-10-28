@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — taken from design/screens/*.dc.html and CLAUDE.md.
+ * Every value here becomes both a CSS variable (var(--color-primary)) and a
+ * Tailwind utility (bg-primary, rounded-card, h-control, p-page …).
+ * Components must use these names, never raw hex.
+ */
+@theme {
+  /* Reset Tailwind's default palette so only design colors are available. */
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* Brand */
+  --color-primary: #1f3a8a;
+  --color-primary-hover: #142867;
+  --color-primary-soft: #e8eefb;
+
+  /* Navy sidebar */
+  --color-navy: #0f1e3d;
+  --color-navy-raised: #1a2c52; /* company switcher background */
+  --color-navy-border: #33497a; /* inputs on navy */
+  --color-navy-text: #c9d3e8; /* inactive nav links */
+  --color-navy-muted: #9db4e8; /* group labels, "Working as", "Manager" */
+
+  /* Surfaces */
+  --color-page: #f4f6fa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef1f6; /* info boxes */
+  --color-surface-subtle: #f7f9fd; /* upload drop zones */
+
+  /* Borders */
+  --color-border: #d9dfea;
+  --color-border-input: #c5cddb;
+  --color-border-row: #eef1f6; /* table row dividers */
+  --color-border-dashed: #8a96ad; /* dashed "add" buttons */
+  --color-border-print: #6b7a99; /* PDF table lines */
+
+  /* Text */
+  --color-text: #111827;
+  --color-text-strong: #1f2937;
+  --color-label: #374151; /* form labels */
+  --color-muted: #4b5563;
+  --color-diagram: #5b6b8c; /* architecture diagram lines */
+
+  /* Status */
+  --color-warning: #7a3a04;
+  --color-warning-soft: #fef3e2;
+  --color-warning-border: #f3c98b;
+  --color-success: #146c43;
+  --color-success-soft: #e6f4ec;
+  --color-danger: #9b1c1c;
+  --color-danger-soft: #fde8e8;
+
+  /* AI import: fields that are new records or low confidence */
+  --color-attention: #e08a1e;
+  --color-attention-soft: #fffaf2;
+
+  /* Radius */
+  --radius-control: 8px; /* inputs, buttons */
+  --radius-tile: 10px; /* large tap tiles (driver app, upload tiles) */
+  --radius-card: 12px;
+  --radius-chip: 999px;
+
+  /* Sizing */
+  --spacing-control: 44px; /* minimum height of inputs and buttons */
+  --spacing-page: 32px; /* main content padding */
+
+  /* Shadow */
+  --shadow-popover: 0 8px 24px rgba(15, 30, 61, 0.14);
+}
+
+/* Fonts come from next/font (see app/layout.tsx), exposed as CSS variables. */
+@theme inline {
+  --font-sans: var(--font-plex-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-page);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+  }
+
+  a {
+    color: var(--color-primary);
+  }
+
+  a:hover {
+    color: var(--color-primary-hover);
+  }
+}
