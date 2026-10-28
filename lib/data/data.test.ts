@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetStore } from "./_store";
+
+// Tests run outside a Next.js request, where connection() would throw.
+vi.mock("next/server", () => ({ connection: async () => {} }));
 import {
   createFreightBill,
   createPayment,

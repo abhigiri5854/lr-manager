@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -17,22 +18,34 @@ const columns: Column<PodPendingRow>[] = [
   { key: "penalty", header: "Penalty so far", cell: (r) => `₹${formatPaise(r.penaltyPaise)}` },
 ];
 
-export default async function PodPendingPage() {
-  const rows = await listPodPending(await getActiveCompanyId());
+function PodTable({ rows, empty }: { rows: PodPendingRow[]; empty: string }) {
+  return (
+    <Card padding="table">
+      <DataTable
+        label="LRs waiting for POD"
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.lrId}
+        rowHref={(r) => `/lr/${r.lrId}/pod`}
+        empty={empty}
+      />
+    </Card>
+  );
+}
 
+/** Per-request: reads the active company from the session. */
+async function PodPendingList() {
+  const rows = await listPodPending(await getActiveCompanyId());
+  return <PodTable rows={rows} empty="No LRs waiting for POD." />;
+}
+
+export default function PodPendingPage() {
   return (
     <>
       <PageHeader title="POD pending" />
-      <Card padding="table">
-        <DataTable
-          label="LRs waiting for POD"
-          columns={columns}
-          rows={rows}
-          rowKey={(r) => r.lrId}
-          rowHref={(r) => `/lr/${r.lrId}/pod`}
-          empty="No LRs waiting for POD."
-        />
-      </Card>
+      <Suspense fallback={<PodTable rows={[]} empty="Loading…" />}>
+        <PodPendingList />
+      </Suspense>
     </>
   );
 }

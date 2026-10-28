@@ -5,7 +5,6 @@ import {
   assertRules,
   clone,
   db,
-  DEFAULT_SESSION,
   fail,
   findSeries,
   now,
@@ -14,6 +13,7 @@ import {
   writeAudit,
 } from "./_store";
 import { ConflictError, NotFoundError } from "./errors";
+import { getCurrentUserId } from "./session";
 
 /** nextLrNo always comes from the number series (single source of truth). */
 function withNextLrNo(c: Company): Company {
@@ -28,10 +28,9 @@ function withNextLrNo(c: Company): Company {
 
 /** Companies the current user can work as. */
 export async function listCompanies(): Promise<Company[]> {
+  const userId = await getCurrentUserId();
   const ids = new Set(
-    db.memberships
-      .filter((m) => m.userId === DEFAULT_SESSION.userId && !m.cancelledAt)
-      .map((m) => m.companyId),
+    db.memberships.filter((m) => m.userId === userId && !m.cancelledAt).map((m) => m.companyId),
   );
   return db.companies.filter((c) => ids.has(c.id) && !c.cancelledAt).map(withNextLrNo);
 }
