@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 import { listCompanies } from "@/lib/data/companies";
+import { getActiveCompanyId } from "@/lib/data/session";
+import { CompanySelect } from "./CompanySwitcher";
 import { SidebarLinks, SidebarNav } from "./SidebarNav";
 
 const selectClass =
@@ -7,15 +9,13 @@ const selectClass =
 
 /** Loads the user's companies per request (session-dependent). */
 async function CompanySwitcher() {
-  const companies = await listCompanies();
+  const [companies, activeId] = await Promise.all([listCompanies(), getActiveCompanyId()]);
   return (
-    <select id="nav-co" defaultValue={companies[0]?.id} className={selectClass}>
-      {companies.map((company) => (
-        <option key={company.id} value={company.id}>
-          {`${company.label} · ${company.city}`}
-        </option>
-      ))}
-    </select>
+    <CompanySelect
+      companies={companies.map(({ id, label, city }) => ({ id, label, city }))}
+      activeId={activeId}
+      className={selectClass}
+    />
   );
 }
 
@@ -32,7 +32,6 @@ export function Sidebar() {
         LR <span className="font-medium text-navy-muted">Manager</span>
       </div>
 
-      {/* Not wired to the session yet — see the auth phase. */}
       <label htmlFor="nav-co" className="m-0 block px-2.5 text-xs font-semibold text-navy-muted">
         Working as
       </label>

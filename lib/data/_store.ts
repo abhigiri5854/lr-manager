@@ -84,7 +84,7 @@ function seed(): Store {
 
 // Kept on globalThis so dev-server hot reloads don't wipe edits. Bump STORE_VERSION when the
 // record shapes change so a running dev server reseeds instead of serving old-shaped rows.
-const STORE_VERSION = 3; // 3: self party per company
+const STORE_VERSION = 4; // 4: numbering reset + freight GST rate on companies
 const g = globalThis as typeof globalThis & {
   __lrManagerStore?: Store;
   __lrManagerStoreV?: number;
@@ -108,6 +108,7 @@ const currentUserId: string = DEFAULT_SESSION.userId;
 
 export type TableName =
   | "companies"
+  | "memberships"
   | "parties"
   | "trucks"
   | "drivers"
@@ -296,28 +297,62 @@ export function findSeries(companyId: string, series: mock.NumberSeriesRow["seri
   );
 }
 
+type SeriesName = mock.NumberSeriesRow["series"];
+
+function latestSeries(companyId: string, series: SeriesName) {
+  return db.numberSeries
+    .filter((s) => s.companyId === companyId && s.series === series)
+    .sort((a, b) => b.fy.localeCompare(a.fy))[0];
+}
+
+/**
+ * Whether a series starts again at 1 in a new financial year. LR numbers always run on;
+ * freight bills and tax invoices follow the company's "reset each financial year" setting.
+ */
+function restartsEachYear(companyId: string, series: SeriesName): boolean {
+  if (series === "lr") return false;
+  return db.companies.find((c) => c.id === companyId)?.numberingResetsYearly ?? true;
+}
+
+/**
+ * The value the next document in this FY would get, without taking it.
+ * Null only for an LR series that was never set up.
+ */
+export function peekNumber(companyId: string, series: SeriesName, fy: string): number | null {
+  const row = findSeries(companyId, series, fy);
+  if (row) return row.nextValue;
+  if (restartsEachYear(companyId, series)) return 1;
+  return latestSeries(companyId, series)?.nextValue ?? (series === "lr" ? null : 1);
+}
+
 /**
  * Takes the next number from the company + FY series. In Postgres this is
  * SELECT … FOR UPDATE on number_series inside the document's transaction — never max + 1.
  */
-export function allocateNumber(
-  companyId: string,
-  series: mock.NumberSeriesRow["series"],
-  fy: string,
-): number {
+export function allocateNumber(companyId: string, series: SeriesName, fy: string): number {
   let row = findSeries(companyId, series, fy);
   if (!row) {
-    if (series === "lr") {
-      // LR numbers usually run on across years; carry on from the latest series.
-      const latest = db.numberSeries
-        .filter((s) => s.companyId === companyId && s.series === "lr")
-        .sort((a, b) => b.fy.localeCompare(a.fy))[0];
-      if (!latest) fail("lrNo", "Set the next LR number in Company profile first");
-      row = { companyId, series, fy, nextValue: latest.nextValue };
-    } else {
-      row = { companyId, series, fy, nextValue: 1 };
-    }
+    const start = peekNumber(companyId, series, fy);
+    if (start === null) fail("lrNo", "Set the next LR number in Company profile first");
+    row = { companyId, series, fy, nextValue: start };
     db.numberSeries.push(row);
   }
   return row.nextValue++;
+}
+
+/** Moves a series forward (Company profile). Never backwards: lower numbers may be in use. */
+export function raiseNumber(
+  companyId: string,
+  series: SeriesName,
+  fy: string,
+  next: number,
+  path: string,
+): void {
+  const current = peekNumber(companyId, series, fy);
+  if (current !== null && next < current) {
+    fail(path, `Can't go below ${current} — numbers up to ${current - 1} may already be used`);
+  }
+  const row = findSeries(companyId, series, fy);
+  if (row) row.nextValue = next;
+  else db.numberSeries.push({ companyId, series, fy, nextValue: next });
 }

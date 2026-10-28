@@ -160,7 +160,9 @@ export async function createFreightBill(
   const v = parseInput(freightBillFields, input);
   assertRef(db.parties, companyId, v.partyId, "partyId", "Party");
   assertBillableLrs(companyId, v.lines);
-  const gstRateBp = v.gstRateBp ?? 0;
+  const company = db.companies.find((c) => c.id === companyId);
+  const gstRateBp =
+    v.gstRateBp ?? (v.gstMode === "forward_charge" ? (company?.freightGstRateBp ?? 0) : 0);
   const t = now();
   const bill: FreightBill = {
     id: newId(),

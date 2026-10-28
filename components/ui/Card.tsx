@@ -3,6 +3,8 @@ import { cx } from "@/lib/cx";
 
 type CardProps = {
   title?: ReactNode;
+  /** Small muted line under the title (Settings "LR terms"). */
+  description?: ReactNode;
   /** Shown to the right of the title, e.g. an "Open register" link. */
   action?: ReactNode;
   /** "table": tight padding for a DataTable that runs edge to edge (Register). */
@@ -15,6 +17,7 @@ type CardProps = {
 
 export function Card({
   title,
+  description,
   action,
   padding = "default",
   heading = "default",
@@ -36,13 +39,14 @@ export function Card({
         <div
           className={cx(
             "flex flex-wrap items-center justify-between gap-3",
-            isTable ? "mx-3 mt-3 mb-1" : action || large ? "mb-3" : "mb-4",
+            isTable ? "mx-3 mt-3 mb-1" : description ? "mb-1" : action || large ? "mb-3" : "mb-4",
           )}
         >
           <h2 className={cx("m-0 font-bold", large ? "text-[18px]" : "text-[17px]")}>{title}</h2>
           {action && <div className="text-sm">{action}</div>}
         </div>
       )}
+      {description && <p className="mt-0 mb-4 text-[13px] text-muted">{description}</p>}
       {children}
     </section>
   );

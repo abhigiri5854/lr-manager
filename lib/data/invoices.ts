@@ -30,7 +30,7 @@ import {
   db,
   fail,
   findById,
-  findSeries,
+  peekNumber,
   insertRecord,
   matchesSearch,
   newId,
@@ -194,7 +194,7 @@ export async function peekNextInvoiceNo(
   date: string,
 ): Promise<{ invoiceNo: string | null; fy: string; counter: number }> {
   const fy = financialYear(date);
-  const counter = findSeries(companyId, "tax_invoice", fy)?.nextValue ?? 1;
+  const counter = peekNumber(companyId, "tax_invoice", fy) ?? 1;
   return { invoiceNo: formatInvoiceNo(company(companyId).taxInvoicePrefix, counter), fy, counter };
 }
 
@@ -310,7 +310,7 @@ export async function finaliseTaxInvoice(
       let invoiceNo = current.invoiceNo;
       if (!current.sellerPartyId) {
         const fy = financialYear(invoiceDay(current.invoiceAt));
-        const next = findSeries(companyId, "tax_invoice", fy)?.nextValue ?? 1;
+        const next = peekNumber(companyId, "tax_invoice", fy) ?? 1;
         invoiceNo = formatInvoiceNo(co.taxInvoicePrefix, next);
         if (!invoiceNo) {
           fail(

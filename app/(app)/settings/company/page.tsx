@@ -1,45 +1,52 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { InvoiceNumberingCard } from "@/components/settings/InvoiceNumberingCard";
+import { CompanyProfileForm } from "@/components/settings/CompanyProfileForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { getCompany } from "@/lib/data/companies";
-import { peekNextInvoiceNo } from "@/lib/data/invoices";
-import { getActiveCompanyId } from "@/lib/data/session";
+import { getCompany, getNumbering } from "@/lib/data/companies";
+import { getActiveCompanyId, getRole } from "@/lib/data/session";
+import { formatDate } from "@/lib/format";
 import { todayInIndia } from "@/lib/fy";
 
 export const metadata: Metadata = { title: "Company profile" };
 
-// Only tax-invoice numbering is built so far; the rest of Settings.dc.html comes later.
-async function CompanySettings() {
+async function CompanyProfile() {
   const companyId = await getActiveCompanyId();
-  const [company, next] = await Promise.all([
+  const [company, numbering, role] = await Promise.all([
     getCompany(companyId),
-    peekNextInvoiceNo(companyId, todayInIndia()),
+    getNumbering(companyId),
+    getRole(companyId),
   ]);
   if (!company) return null;
   return (
-    <InvoiceNumberingCard
-      key={`${company.id}:${company.version}`}
-      version={company.version}
-      prefix={company.taxInvoicePrefix}
-      roundOff={company.invoiceRoundOff}
-      nextCounter={next.counter}
-      fy={next.fy}
+    <CompanyProfileForm
+      // A new form when "Working as" changes; saves keep the same form (version is tracked inside).
+      key={company.id}
+      company={company}
+      numbering={numbering}
+      canEdit={role === "owner"}
+      today={formatDate(todayInIndia())}
     />
+  );
+}
+
+function ProfileSkeleton() {
+  return (
+    <>
+      <PageHeader eyebrow="SETTINGS" title="Company profile" />
+      <Skeleton className="h-16 rounded-tile" />
+      <div className="flex flex-wrap items-start gap-5">
+        <Skeleton className="h-[640px] min-w-0 flex-[999_1_560px] rounded-card" />
+        <Skeleton className="h-[420px] min-w-0 flex-[1_1_380px] rounded-card" />
+      </div>
+    </>
   );
 }
 
 export default function CompanyProfilePage() {
   return (
-    <>
-      <PageHeader
-        title="Company profile"
-        subtitle="Tax invoice numbering. Name, address, bank, logo and LR terms come in a later update."
-      />
-      <Suspense fallback={<Skeleton className="h-64 max-w-[720px] rounded-card" />}>
-        <CompanySettings />
-      </Suspense>
-    </>
+    <Suspense fallback={<ProfileSkeleton />}>
+      <CompanyProfile />
+    </Suspense>
   );
 }

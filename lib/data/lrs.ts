@@ -29,7 +29,7 @@ import {
   db,
   fail,
   findById,
-  findSeries,
+  peekNumber,
   insertRecord,
   matchesSearch,
   newId,
@@ -194,13 +194,8 @@ export async function peekNextLrNo(
 ): Promise<string | null> {
   const company = db.companies.find((c) => c.id === companyId);
   if (!company) return null;
-  const row =
-    findSeries(companyId, "lr", financialYear(lrDate ?? today())) ??
-    // Same carry-over rule as allocateNumber: a new FY continues from the latest series.
-    db.numberSeries
-      .filter((s) => s.companyId === companyId && s.series === "lr")
-      .sort((a, b) => b.fy.localeCompare(a.fy))[0];
-  return row ? `${company.lrPrefix}${row.nextValue}` : null;
+  const next = peekNumber(companyId, "lr", financialYear(lrDate ?? today()));
+  return next === null ? null : `${company.lrPrefix}${next}`;
 }
 
 export type ConsignorDefaults = {

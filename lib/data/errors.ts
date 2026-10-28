@@ -26,6 +26,14 @@ export class NotFoundError extends Error {
   }
 }
 
+/** The user's role in this company doesn't allow the action. */
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
 /** What a server action hands back to a form when a data call throws. */
 export type ActionFailure =
   | { ok: false; kind: "validation"; issues: RuleError[]; message: string }
@@ -37,6 +45,7 @@ export function toActionFailure(e: unknown): ActionFailure {
   if (e instanceof ValidationError)
     return { ok: false, kind: "validation", issues: e.issues, message: e.message };
   if (e instanceof ConflictError) return { ok: false, kind: "conflict", message: e.message };
-  if (e instanceof NotFoundError) return { ok: false, kind: "error", message: e.message };
+  if (e instanceof NotFoundError || e instanceof ForbiddenError)
+    return { ok: false, kind: "error", message: e.message };
   throw e;
 }

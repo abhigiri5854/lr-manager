@@ -82,6 +82,10 @@ export type Company = {
   taxInvoicePrefix: string;
   /** Round tax-invoice totals to the nearest rupee (shown as its own line). */
   invoiceRoundOff: boolean;
+  /** Freight bill and tax invoice numbers restart at 001 each April (LR numbers always run on). */
+  numberingResetsYearly: boolean;
+  /** GST rate on forward-charge freight bills, basis points (500 = 5%). */
+  freightGstRateBp: number;
   signatoryName: string | null;
   // LR terms & numbering (null = not set yet)
   /** "" allowed */
