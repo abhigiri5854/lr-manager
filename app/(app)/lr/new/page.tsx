@@ -11,6 +11,7 @@ import {
   getLrById,
   peekNextLrNo,
 } from "@/lib/data/lrs";
+import { getPartyById } from "@/lib/data/parties";
 import { getActiveCompanyId } from "@/lib/data/session";
 import { todayInIndia } from "@/lib/fy";
 import { applyConsignorDefaults, emptyLrForm, invoiceToForm, lrToForm } from "@/lib/lr-form";
@@ -59,12 +60,32 @@ async function NewLr({ searchParams }: { searchParams: SearchParams }) {
       ? lrToForm(source, { copy: true, today })
       : emptyLrForm(today);
 
+  // `?consignor=<partyId>&consignee=<partyId>` (from a party page) starts a blank LR with them.
+  const fromParty = !invoice && !source;
+  const [prefillConsignor, prefillConsignee] = await Promise.all([
+    fromParty && one(params.consignor) ? getPartyById(companyId, one(params.consignor)!) : null,
+    fromParty && one(params.consignee) ? getPartyById(companyId, one(params.consignee)!) : null,
+  ]);
+  if (prefillConsignor && !prefillConsignor.cancelledAt)
+    initial = { ...initial, consignorId: prefillConsignor.id };
+  if (prefillConsignee && !prefillConsignee.cancelledAt) {
+    initial = { ...initial, consigneeId: prefillConsignee.id };
+  }
+
   const [picked, nextLrNo, defaults, toPlace] = await Promise.all([
     loadPicked(companyId, initial),
     peekNextLrNo(companyId, today),
     // From an invoice, the parties are already known: fill their usual values too.
-    invoice?.sellerPartyId ? getConsignorDefaults(companyId, invoice.sellerPartyId) : null,
-    invoice ? getConsigneeToPlace(companyId, invoice.billToId) : null,
+    invoice?.sellerPartyId
+      ? getConsignorDefaults(companyId, invoice.sellerPartyId)
+      : prefillConsignor && initial.consignorId === prefillConsignor.id
+        ? getConsignorDefaults(companyId, prefillConsignor.id)
+        : null,
+    invoice
+      ? getConsigneeToPlace(companyId, invoice.billToId)
+      : prefillConsignee && initial.consigneeId === prefillConsignee.id
+        ? getConsigneeToPlace(companyId, prefillConsignee.id)
+        : null,
   ]);
   if (toPlace && !initial.toPlace) initial = { ...initial, toPlace };
 

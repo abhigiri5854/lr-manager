@@ -132,6 +132,8 @@ export type Party = BaseRecord & {
   defaultGstPayer: GstPayer | null;
   defaultChargedAs: ChargedAs | null;
   source: RecordSource;
+  /** Why it was cancelled (set with cancelledAt). */
+  cancelReason?: string;
 };
 
 export type Truck = BaseRecord & {
