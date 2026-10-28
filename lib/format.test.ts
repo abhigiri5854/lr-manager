@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { amountInWords, formatDate, formatPaise, formatRupees, formatRupeesShort } from "./format";
+import {
+  amountInWords,
+  formatDate,
+  formatPaise,
+  formatRupees,
+  formatRupeesShort,
+  parseRupees,
+} from "./format";
 
 describe("formatPaise", () => {
   it.each([
@@ -68,5 +75,23 @@ describe("formatRupeesShort", () => {
     expect(formatRupeesShort(10000000)).toBe("₹1,00,000");
     expect(formatRupeesShort(18490258)).toBe("₹1,84,902.58");
     expect(formatRupeesShort(-5000)).toBe("-₹50");
+  });
+});
+
+describe("parseRupees", () => {
+  it.each([
+    ["1,84,902.58", 18490258],
+    ["₹ 500", 50000],
+    ["500.5", 50050],
+    ["0", 0],
+  ])("%s → %i paise", (text, paise) => {
+    expect(parseRupees(text)).toBe(paise);
+  });
+
+  it("returns null for blank and undefined for junk", () => {
+    expect(parseRupees("  ")).toBeNull();
+    expect(parseRupees("12.345")).toBeUndefined();
+    expect(parseRupees("-5")).toBeUndefined();
+    expect(parseRupees("abc")).toBeUndefined();
   });
 });

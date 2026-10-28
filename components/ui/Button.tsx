@@ -35,16 +35,20 @@ type ButtonAsLink = CommonProps & {
   disabled?: boolean;
   /** File download (e.g. Excel export): a plain <a download>, not a client-side route change. */
   download?: boolean;
+  /** Opens in a new tab (e.g. PDF preview): a plain <a target="_blank">. */
+  newTab?: boolean;
 };
 
 export function Button(props: ButtonAsButton | ButtonAsLink) {
   if (props.href !== undefined) {
-    const { variant = "primary", className, children, href, disabled, download } = props;
-    if (download) {
+    const { variant = "primary", className, children, href, disabled, download, newTab } = props;
+    if (download || newTab) {
       return (
         <a
           href={disabled ? undefined : href}
-          download
+          download={download || undefined}
+          target={newTab ? "_blank" : undefined}
+          rel={newTab ? "noopener" : undefined}
           className={cx(base, variants[variant], className)}
           aria-disabled={disabled || undefined}
         >

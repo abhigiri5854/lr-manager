@@ -19,7 +19,7 @@ import { cx } from "@/lib/cx";
 
 export type AiFlag = "low-confidence" | "new-record";
 
-type ShellProps = {
+export type ShellProps = {
   label: ReactNode;
   /** Visually hide the label (still read by screen readers), e.g. inside a table cell. */
   hideLabel?: boolean;
@@ -31,23 +31,23 @@ type ShellProps = {
   className?: string;
 };
 
-const control =
+export const control =
   "w-full rounded-control border bg-surface px-3 text-sm text-text disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted";
 
-function stateClasses(error: ReactNode, aiFlag: AiFlag | undefined) {
+export function stateClasses(error: ReactNode, aiFlag: AiFlag | undefined) {
   if (error) return "border-danger";
   if (aiFlag === "new-record") return "border-2 border-attention bg-attention-soft";
   if (aiFlag === "low-confidence") return "border-attention bg-attention-soft";
   return "border-border-input";
 }
 
-function useFieldIds(id: string | undefined) {
+export function useFieldIds(id: string | undefined) {
   const auto = useId();
   const controlId = id ?? auto;
   return { controlId, hintId: `${controlId}-hint`, msgId: `${controlId}-msg` };
 }
 
-function Shell({
+export function Shell({
   label,
   hideLabel,
   hint,
@@ -90,7 +90,7 @@ function Shell({
   );
 }
 
-function describedBy(p: ShellProps, hintId: string, msgId: string) {
+export function describedBy(p: ShellProps, hintId: string, msgId: string) {
   const ids = [p.hint && !p.error && hintId, (p.error || (p.aiFlag && p.aiNote)) && msgId];
   return ids.filter(Boolean).join(" ") || undefined;
 }

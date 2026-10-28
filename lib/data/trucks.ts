@@ -67,6 +67,21 @@ export async function listTrucks(
   return paginate(rows, params);
 }
 
+export type TruckSuggestion = TruckView & { lastLrNo: string | null };
+
+/** Up to 8 trucks for the LR form's truck autocomplete, with the latest LR each was on. */
+export async function listTruckSuggestions(
+  companyId: string,
+  search: string,
+): Promise<TruckSuggestion[]> {
+  const { rows } = await listTrucks(companyId, { search, pageSize: 8 });
+  const lrs = scoped(db.lrs, companyId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return rows.map((t) => ({
+    ...t,
+    lastLrNo: lrs.find((lr) => lr.truckId === t.id)?.lrNo ?? null,
+  }));
+}
+
 /** Every active truck as id + number, for filter dropdowns (not paginated). */
 export async function listTruckOptions(
   companyId: string,

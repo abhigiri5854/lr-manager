@@ -13,10 +13,20 @@ import {
 import { getCompany, listCompanies, updateCompany } from "./companies";
 import { ConflictError, ValidationError } from "./errors";
 import { getTaxInvoiceById, listLrsForInvoice, listTaxInvoices } from "./invoices";
-import { bookLr, cancelLr, createLr, getLrById, listLrs, listLrsForExport, updateLr } from "./lrs";
+import {
+  bookLr,
+  cancelLr,
+  createLr,
+  getConsignorDefaults,
+  getLrById,
+  listLrs,
+  listLrsForExport,
+  peekNextLrNo,
+  updateLr,
+} from "./lrs";
 import { createParty, findPartyByGstin, listParties, updateParty } from "./parties";
 import { createPod, listPodPending } from "./pod";
-import { findTruckByNumber, listTrucks } from "./trucks";
+import { findTruckByNumber, listTruckSuggestions, listTrucks } from "./trucks";
 
 // Sample ids are looked up by business key so the test doesn't import lib/mock.
 const acmId = () => db.companies.find((c) => c.label === "ACM Logistics")!.id;
@@ -213,5 +223,70 @@ describe("LR → POD → bill → paid", () => {
   it("won't book a draft that is missing required fields", async () => {
     const lr = await createLr(acmId(), { fromPlace: "Painal" });
     await expect(bookLr(acmId(), lr.id, lr.version)).rejects.toThrow(/LR date is required/);
+  });
+});
+
+describe("New / Edit LR form", () => {
+  const bookable = () => ({
+    lrDate: "2026-10-28",
+    fromPlace: "Painal",
+    toPlace: "Motihari",
+    consignorId: partyId("Ashirvad Pipes Pvt Ltd"),
+    consigneeId: partyId("1789 India Trading"),
+    paymentMode: "tbb" as const,
+    items: [{ description: "Water tank", packages: 10 }],
+  });
+
+  it("peeks the next LR number without taking it", async () => {
+    expect(await peekNextLrNo(acmId(), "2026-10-28")).toBe("19021");
+    expect(await peekNextLrNo(acmId(), "2026-10-28")).toBe("19021");
+    // A new financial year carries on from the latest series, like allocation does.
+    expect(await peekNextLrNo(acmId(), "2027-05-01")).toBe("19021");
+    expect(await peekNextLrNo(rsId())).toBeNull();
+  });
+
+  it("creates and books in one go, with a snapshot", async () => {
+    const lr = await createLr(acmId(), bookable(), { book: true });
+    expect(lr.lrNo).toBe("19021");
+    expect(lr.status).toBe("Booked");
+    expect(lr.snapshot?.consignor?.name).toBe("Ashirvad Pipes Pvt Ltd");
+  });
+
+  it("refuses to book an incomplete LR without using up a number", async () => {
+    await expect(createLr(acmId(), { fromPlace: "Painal" }, { book: true })).rejects.toThrow(
+      /LR date is required/,
+    );
+    expect(await peekNextLrNo(acmId(), "2026-10-28")).toBe("19021");
+  });
+
+  it("books a draft on update and still checks the version", async () => {
+    const draft = await createLr(acmId(), { fromPlace: "Painal" });
+    await expect(updateLr(acmId(), draft.id, 99, bookable(), { book: true })).rejects.toThrow(
+      ConflictError,
+    );
+    const booked = await updateLr(acmId(), draft.id, draft.version, bookable(), { book: true });
+    expect(booked.status).toBe("Booked");
+    expect(booked.lrNo).toBe(draft.lrNo);
+    expect(booked.snapshot?.consignee?.name).toBe("1789 India Trading");
+  });
+
+  it("fills consignor defaults from their latest booked LR, else the party's settings", async () => {
+    const d = await getConsignorDefaults(acmId(), partyId("Ashirvad Pipes Pvt Ltd"));
+    expect(d).toMatchObject({ lrNo: "19019", fromPlace: "Painal", chargedAs: "ftl" });
+    expect(await getConsignorDefaults(acmId(), partyId("Maa Vaishno Hardware"))).toBeNull();
+    const p = await createParty(acmId(), { name: "New Co", defaultFrom: "Bihta" });
+    expect(await getConsignorDefaults(acmId(), p.id)).toMatchObject({
+      lrNo: null,
+      fromPlace: "Bihta",
+    });
+  });
+
+  it("suggests trucks with their latest LR", async () => {
+    const [t] = await listTruckSuggestions(acmId(), "br 06");
+    expect(t).toMatchObject({
+      number: "BR06GB7374",
+      driverMobile: "8873764100",
+      lastLrNo: "19020",
+    });
   });
 });

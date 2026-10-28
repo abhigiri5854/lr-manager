@@ -1,7 +1,16 @@
 import { financialYear } from "@/lib/fy";
 import { normaliseVehicleNo } from "@/lib/validators/common";
 import { companySnapshot, partySnapshot } from "@/lib/snapshots";
-import type { Lr, LrCharges, LrStatus, LrView, Page } from "@/lib/types";
+import type {
+  ChargedAs,
+  GstPayer,
+  Lr,
+  LrCharges,
+  LrPaymentMode,
+  LrStatus,
+  LrView,
+  Page,
+} from "@/lib/types";
 import {
   lrBookingErrors,
   lrCancelSchema,
@@ -20,6 +29,7 @@ import {
   db,
   fail,
   findById,
+  findSeries,
   insertRecord,
   matchesSearch,
   newId,
@@ -174,12 +184,90 @@ export async function getLrById(companyId: string, id: string): Promise<LrView |
   return lr ? toLrView(lr) : null;
 }
 
-/** Creates a draft LR. Its number is taken from the company's LR series straight away. */
-export async function createLr(companyId: string, input: LrInput): Promise<LrView> {
+/**
+ * The number the next new LR will get (prefix included), without taking it.
+ * Shown on the New LR screen; the real number is allocated on save.
+ */
+export async function peekNextLrNo(
+  companyId: string,
+  lrDate?: string | null,
+): Promise<string | null> {
+  const company = db.companies.find((c) => c.id === companyId);
+  if (!company) return null;
+  const row =
+    findSeries(companyId, "lr", financialYear(lrDate ?? today())) ??
+    // Same carry-over rule as allocateNumber: a new FY continues from the latest series.
+    db.numberSeries
+      .filter((s) => s.companyId === companyId && s.series === "lr")
+      .sort((a, b) => b.fy.localeCompare(a.fy))[0];
+  return row ? `${company.lrPrefix}${row.nextValue}` : null;
+}
+
+export type ConsignorDefaults = {
+  /** Null when the values come from the party's saved defaults, not an earlier LR. */
+  lrId: string | null;
+  lrNo: string | null;
+  fromPlace: string | null;
+  chargedAs: ChargedAs | null;
+  paymentMode: LrPaymentMode | null;
+  gstPaidBy: GstPayer | null;
+};
+
+/** What to pre-fill when a consignor is picked: their latest booked LR, else the party's defaults. */
+export async function getConsignorDefaults(
+  companyId: string,
+  consignorId: string,
+): Promise<ConsignorDefaults | null> {
+  const last = scoped(db.lrs, companyId)
+    .filter((lr) => lr.consignorId === consignorId && lr.bookedAt)
+    .sort((a, b) => b.bookedAt!.localeCompare(a.bookedAt!))[0];
+  if (last) {
+    return {
+      lrId: last.id,
+      lrNo: last.lrNo,
+      fromPlace: last.fromPlace,
+      chargedAs: last.chargedAs,
+      paymentMode: last.paymentMode,
+      gstPaidBy: last.gstPaidBy,
+    };
+  }
+  const party = findById(db.parties, companyId, consignorId);
+  if (
+    !party ||
+    (!party.defaultFrom &&
+      !party.defaultChargedAs &&
+      !party.defaultPaymentMode &&
+      !party.defaultGstPayer)
+  ) {
+    return null;
+  }
+  return {
+    lrId: null,
+    lrNo: null,
+    fromPlace: party.defaultFrom,
+    chargedAs: party.defaultChargedAs,
+    paymentMode: party.defaultPaymentMode,
+    gstPaidBy: party.defaultGstPayer,
+  };
+}
+
+export type SaveLrOptions = {
+  /** Also book the LR (Draft → Booked) in the same write. */
+  book?: boolean;
+};
+
+/**
+ * Creates an LR (a draft, or booked when `book` is set). Its number is taken from the
+ * company's LR series on create — only after validation passes, so a failed save leaves no gap.
+ */
+export async function createLr(
+  companyId: string,
+  input: LrInput,
+  options: SaveLrOptions = {},
+): Promise<LrView> {
   const v = parseInput(lrFields, input);
   assertLrRefs(companyId, v);
   const company = db.companies.find((c) => c.id === companyId)!;
-  const no = allocateNumber(companyId, "lr", financialYear(v.lrDate ?? today()));
   const nested = normaliseNested(v);
   const t = now();
   const lr: Lr = {
@@ -188,7 +276,7 @@ export async function createLr(companyId: string, input: LrInput): Promise<LrVie
     createdAt: t,
     updatedAt: t,
     version: 1,
-    lrNo: `${company.lrPrefix}${no}`,
+    lrNo: "",
     lrDate: v.lrDate ?? null,
     fromPlace: v.fromPlace ?? null,
     toPlace: v.toPlace ?? null,
@@ -211,6 +299,13 @@ export async function createLr(companyId: string, input: LrInput): Promise<LrVie
     deliveredAt: null,
     snapshot: null,
   };
+  if (options.book) {
+    assertRules(lrBookingErrors(lr));
+    lr.bookedAt = t;
+  }
+  const no = allocateNumber(companyId, "lr", financialYear(v.lrDate ?? today()));
+  lr.lrNo = `${company.lrPrefix}${no}`;
+  if (options.book) lr.snapshot = snapshotFor(lr);
   return toLrView(insertRecord("lrs", db.lrs, lr));
 }
 
@@ -219,6 +314,7 @@ export async function updateLr(
   id: string,
   expectedVersion: number,
   patch: LrPatch,
+  options: SaveLrOptions = {},
 ): Promise<LrView> {
   assertNotOnFinalBill(companyId, id);
   const p = parseInput(lrPatchSchema, patch);
@@ -238,6 +334,7 @@ export async function updateLr(
         lrInvoices: nested.lrInvoices ?? current.lrInvoices,
         charges: { ...current.charges, ...p.charges },
       };
+      if (options.book && !next.bookedAt) next.bookedAt = now();
       if (next.bookedAt) {
         assertRules(lrBookingErrors(next));
         // A booked LR keeps its snapshot, except for a party that was swapped for another.

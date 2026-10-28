@@ -93,3 +93,15 @@ export function amountInWords(paise: number): string {
   const paisePart = p ? ` and ${twoDigits(p)} Paise` : "";
   return `Rupees ${integerInWords(rupees)}${paisePart} only`;
 }
+
+/**
+ * Rupees typed into a form → paise. "1,84,902.58" / "₹ 500" → 18490258 / 50000.
+ * Blank → null. Anything else (letters, 3+ decimals, negatives) → undefined.
+ */
+export function parseRupees(text: string): number | null | undefined {
+  const s = text.replace(/[\s,₹]/g, "");
+  if (s === "") return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return undefined;
+  const [whole, frac = ""] = s.split(".");
+  return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+}
