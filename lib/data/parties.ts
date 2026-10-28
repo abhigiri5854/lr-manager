@@ -44,6 +44,15 @@ export async function listParties(
   return paginate(rows, params);
 }
 
+/** Every active party as id + name + place, for filter dropdowns (not paginated). */
+export async function listPartyOptions(
+  companyId: string,
+): Promise<{ id: string; name: string; place: string | null }[]> {
+  return scoped(db.parties, companyId)
+    .map((p) => ({ id: p.id, name: p.name, place: p.place }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function getPartyById(companyId: string, id: string): Promise<Party | null> {
   const p = findById(db.parties, companyId, id);
   return p ? clone(p) : null;

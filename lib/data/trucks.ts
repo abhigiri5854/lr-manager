@@ -67,6 +67,15 @@ export async function listTrucks(
   return paginate(rows, params);
 }
 
+/** Every active truck as id + number, for filter dropdowns (not paginated). */
+export async function listTruckOptions(
+  companyId: string,
+): Promise<{ id: string; number: string }[]> {
+  return scoped(db.trucks, companyId)
+    .map((t) => ({ id: t.id, number: t.number }))
+    .sort((a, b) => a.number.localeCompare(b.number));
+}
+
 export async function getTruckById(companyId: string, id: string): Promise<TruckView | null> {
   const t = findById(db.trucks, companyId, id);
   return t ? toTruckView(t) : null;

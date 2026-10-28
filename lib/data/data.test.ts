@@ -13,7 +13,7 @@ import {
 import { getCompany, listCompanies, updateCompany } from "./companies";
 import { ConflictError, ValidationError } from "./errors";
 import { getTaxInvoiceById, listLrsForInvoice, listTaxInvoices } from "./invoices";
-import { bookLr, cancelLr, createLr, getLrById, listLrs, updateLr } from "./lrs";
+import { bookLr, cancelLr, createLr, getLrById, listLrs, listLrsForExport, updateLr } from "./lrs";
 import { createParty, findPartyByGstin, listParties, updateParty } from "./parties";
 import { createPod, listPodPending } from "./pod";
 import { findTruckByNumber, listTrucks } from "./trucks";
@@ -71,6 +71,28 @@ describe("sample LRs", () => {
     const inv = (await listTaxInvoices(acmId())).rows[0];
     expect((await getTaxInvoiceById(acmId(), inv.id))!.totals.totalPaise).toBe(18490258);
     expect((await listLrsForInvoice(acmId(), inv.id)).map((l) => l.lrNo)).toEqual(["19020"]);
+  });
+});
+
+describe("LR register filters", () => {
+  const lrNos = async (params: Parameters<typeof listLrs>[1]) =>
+    (await listLrs(acmId(), params)).rows.map((r) => r.lrNo);
+
+  it("finds a truck typed with spaces", async () => {
+    expect(await lrNos({ search: "br 01 gn" })).toEqual(["19019"]);
+  });
+
+  it("filters by date range, skipping LRs with no date", async () => {
+    expect(await lrNos({ dateFrom: "2026-10-14", dateTo: "2026-10-14" })).toEqual(["19019"]);
+    expect(await lrNos({ dateFrom: "2026-10-15" })).toEqual([]);
+  });
+
+  it("exports every matching row, not just one page", async () => {
+    const all = await listLrsForExport(acmId(), {});
+    expect(all.total).toBe(2);
+    expect((await listLrsForExport(acmId(), { search: "19020" })).rows.map((r) => r.lrNo)).toEqual([
+      "19020",
+    ]);
   });
 });
 

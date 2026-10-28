@@ -31,11 +31,25 @@ type ButtonAsLink = CommonProps & {
   href: string;
   /** Renders a non-clickable link (links can't be `disabled`). */
   disabled?: boolean;
+  /** File download (e.g. Excel export): a plain <a download>, not a client-side route change. */
+  download?: boolean;
 };
 
 export function Button(props: ButtonAsButton | ButtonAsLink) {
   if (props.href !== undefined) {
-    const { variant = "primary", className, children, href, disabled } = props;
+    const { variant = "primary", className, children, href, disabled, download } = props;
+    if (download) {
+      return (
+        <a
+          href={disabled ? undefined : href}
+          download
+          className={cx(base, variants[variant], className)}
+          aria-disabled={disabled || undefined}
+        >
+          {children}
+        </a>
+      );
+    }
     return (
       <Link
         href={href}

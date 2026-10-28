@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveLrStatus } from "./lr-status";
+import { deriveLrStatus, ewayUrgency } from "./lr-status";
 import type { LrStatusInput } from "./types";
 
 const T = "2026-10-14T05:30:00.000Z";
@@ -43,5 +43,18 @@ describe("deriveLrStatus", () => {
 
   it("an un-booked draft stays Draft even if other stamps are present", () => {
     expect(deriveLrStatus({ ...paid, bookedAt: null })).toBe("Draft");
+  });
+});
+
+describe("ewayUrgency", () => {
+  const now = Date.parse("2026-10-15T00:00:00.000Z");
+  it("flags expired and expiring e-way bills on moving goods", () => {
+    expect(ewayUrgency("In transit", "2026-10-14T23:59:59.000Z", now)).toBe("expired");
+    expect(ewayUrgency("Booked", "2026-10-16T00:00:00.000Z", now)).toBe("expiring");
+    expect(ewayUrgency("Draft", "2026-10-16T00:00:01.000Z", now)).toBeNull();
+  });
+  it("ignores delivered LRs and missing dates", () => {
+    expect(ewayUrgency("Delivered", "2026-10-01T00:00:00.000Z", now)).toBeNull();
+    expect(ewayUrgency("In transit", null, now)).toBeNull();
   });
 });

@@ -1,3 +1,4 @@
+import { isGoodsMoving } from "@/lib/lr-status";
 import type { AttentionItem, Dashboard, LrView, RepeatRoute } from "@/lib/types";
 import { lrBookingErrors } from "@/lib/validators/lr";
 import { billForLr, receivedForBill, toLrView } from "./_derive";
@@ -23,9 +24,7 @@ const BOOKING_LABELS: Record<string, string> = {
   items: "items",
 };
 
-/** Goods are still moving: the e-way bill must stay valid. */
-const isOpen = (lr: LrView) =>
-  lr.status === "Draft" || lr.status === "Booked" || lr.status === "In transit";
+const isOpen = (lr: LrView) => isGoodsMoving(lr.status);
 
 function draftMissing(lr: LrView): string[] {
   const missing = lrBookingErrors(lr).map((e) => BOOKING_LABELS[e.path] ?? e.path);

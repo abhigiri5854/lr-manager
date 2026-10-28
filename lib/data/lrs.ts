@@ -1,4 +1,5 @@
 import { financialYear } from "@/lib/fy";
+import { normaliseVehicleNo } from "@/lib/validators/common";
 import { companySnapshot, partySnapshot } from "@/lib/snapshots";
 import type { Lr, LrCharges, LrStatus, LrView, Page } from "@/lib/types";
 import {
@@ -116,9 +117,12 @@ function assertNotOnFinalBill(companyId: string, lrId: string) {
   if (bill?.status === "final") fail("", `LR is on freight bill ${bill.billNo} and is locked`);
 }
 
-export async function listLrs(companyId: string, params: LrListParams = {}): Promise<Page<LrView>> {
+/** Filters shared by the register page and its Excel export, newest first. */
+function filterLrs(companyId: string, params: LrListParams): LrView[] {
   const includeCancelled = params.status === "Cancelled";
-  const rows = scoped(db.lrs, companyId, includeCancelled)
+  // "br 01 gn 8331" should find BR01GN8331.
+  const truckQuery = params.search ? normaliseVehicleNo(params.search) : "";
+  return scoped(db.lrs, companyId, includeCancelled)
     .filter((lr) => !params.truckId || lr.truckId === params.truckId)
     .filter(
       (lr) =>
@@ -128,21 +132,39 @@ export async function listLrs(companyId: string, params: LrListParams = {}): Pro
     .filter((lr) => !params.dateTo || (lr.lrDate !== null && lr.lrDate <= params.dateTo))
     .map(toLrView)
     .filter((v) => !params.status || v.status === params.status)
-    .filter((v) =>
-      matchesSearch(
-        params.search,
-        v.lrNo,
-        v.consignorName,
-        v.consigneeName,
-        v.billedToName,
-        v.truckNumber,
-        v.fromPlace,
-        v.toPlace,
-        ...v.lrInvoices.flatMap((i) => [i.invoiceNo, i.ewayBillNo]),
-      ),
+    .filter(
+      (v) =>
+        (truckQuery !== "" && !!v.truckNumber?.includes(truckQuery)) ||
+        matchesSearch(
+          params.search,
+          v.lrNo,
+          v.consignorName,
+          v.consigneeName,
+          v.billedToName,
+          v.truckNumber,
+          v.fromPlace,
+          v.toPlace,
+          ...v.lrInvoices.flatMap((i) => [i.invoiceNo, i.ewayBillNo]),
+        ),
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return paginate(rows, params);
+}
+
+/** One page (max 50) of LRs matching the filters, with the total count. */
+export async function listLrs(companyId: string, params: LrListParams = {}): Promise<Page<LrView>> {
+  return paginate(filterLrs(companyId, params), params);
+}
+
+/** Most rows one Excel export returns. */
+export const LR_EXPORT_LIMIT = 10_000;
+
+/** Every LR matching the filters (up to LR_EXPORT_LIMIT), for the Excel export. */
+export async function listLrsForExport(
+  companyId: string,
+  params: Omit<LrListParams, "page" | "pageSize"> = {},
+): Promise<{ rows: LrView[]; total: number }> {
+  const rows = filterLrs(companyId, params);
+  return { rows: rows.slice(0, LR_EXPORT_LIMIT), total: rows.length };
 }
 
 export async function getLrById(companyId: string, id: string): Promise<LrView | null> {
