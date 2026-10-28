@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveLrStatus, ewayUrgency } from "./lr-status";
+import { deriveLrStatus, ewayUrgency, lrTimeline } from "./lr-status";
 import type { LrStatusInput } from "./types";
 
 const T = "2026-10-14T05:30:00.000Z";
@@ -56,5 +56,29 @@ describe("ewayUrgency", () => {
   it("ignores delivered LRs and missing dates", () => {
     expect(ewayUrgency("Delivered", "2026-10-01T00:00:00.000Z", now)).toBeNull();
     expect(ewayUrgency("In transit", null, now)).toBeNull();
+  });
+});
+
+describe("lrTimeline", () => {
+  const states = (input: LrStatusInput) => lrTimeline(input).map((s) => s.state);
+
+  it("marks reached stages done and the next one current", () => {
+    expect(states(inTransit)).toEqual([
+      "done",
+      "done",
+      "current",
+      "upcoming",
+      "upcoming",
+      "upcoming",
+    ]);
+    expect(lrTimeline(inTransit)[1].at).toBe(T);
+  });
+
+  it("has no current stage once cancelled", () => {
+    expect(states({ ...booked, cancelledAt: T })).not.toContain("current");
+  });
+
+  it("a paid LR is all done", () => {
+    expect(new Set(states(paid))).toEqual(new Set(["done"]));
   });
 });

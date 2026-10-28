@@ -15,7 +15,21 @@ const PRIMARY: Partial<Record<LrStatus, Primary>> = {
 };
 
 /** Once on a final bill an LR is locked, so it can't be cancelled from here. */
-const CANCELLABLE: LrStatus[] = ["Draft", "Booked", "In transit", "Delivered", "POD received"];
+export const CANCELLABLE: LrStatus[] = [
+  "Draft",
+  "Booked",
+  "In transit",
+  "Delivered",
+  "POD received",
+];
+
+/** The next step for an LR (register row and detail header share it). */
+export function lrPrimaryAction(
+  lr: Pick<LrView, "id" | "status">,
+): { label: string; href: string } | null {
+  const p = PRIMARY[lr.status];
+  return p ? { label: p.label, href: p.href(lr.id) } : null;
+}
 
 /**
  * Row actions: the status's next step plus a "⋯" menu (Print, Repeat, Cancel LR).

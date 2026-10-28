@@ -38,3 +38,40 @@ export function ewayUrgency(
   if (left < 0) return "expired";
   return left <= DAY_MS ? "expiring" : null;
 }
+
+export const LR_STAGES = [
+  "Booked",
+  "In transit",
+  "Delivered",
+  "POD received",
+  "Billed",
+  "Paid",
+] as const;
+export type LrStage = (typeof LR_STAGES)[number];
+
+export type TimelineStep = {
+  stage: LrStage;
+  /** ISO date or timestamp the stage was reached, null if not yet. */
+  at: string | null;
+  /** "current" is the next stage to happen; a cancelled LR has none. */
+  state: "done" | "current" | "upcoming";
+};
+
+/** Booked → In transit → Delivered → POD received → Billed → Paid, with when each was reached. */
+export function lrTimeline(lr: LrStatusInput): TimelineStep[] {
+  const at: Record<LrStage, string | null> = {
+    Booked: lr.bookedAt,
+    "In transit": lr.dispatchedAt,
+    Delivered: lr.deliveredAt,
+    "POD received": lr.podReceivedAt,
+    Billed: lr.billedAt,
+    Paid: lr.paidAt,
+  };
+  let currentTaken = !!lr.cancelledAt;
+  return LR_STAGES.map((stage) => {
+    if (at[stage]) return { stage, at: at[stage], state: "done" };
+    if (currentTaken) return { stage, at: null, state: "upcoming" };
+    currentTaken = true;
+    return { stage, at: null, state: "current" };
+  });
+}
