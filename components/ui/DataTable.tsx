@@ -9,6 +9,8 @@ export type Column<T> = {
   align?: "left" | "right";
   /** IBM Plex Mono — LR no., GSTIN, truck no. */
   mono?: boolean;
+  /** Let long text wrap, cut off after 2 lines (other cells never wrap). Kept wider on phones, where the table scrolls anyway. */
+  wrap?: boolean;
 };
 
 type DataTableProps<T> = {
@@ -24,12 +26,17 @@ type DataTableProps<T> = {
   rowHref?: (row: T) => string;
   /** Shown in a single row when there is no data. */
   empty?: ReactNode;
+  /** "compact": 10px cell padding (Invoice.dc.html) for tables that share the row with a sidebar. */
+  density?: "default" | "compact";
 };
 
-// th/td rules from the <style> block in Register.dc.html.
-const th =
-  "border-b border-border px-3 py-2.5 text-[13px] font-semibold whitespace-nowrap text-muted";
-const td = "border-b border-border-row p-3 text-sm whitespace-nowrap";
+// th/td rules from the <style> blocks in Register.dc.html (default) and Invoice.dc.html (compact).
+const th = "border-b border-border py-2.5 text-[13px] font-semibold text-muted";
+const td = "border-b border-border-row text-sm";
+const pad = {
+  default: { th: "px-3", td: "p-3" },
+  compact: { th: "px-2.5", td: "p-2.5" },
+};
 
 /**
  * Table that scrolls sideways when it doesn't fit (phones). Put it in
@@ -42,7 +49,9 @@ export function DataTable<T>({
   rowKey,
   rowHref,
   empty = "Nothing here yet.",
+  density = "default",
 }: DataTableProps<T>) {
+  const p = pad[density];
   return (
     <div className="overflow-x-auto">
       <table aria-label={label} className="w-full border-collapse">
@@ -52,7 +61,12 @@ export function DataTable<T>({
               <th
                 key={c.key}
                 scope="col"
-                className={cx(th, c.align === "right" ? "text-right" : "text-left")}
+                className={cx(
+                  th,
+                  p.th,
+                  !c.wrap && "whitespace-nowrap",
+                  c.align === "right" ? "text-right" : "text-left",
+                )}
               >
                 {c.header}
               </th>
@@ -62,7 +76,7 @@ export function DataTable<T>({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className={cx(td, "text-muted")}>
+              <td colSpan={columns.length} className={cx(td, p.td, "text-muted")}>
                 {empty}
               </td>
             </tr>
@@ -72,12 +86,15 @@ export function DataTable<T>({
               return (
                 <tr key={rowKey(row)} className={cx(href && "relative hover:bg-surface-subtle")}>
                   {columns.map((c, i) => {
-                    const content = c.cell(row);
+                    const cell = c.cell(row);
+                    const content = c.wrap ? <div className="line-clamp-2">{cell}</div> : cell;
                     return (
                       <td
                         key={c.key}
                         className={cx(
                           td,
+                          p.td,
+                          c.wrap ? "min-w-40 sm:min-w-24" : "whitespace-nowrap",
                           c.align === "right" && "text-right",
                           c.mono && "font-mono",
                         )}

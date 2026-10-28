@@ -476,7 +476,7 @@ export type AttentionItem =
       missing: string[];
     };
 
-/** A consignor → consignee pair, with the latest LR to copy from. */
+/** A consignor → consignee pair from booked LRs, with the latest one to copy from. */
 export type RepeatRoute = {
   /** Latest LR for this pair (used for /lr/new?from=). */
   lrId: Uuid;
@@ -486,7 +486,9 @@ export type RepeatRoute = {
   toPlace: string | null;
   chargedAs: ChargedAs | null;
   paymentMode: LrPaymentMode | null;
+  /** LR date of the latest booked LR for this pair. */
   lastUsedOn: IsoDate;
+  /** Booked, non-cancelled LRs for this pair. */
   count: number;
 };
 

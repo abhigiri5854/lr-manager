@@ -37,28 +37,30 @@ function draftMissing(lr: LrView): string[] {
   return missing;
 }
 
+/** Booked LRs only (drafts and cancelled LRs don't count); "last used" is the LR date. */
 function repeatRoutes(lrs: LrView[]): RepeatRoute[] {
-  const pairs = new Map<string, LrView[]>();
+  type BookedLr = LrView & { lrDate: string; consignorName: string; consigneeName: string };
+  const pairs = new Map<string, BookedLr[]>();
   for (const lr of lrs) {
+    if (!lr.bookedAt || lr.cancelledAt || !lr.lrDate) continue;
     if (!lr.consignorName || !lr.consigneeName) continue;
     const key = `${lr.consignorId}:${lr.consigneeId}`;
-    pairs.set(key, [...(pairs.get(key) ?? []), lr]);
+    pairs.set(key, [...(pairs.get(key) ?? []), lr as BookedLr]);
   }
-  const usedOn = (lr: LrView) => lr.lrDate ?? lr.createdAt.slice(0, 10);
   return [...pairs.values()]
     .map((group) => {
       const latest = group.reduce((a, b) =>
-        `${usedOn(b)}${b.createdAt}` > `${usedOn(a)}${a.createdAt}` ? b : a,
+        b.lrDate > a.lrDate || (b.lrDate === a.lrDate && b.createdAt > a.createdAt) ? b : a,
       );
       return {
         lrId: latest.id,
-        consignorName: latest.consignorName!,
-        consigneeName: latest.consigneeName!,
+        consignorName: latest.consignorName,
+        consigneeName: latest.consigneeName,
         fromPlace: latest.fromPlace,
         toPlace: latest.toPlace,
         chargedAs: latest.chargedAs,
         paymentMode: latest.paymentMode,
-        lastUsedOn: usedOn(latest),
+        lastUsedOn: latest.lrDate,
         count: group.length,
       };
     })

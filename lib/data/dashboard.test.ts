@@ -3,7 +3,7 @@ import { db, resetStore } from "./_store";
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
 import { getDashboard } from "./dashboard";
-import { createLr } from "./lrs";
+import { bookLr, cancelLr, createLr } from "./lrs";
 import { createPod } from "./pod";
 
 const acmId = () => db.companies.find((c) => c.label === "ACM Logistics")!.id;
@@ -35,8 +35,8 @@ describe("dashboard", () => {
         missing: ["LR date", "e-way bill no.", "weight"],
       },
     ]);
+    // Draft 19020 doesn't count, so only 19019's pair is offered.
     expect(d.repeatRoutes.map((r) => `${r.consigneeName} ${r.lastUsedOn}`)).toEqual([
-      "1789 India Trading 2026-10-27",
       "Maa Vaishno Hardware 2026-10-14",
     ]);
   });
@@ -66,15 +66,34 @@ describe("dashboard", () => {
     });
   });
 
-  it("ranks repeat pairs by how often they are used", async () => {
-    const pair = {
+  it("builds repeat pairs from booked, non-cancelled LRs only, dated by LR date", async () => {
+    const co = acmId();
+    const toIndia = {
       consignorId: partyId("Ashirvad Pipes Pvt Ltd"),
-      consigneeId: partyId("Maa Vaishno Hardware"),
+      consigneeId: partyId("1789 India Trading"),
+      fromPlace: "Painal",
+      toPlace: "Motihari",
+      paymentMode: "tbb" as const,
+      items: [{ description: "Water tank", packages: 5 }],
     };
-    await createLr(acmId(), { ...pair, lrDate: "2026-10-20" });
-    const d = await getDashboard(acmId());
-    expect(d.repeatRoutes[0]).toMatchObject({ consigneeName: "Maa Vaishno Hardware", count: 2 });
-    expect(d.repeatRoutes[0].lastUsedOn).toBe("2026-10-20");
+    const book = async (lrDate: string) => {
+      const lr = await createLr(co, { ...toIndia, lrDate });
+      return bookLr(co, lr.id, lr.version);
+    };
+
+    // Two booked LRs for 1789 India Trading (+ draft 19020 and a cancelled one, which don't count).
+    await book("2026-10-18");
+    const latest = await book("2026-10-22");
+    const cancelled = await book("2026-10-25");
+    await cancelLr(co, cancelled.id);
+    await createLr(co, { ...toIndia, lrDate: "2026-10-26" }); // draft
+
+    const d = await getDashboard(co);
+    expect(d.repeatRoutes.map((r) => [r.consigneeName, r.count, r.lastUsedOn])).toEqual([
+      ["1789 India Trading", 2, "2026-10-22"],
+      ["Maa Vaishno Hardware", 1, "2026-10-14"],
+    ]);
+    expect(d.repeatRoutes[0].lrId).toBe(latest.id);
   });
 
   it("counts e-way bills expiring within 24 hours", async () => {
