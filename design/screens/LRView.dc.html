@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LR 19019 – LR Manager</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F3A8A}a:hover{color:#142867}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input,select{width:100%;height:44px;box-sizing:border-box;padding:0 12px;border:1px solid #C5CDDB;border-radius:8px;font:inherit;font-size:14px;background:#FFFFFF;color:#111827}
+th{text-align:left;font-weight:600;font-size:13px;color:#4B5563;padding:10px 12px;border-bottom:1px solid #D9DFEA;white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #EEF1F6;font-size:14px;white-space:nowrap;vertical-align:top}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6FA; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #111827">
+<nav aria-label="Main" style="flex: 1 1 240px; background: #0F1E3D; padding: 20px 14px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-weight: 700; font-size: 18px; color: #FFFFFF; padding: 0 10px 12px">LR <span style="color: #9DB4E8; font-weight: 500">Manager</span></div>
+<label for="nav-co" style="display: block; font-size: 12px; font-weight: 600; color: #9DB4E8; padding: 0 10px; margin: 0">Working as</label>
+<select id="nav-co" style="margin: 4px 0 8px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 10px; border: 1px solid #33497A; border-radius: 8px; background: #1A2C52; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600"><option>ACM Logistics · Patna</option><option>RS Logistics · Bokaro</option></select>
+<label for="nav-q" style="position: absolute; left: -9999px">Search everything</label>
+<input id="nav-q" placeholder="Search LR, invoice, truck, party…" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #33497A; border-radius: 8px; background: #FFFFFF; color: #111827; font: inherit; font-size: 14px; margin-bottom: 6px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">OPERATIONS</div>
+<a href="Main.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Dashboard</a>
+<a href="NewLR.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">New LR</a>
+<a href="Register.dc.html" aria-current="page" style="display: block; padding: 11px 12px; border-radius: 8px; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font-weight: 600">LR register</a>
+<a href="POD.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">POD &amp; delivery</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">BILLING</div>
+<a href="Invoice.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Tax invoices</a>
+<a href="Bills.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Bills &amp; payments</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">DATA</div>
+<a href="Parties.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Parties</a>
+<a href="Trucks.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Trucks &amp; drivers</a>
+<a href="Import.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Smart import</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">SETTINGS</div>
+<a href="Settings.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Company profile</a>
+<a href="Users.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Users &amp; roles</a>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div style="font-size: 13px; color: #4B5563"><a href="Register.dc.html">LR register</a> / LR 19019</div>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between">
+<div><h1 style="margin: 0; font-size: 28px">LR <span style="font-family: 'IBM Plex Mono', monospace; color: #1F3A8A">19019</span> <span style="background: #E8EEFB; color: #1F3A8A; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600">In transit</span></h1><p style="margin: 4px 0 0; font-size: 14px; color: #4B5563">14-10-2026 · Ashirvad Pipes → Maa Vaishno Hardware · Painal → Gaighat (MUZ)</p></div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<a href="NewLR.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; color: #111827; text-decoration: none; font: inherit; font-weight: 600">Edit</a>
+<a href="LRPDF.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; color: #111827; text-decoration: none; font: inherit; font-weight: 600">Preview PDF</a>
+<button type="button" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; color: #111827; text-decoration: none; font: inherit; font-weight: 600">Download PDF</button>
+<a href="POD.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #0F1E3D; color: #FFFFFF; text-decoration: none; font: inherit; font-weight: 600">Mark delivered / POD</a>
+</div>
+</div>
+<div style="padding: 12px 16px; border-radius: 10px; background: #FEF3E2; color: #7A3A04; font-size: 14px"><b>E-way bill 801755453075 expired on 15-10-2026.</b> If goods are still moving, extend it on the e-way portal; if delivered, record the POD.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px"><div style="flex: 1 1 140px; padding: 12px; border-radius: 10px; border: 2px solid #1F3A8A; background: #1F3A8A; color: #FFFFFF; font-size: 14px; line-height: 1.4"><b>Booked</b><br><span style="font-size: 12px">14-10-2026</span></div>
+<div style="flex: 1 1 140px; padding: 12px; border-radius: 10px; border: 2px solid #1F3A8A; background: #1F3A8A; color: #FFFFFF; font-size: 14px; line-height: 1.4"><b>In transit</b><br><span style="font-size: 12px">truck BR01GN8331</span></div>
+<div style="flex: 1 1 140px; padding: 12px; border-radius: 10px; border: 2px solid #1F3A8A; background: #FFFFFF; color: #1F3A8A; font-size: 14px; line-height: 1.4"><b>Delivered</b><br><span style="font-size: 12px">pending</span></div>
+<div style="flex: 1 1 140px; padding: 12px; border-radius: 10px; border: 2px solid #C5CDDB; background: #FFFFFF; color: #4B5563; font-size: 14px; line-height: 1.4"><b>POD received</b><br><span style="font-size: 12px">due 10 days after delivery</span></div>
+<div style="flex: 1 1 140px; padding: 12px; border-radius: 10px; border: 2px solid #C5CDDB; background: #FFFFFF; color: #4B5563; font-size: 14px; line-height: 1.4"><b>Billed</b><br><span style="font-size: 12px">—</span></div>
+<div style="flex: 1 1 140px; padding: 12px; border-radius: 10px; border: 2px solid #C5CDDB; background: #FFFFFF; color: #4B5563; font-size: 14px; line-height: 1.4"><b>Paid</b><br><span style="font-size: 12px">—</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section style="flex: 1 1 380px; background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px"><h2 style="margin: 0 0 8px; font-size: 17px">Parties</h2>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Consignor</span><b style="text-align: right">Ashirvad Pipes Pvt Ltd</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Consignor GSTIN</span><b style="text-align: right">10AABCA7061K2ZZ</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Consignee</span><b style="text-align: right">Maa Vaishno Hardware</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Consignee GSTIN</span><b style="text-align: right">10FVWPS5035R1ZM</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Billed to</span><b style="text-align: right">Modern Sanitation</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Billed to GSTIN</span><b style="text-align: right">10AAJFM3446M1ZA</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">GST paid by</span><b style="text-align: right">Consignor</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Payment</span><b style="text-align: right">T.B.B.</b></div></section>
+<section style="flex: 1 1 380px; background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px"><h2 style="margin: 0 0 8px; font-size: 17px">Shipment</h2>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Goods</span><b style="text-align: right">Water tank · 28 pkgs</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Weight / size</span><b style="text-align: right">22 FEET · 564.000</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Charged as</span><b style="text-align: right">FTL</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Value</span><b style="text-align: right">₹ 1,79,356.00</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Goods invoice</span><b style="text-align: right">182604002150 · 10-10-2026</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">E-way bill</span><b style="text-align: right">801755453075</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Truck / driver</span><b style="text-align: right">BR01GN8331 · 7870015869</b></div><div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #EEF1F6; font-size: 14px"><span style="color: #4B5563">Freight</span><b style="text-align: right">[not entered]</b></div></section>
+<section style="flex: 1 1 300px; background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px"><h2 style="margin: 0 0 10px; font-size: 17px">Linked documents</h2>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.5">
+<a href="LRPDF.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>LR PDF</b> · 4 copies<br><span style="color: #4B5563">consignor, consignee, driver, office</span></a>
+<a href="Invoice.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>Goods invoice</b> · 182604002150<br><span style="color: #4B5563">source file attached</span></a>
+<a href="POD.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>POD</b> · not yet received</a>
+<a href="Bills.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>Freight bill</b> · not billed</a>
+</div>
+<h3 style="margin: 16px 0 6px; font-size: 15px">Activity</h3>
+<div style="font-size: 13px; color: #4B5563; line-height: 1.7">14-10-2026 · LR created by [user]<br>Every later edit is logged here: who, what, old → new</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

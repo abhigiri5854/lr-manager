@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Freight invoice PDF – ACM Logistics</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+th{background:#E8EEFB;color:#0F1E3D;font-weight:600;font-size:12px;padding:7px 6px;border:1px solid #6B7A99;text-align:center}
+td{font-size:12px;padding:7px 6px;border:1px solid #6B7A99;vertical-align:top}
+</style>
+</helmet>
+<div style="position: relative; width: 1123px; height: 794px; box-sizing: border-box; padding: 40px; background: #FFFFFF; font-family: 'IBM Plex Sans', Arial, sans-serif; color: #111827; overflow: hidden">
+
+<div style="position: absolute; left: 40px; right: 40px; top: 6px; height: 28px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; z-index: 3"><a href="FreightBill.dc.html" style="color: #1F3A8A; font-weight: 600">← Back to freight bill</a><span style="color: #4B5563">Preview · <button type="button" style="border: 0; background: none; padding: 0; color: #1F3A8A; font: inherit; font-weight: 600; text-decoration: underline">Download PDF</button></span></div>
+<img src="../assets/acm-logo.png" alt="" aria-hidden="true" style="position: absolute; left: 161px; top: 300px; width: 800px; opacity: {{wm}}; pointer-events: none">
+
+<div style="position: relative; border: 1.5px solid #0F1E3D; height: 100%; box-sizing: border-box; display: flex; flex-direction: column">
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 18px; border-bottom: 3px solid {{brand}}">
+<img src="../assets/acm-logo.png" alt="ACM Logistics" style="height: 52px">
+<div style="text-align: right">
+<div style="font-size: 22px; font-weight: 700; letter-spacing: 0.08em; color: {{brand}}">FREIGHT INVOICE</div>
+<div style="font-size: 13px; margin-top: 2px">Original for recipient</div>
+</div>
+</div>
+
+<div style="padding: 8px 18px; border-bottom: 1px solid #6B7A99; font-size: 12px; line-height: 1.55; text-align: center">
+Reg. office: 1st Floor, Near NRL Pump (West Side), Main Road, Bhagwat Nagar Road, Patna – 800026 · Mob. 7070191216, 7070191221<br>
+Email: Rajesh@acmlogistics.in · www.acmlogistics.in · <b>GSTIN: 10AAXFA2859G1ZD</b> · <b>PAN: AAXFA2859G</b>
+</div>
+
+<div style="display: flex; justify-content: space-between; padding: 8px 18px; border-bottom: 1px solid #6B7A99; font-size: 15px; font-weight: 700">
+<span>Invoice No: <span style="font-family: 'IBM Plex Mono', monospace">ACM/FB/26-27/[no.]</span></span>
+<span>Invoice Date: 27-10-2026</span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #6B7A99">
+<div style="padding: 8px 12px; border-right: 1px solid #6B7A99; font-size: 12px; line-height: 1.5"><div style="font-weight: 700; background: #E8EEFB; margin: -8px -12px 6px; padding: 5px 12px; color: #0F1E3D">BILLED TO</div><b>Ashirvad Pipes Pvt Ltd</b><br>Plot 8461 &amp; 8462, Khata 1593/1594, PS Bihta, Painal, Patna<br>Phone: 7250015777<br>GSTIN: 10AABCA7061K2ZZ</div>
+<div style="padding: 8px 12px; border-right: 1px solid #6B7A99; font-size: 12px; line-height: 1.5"><div style="font-weight: 700; background: #E8EEFB; margin: -8px -12px 6px; padding: 5px 12px; color: #0F1E3D">SHIP FROM</div>Ashirvad Pipes Pvt Ltd<br>Painal, Patna, Bihar</div>
+<div style="padding: 8px 12px; font-size: 12px; line-height: 1.5"><div style="font-weight: 700; background: #E8EEFB; margin: -8px -12px 6px; padding: 5px 12px; color: #0F1E3D">SHIP TO</div>Maa Vaishno Hardware<br>Kanta Pirouchha North, Benibad, Muzaffarpur 847107<br>GSTIN: 10FVWPS5035R1ZM</div>
+</div>
+
+<table style="border-collapse: collapse; width: 100%; margin-top: -1px">
+<thead><tr><th>S No</th><th>LR No</th><th>LR Date</th><th>Invoice No</th><th>Description</th><th>From</th><th>Destination</th><th>Vehicle No</th><th>Vehicle Type</th><th>Billing Wt</th><th>Rate</th><th>Freight</th><th>Detention</th><th>Other</th><th>Total Freight</th></tr></thead>
+<tbody>
+<tr><td style="text-align: center">1</td><td>19019</td><td>14-10-2026</td><td>182604002150</td><td>Water tank, 28 pkgs</td><td>Painal</td><td>Gaighat (MUZ)</td><td>BR01GN8331</td><td>Truck · FTL</td><td style="text-align: right">564.000</td><td style="text-align: right">[rate]</td><td style="text-align: right">[freight]</td><td style="text-align: right">[ ]</td><td style="text-align: right">[ ]</td><td style="text-align: right">[total]</td></tr>
+<tr><td colspan="11" style="text-align: center; font-weight: 700">TOTAL</td><td style="text-align: right; font-weight: 700">[ ]</td><td style="text-align: right; font-weight: 700">0</td><td style="text-align: right; font-weight: 700">0</td><td style="text-align: right; font-weight: 700">[ ]</td></tr>
+<tr><td colspan="15" style="font-weight: 600">Amount in words: Rupees [amount in words] only</td></tr>
+</tbody>
+</table>
+
+<div style="display: flex; flex: 1; border-top: 1px solid #6B7A99; margin-top: -1px">
+<div style="flex: 1; padding: 10px 14px; font-size: 12px; line-height: 1.7; border-right: 1px solid #6B7A99">
+<div>Note: GST on freight under reverse charge (RCM) — payable by recipient.</div>
+<div style="font-weight: 700; margin-top: 6px; color: #0F1E3D">Our bank account details</div>
+<div>A/c name: [account name] · Bank: [bank name]</div>
+<div>A/c no: [account number] · IFSC: [IFSC code]</div>
+</div>
+<div style="width: 300px; padding: 10px 14px; font-size: 12px; display: flex; flex-direction: column; justify-content: space-between; text-align: right">
+<div style="font-weight: 700">For ACM Logistics</div>
+<div>Authorised signatory</div>
+</div>
+</div>
+
+<div style="padding: 6px 14px; border-top: 1px solid #6B7A99; font-size: 12px; color: #4B5563; text-align: center">Computer-generated invoice · Subject to Patna jurisdiction</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"brand":{"editor":"color","default":"#1F3A8A","options":["#1F3A8A","#0F1E3D","#B45309"]},"wm":{"editor":"range","default":0.07,"min":0,"max":0.25,"step":0.01},"$preview":{"width":1123,"height":794}}'>
+class Component extends DCLogic {
+  renderVals() { return { brand: this.props.brand ?? '#1F3A8A', wm: this.props.wm ?? 0.07 }; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Log in – LR Manager</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F3A8A}a:hover{color:#142867}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input,select{width:100%;height:44px;box-sizing:border-box;padding:0 12px;border:1px solid #C5CDDB;border-radius:8px;font:inherit;font-size:14px;background:#FFFFFF;color:#111827}
+th{text-align:left;font-weight:600;font-size:13px;color:#4B5563;padding:10px 12px;border-bottom:1px solid #D9DFEA;white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #EEF1F6;font-size:14px;white-space:nowrap;vertical-align:top}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 32px; box-sizing: border-box; background: #0F1E3D; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #111827">
+<div style="width: 100%; max-width: 420px; background: #FFFFFF; border-radius: 16px; padding: 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+<div style="font-weight: 700; font-size: 24px">LR <span style="color: #1F3A8A">Manager</span></div>
+<p style="margin: 0; font-size: 14px; color: #4B5563">Log in with your mobile number. Owners and staff land on the Dashboard; drivers on My trips.</p>
+<div><label for="l1">Mobile number or email</label><input id="l1" placeholder="10-digit mobile"></div>
+<div><label for="l2">Password</label><input id="l2" type="password" placeholder="••••••••"></div>
+<a href="Main.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font: inherit; font-weight: 600; justify-content: center">Log in</a>
+<a href="Main.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; color: #111827; text-decoration: none; font: inherit; font-weight: 600; justify-content: center">Get OTP instead</a>
+<a href="Login.dc.html" style="font-size: 14px; text-align: center">Forgot password?</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

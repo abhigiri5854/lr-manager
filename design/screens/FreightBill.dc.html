@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Freight bill – ACM LR Manager</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F3A8A}a:hover{color:#142867}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input,select{width:100%;height:44px;box-sizing:border-box;padding:0 12px;border:1px solid #C5CDDB;border-radius:8px;font:inherit;font-size:14px;background:#FFFFFF;color:#111827}
+th{text-align:left;font-weight:600;font-size:13px;color:#4B5563;padding:10px 12px;border-bottom:1px solid #D9DFEA;white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #EEF1F6;font-size:14px;white-space:nowrap}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6FA; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #111827">
+
+<nav aria-label="Main" style="flex: 1 1 240px; background: #0F1E3D; padding: 20px 14px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-weight: 700; font-size: 18px; color: #FFFFFF; padding: 0 10px 12px">LR <span style="color: #9DB4E8; font-weight: 500">Manager</span></div>
+<label for="nav-co" style="display: block; font-size: 12px; font-weight: 600; color: #9DB4E8; padding: 0 10px; margin: 0">Working as</label>
+<select id="nav-co" style="margin: 4px 0 8px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 10px; border: 1px solid #33497A; border-radius: 8px; background: #1A2C52; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600"><option>ACM Logistics · Patna</option><option>RS Logistics · Bokaro</option></select>
+<label for="nav-q" style="position: absolute; left: -9999px">Search everything</label>
+<input id="nav-q" placeholder="Search LR, invoice, truck, party…" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #33497A; border-radius: 8px; background: #FFFFFF; color: #111827; font: inherit; font-size: 14px; margin-bottom: 6px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">OPERATIONS</div>
+<a href="Main.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Dashboard</a>
+<a href="NewLR.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">New LR</a>
+<a href="Register.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">LR register</a>
+<a href="POD.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">POD &amp; delivery</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">BILLING</div>
+<a href="Invoice.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Tax invoices</a>
+<a href="Bills.dc.html" aria-current="page" style="display: block; padding: 11px 12px; border-radius: 8px; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font-weight: 600">Bills &amp; payments</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">DATA</div>
+<a href="Parties.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Parties</a>
+<a href="Trucks.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Trucks &amp; drivers</a>
+<a href="Import.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Smart import</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">SETTINGS</div>
+<a href="Settings.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Company profile</a>
+<a href="Users.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Users &amp; roles</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between">
+<div><h1 style="margin: 0; font-size: 28px">New freight bill <span style="font-family: 'IBM Plex Mono', monospace; color: #1F3A8A">ACM/FB/26-27/[next]</span></h1><p style="margin: 4px 0 0; font-size: 14px; color: #4B5563">Pick a party → its unbilled LRs appear → tick → bill. Billed LRs are locked.</p></div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<button type="button" style="height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; font: inherit; font-weight: 600">Save changes</button>
+<a href="FreightPDF.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; color: #111827; text-decoration: none; font-weight: 600">Preview PDF</a>
+<button type="button" style="height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #0F1E3D; color: #FFFFFF; font: inherit; font-weight: 600">Download PDF</button>
+</div>
+</div>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<div><label for="q1">Bill to (party)</label><select id="q1"><option>Ashirvad Pipes Pvt Ltd – Painal</option></select></div>
+<div><label for="q2">LRs dated</label><input id="q2" value="{{f.q2}}" onChange="{{on.q2}}"></div>
+<div><label for="q3">GST on freight</label><select id="q3"><option>Reverse charge – party pays GST</option><option>Forward charge – ACM charges GST</option></select></div>
+<div><label for="q4">Bill date</label><input id="q4" value="{{f.q4}}" onChange="{{on.q4}}"></div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 8px 8px 16px">
+<div style="overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%">
+<thead><tr><th><span style="position: absolute; left: -9999px">Select</span></th><th>LR No</th><th>Date</th><th>Goods invoice</th><th>Consignee</th><th>Route</th><th>Truck</th><th>Freight</th><th>Other charges</th><th>Advance</th><th>POD</th></tr></thead>
+<tbody>
+<tr><td><input checked="{{f.cb3}}" onChange="{{on.cb3}}" type="checkbox" aria-label="Bill LR 19019" style="width: 20px; height: 20px"></td><td style="font-family: 'IBM Plex Mono', monospace">19019</td><td>14-10-2026</td><td style="font-family: 'IBM Plex Mono', monospace">182604002150</td><td>Maa Vaishno Hardware</td><td>Painal → Gaighat</td><td style="font-family: 'IBM Plex Mono', monospace">BR01GN8331</td><td>₹ [from LR]</td><td>₹ [from LR]</td><td>₹ [from LR]</td><td><span style="background: #FEF3E2; color: #7A3A04; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600">Pending</span></td></tr>
+<tr><td><input type="checkbox" aria-label="Bill LR 19020" disabled style="width: 20px; height: 20px"></td><td style="font-family: 'IBM Plex Mono', monospace; color: #4B5563">19020</td><td>—</td><td style="font-family: 'IBM Plex Mono', monospace">SQ2604002116</td><td>1789 India Trading</td><td>Painal → Motihari</td><td style="font-family: 'IBM Plex Mono', monospace">BR06GB7374</td><td colspan="4" style="color: #4B5563">Draft LR — can't bill until booked</td></tr>
+</tbody>
+</table>
+</div>
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; margin: 16px 12px 0">
+<div style="font-size: 13px; color: #7A3A04; max-width: 520px; line-height: 1.5">LR 19019 POD not received — you can still bill, but the bill prints "POD awaited". Upload POD photo from the LR or here.</div>
+<div style="width: 320px; display: flex; flex-direction: column; gap: 8px; font-size: 14px">
+<div style="display: flex; justify-content: space-between"><span>Freight + charges</span><b>₹ [sum]</b></div>
+<div style="display: flex; justify-content: space-between"><span>GST</span><b>Nil – reverse charge</b></div>
+<div style="display: flex; justify-content: space-between"><span>Less advance</span><b>₹ [sum]</b></div>
+<div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #D9DFEA; font-size: 18px"><span>Bill amount</span><b>₹ [total]</b></div>
+</div>
+</div>
+</section>
+
+<p style="margin: 0; font-size: 14px; color: #4B5563">Payments, TDS and dues are recorded in <a href="Bills.dc.html">Bills &amp; payments</a>.</p>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1120}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { f: {"q2": "01-10-2026 – 31-10-2026", "q4": "27-10-2026", "cb3": true} };
+  }
+  change(k, e) {
+    const t = e.target;
+    const f = Object.assign({}, this.state.f);
+    if (t.type === 'radio') {
+      const g = k.split('__')[0] + '__';
+      Object.keys(f).forEach((x) => { if (x.indexOf(g) === 0) f[x] = false; });
+      f[k] = true;
+    } else if (t.type === 'checkbox') {
+      f[k] = t.checked;
+    } else {
+      f[k] = t.value;
+    }
+    this.setState({ f: f });
+  }
+  renderVals() {
+    const f = this.state.f;
+    const on = {};
+    Object.keys(f).forEach((k) => { on[k] = (e) => this.change(k, e); });
+    return { f: f, on: on };
+  }
+}
+</script>
+</body>
+</html>

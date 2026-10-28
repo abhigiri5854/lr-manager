@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Company profile – Settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F3A8A}a:hover{color:#142867}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input,textarea{width:100%;min-height:44px;box-sizing:border-box;padding:10px 12px;border:1px solid #C5CDDB;border-radius:8px;font:inherit;font-size:14px;background:#FFFFFF;color:#111827}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6FA; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #111827">
+
+<nav aria-label="Main" style="flex: 1 1 240px; background: #0F1E3D; padding: 20px 14px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-weight: 700; font-size: 18px; color: #FFFFFF; padding: 0 10px 12px">LR <span style="color: #9DB4E8; font-weight: 500">Manager</span></div>
+<label for="nav-co" style="display: block; font-size: 12px; font-weight: 600; color: #9DB4E8; padding: 0 10px; margin: 0">Working as</label>
+<select id="nav-co" value="{{cur}}" onChange="{{pickCo}}" style="margin: 4px 0 8px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 10px; border: 1px solid #33497A; border-radius: 8px; background: #1A2C52; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600"><option value="acm">ACM Logistics · Patna</option><option value="rs">RS Logistics · Bokaro</option></select>
+<label for="nav-q" style="position: absolute; left: -9999px">Search everything</label>
+<input id="nav-q" placeholder="Search LR, invoice, truck, party…" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #33497A; border-radius: 8px; background: #FFFFFF; color: #111827; font: inherit; font-size: 14px; margin-bottom: 6px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">OPERATIONS</div>
+<a href="Main.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Dashboard</a>
+<a href="NewLR.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">New LR</a>
+<a href="Register.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">LR register</a>
+<a href="POD.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">POD &amp; delivery</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">BILLING</div>
+<a href="Invoice.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Tax invoices</a>
+<a href="Bills.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Bills &amp; payments</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">DATA</div>
+<a href="Parties.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Parties</a>
+<a href="Trucks.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Trucks &amp; drivers</a>
+<a href="Import.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Smart import</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">SETTINGS</div>
+<a href="Settings.dc.html" aria-current="page" style="display: block; padding: 11px 12px; border-radius: 8px; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font-weight: 600">Company profile</a>
+<a href="Users.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Users &amp; roles</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between">
+<div><div style="font-size: 12px; letter-spacing: 0.08em; color: #1F3A8A; font-weight: 600">SETTINGS</div><h1 style="margin: 4px 0 0; font-size: 28px">Company profile</h1><p style="margin: 4px 0 0; font-size: 14px; color: #4B5563">One place for your company details. Every new LR, tax invoice, POD and freight invoice picks them up automatically.</p></div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<a href="FreightPDF.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; color: #111827; text-decoration: none; font-weight: 600">Preview PDF</a>
+<button type="button" style="height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #0F1E3D; color: #FFFFFF; font: inherit; font-weight: 600">Save changes</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; background: #E8EEFB; border-radius: 10px; font-size: 14px; color: #1F2937">
+<span>Editing <b style="color: #1F3A8A">{{c.label}}</b> — the company chosen in “Working as”. Switch there to edit another.</span>
+<button type="button" style="margin-left: auto; height: 40px; padding: 0 14px; border-radius: 8px; border: 1px dashed #8A96AD; background: #FFFFFF; color: #1F3A8A; font: inherit; font-size: 14px; font-weight: 600">+ Add company</button>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Company information</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div><label for="c1">Company name</label><input id="c1" value="{{c.name}}" onChange="{{set.name}}"></div>
+<div><label for="c2">Registered office</label><textarea id="c2" rows="2" value="{{c.office}}" onChange="{{set.office}}"></textarea></div>
+<div><label for="c3">Email ID</label><input id="c3" value="{{c.email}}" onChange="{{set.email}}"></div>
+<div><label for="c4">Website</label><input id="c4" value="{{c.web}}" onChange="{{set.web}}"></div>
+<div><label for="c5">Mobile no. 1</label><input id="c5" value="{{c.mob1}}" onChange="{{set.mob1}}"></div>
+<div><label for="c6">Mobile no. 2</label><input id="c6" value="{{c.mob2}}" onChange="{{set.mob2}}"></div>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Tax &amp; registration</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div><label for="g1">GSTIN</label><input id="g1" value="{{c.gstin}}" onChange="{{set.gstin}}"></div>
+<div><label for="g2">PAN no.</label><input id="g2" value="{{c.pan}}" onChange="{{set.pan}}"></div>
+<div><label for="g3">MSME / UDYAM no.</label><input id="g3" value="{{c.udyam}}" onChange="{{set.udyam}}"></div>
+</div>
+<p style="margin: 10px 0 0; font-size: 13px; color: #4B5563">PAN is checked against GSTIN characters 3–12; state code (first 2 digits) sets SGST+CGST vs IGST.</p>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Bank account details</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div><label for="k1">Account name</label><input id="k1" value="{{c.accName}}" onChange="{{set.accName}}" placeholder="Not set"></div>
+<div><label for="k2">Bank name</label><input id="k2" value="{{c.bank}}" onChange="{{set.bank}}" placeholder="Not set"></div>
+<div><label for="k3">Account number</label><input id="k3" value="{{c.accNo}}" onChange="{{set.accNo}}" placeholder="Not set"></div>
+<div><label for="k4">NEFT IFSC code</label><input id="k4" value="{{c.ifsc}}" onChange="{{set.ifsc}}" placeholder="Not set"></div>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Invoice &amp; document defaults</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div><label for="n1">Invoice title / label</label><input id="n1" value="{{c.title}}" onChange="{{set.title}}"></div>
+<div><label for="n2">Default invoice note</label><input id="n2" value="{{c.note}}" onChange="{{set.note}}"></div>
+<div><label for="n3">Freight invoice no. prefix</label><input id="n3" value="{{c.prefix}}" onChange="{{set.prefix}}"></div>
+<div><label for="n4">Authorised signatory</label><input id="n4" value="{{c.sign}}" onChange="{{set.sign}}" placeholder="Name on PDFs"></div>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 4px; font-size: 17px">LR terms &amp; numbering</h2>
+<p style="margin: 0 0 16px; font-size: 13px; color: #4B5563">Printed on this company’s LRs and used for its alerts and penalties — nothing is hard-coded.</p>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div><label for="t1">LR number prefix</label><input id="t1" value="{{c.lrPrefix}}" onChange="{{set.lrPrefix}}" placeholder="none"></div>
+<div><label for="t2">Next LR number</label><input id="t2" value="{{c.lrNext}}" onChange="{{set.lrNext}}" placeholder="e.g. 1"></div>
+<div><label for="t3">Jurisdiction</label><input id="t3" value="{{c.juris}}" onChange="{{set.juris}}" placeholder="City"></div>
+<div><label for="t4">POD due within (days)</label><input id="t4" value="{{c.podDays}}" onChange="{{set.podDays}}" placeholder="days"></div>
+<div><label for="t5">Late POD penalty (₹ / day)</label><input id="t5" value="{{c.podPenalty}}" onChange="{{set.podPenalty}}" placeholder="0"></div>
+<div><label for="t6">LR copies printed</label><input id="t6" value="{{c.copies}}" onChange="{{set.copies}}"></div>
+<div style="grid-column: span 3"><label for="t7">Detention charges</label><input id="t7" value="{{c.detention}}" onChange="{{set.detention}}" placeholder="e.g. 7 MT ₹1,000/day"></div>
+<div style="grid-column: span 3"><label for="t8">Terms printed on LR</label><textarea id="t8" rows="2" value="{{c.lrTerms}}" onChange="{{set.lrTerms}}" placeholder="Your conditions of carriage"></textarea></div>
+</div>
+</section>
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Logo, watermark &amp; signature</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center">
+<div style="width: 220px; height: 110px; border: 1px solid #D9DFEA; border-radius: 10px; display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box"><img src="{{c.logo}}" alt="{{c.name}} logo" style="max-width: 100%; max-height: 100%"></div>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<button type="button" style="height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; font: inherit; font-weight: 600">Replace logo (PNG / SVG)</button>
+<label style="display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 500"><input type="checkbox" checked="{{wmOn}}" onChange="{{toggleWm}}" style="width: 20px; min-height: 20px; height: 20px"> Use logo as watermark on PDFs</label>
+<button type="button" style="height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; font: inherit; font-weight: 600">Upload signature / stamp</button>
+</div>
+</div>
+</section>
+</div>
+
+<aside style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 16px">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px"><h2 style="margin: 0; font-size: 17px">Live preview</h2><span style="font-size: 12px; color: #4B5563">updates as you type</span></div>
+<div style="position: relative; overflow: hidden; border: 1.5px solid #0F1E3D; font-size: 12px; line-height: 1.5; background: #FFFFFF">
+<img src="{{c.logo}}" alt="" aria-hidden="true" style="position: absolute; left: 50%; top: 52%; width: 260px; transform: translate(-50%, -50%); opacity: {{wmOpacity}}">
+<div style="position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #6B7A99">
+<img src="{{c.logo}}" alt="" style="height: 44px; max-width: 120px; object-fit: contain">
+<div style="flex: 1; text-align: center; font-size: 18px; font-weight: 700">{{c.name}}</div>
+</div>
+<div style="position: relative; padding: 6px 10px; border-bottom: 1px solid #6B7A99; text-align: center">{{c.office}}<br>{{c.email}} · {{c.mob1}} / {{c.mob2}}</div>
+<div style="position: relative; padding: 6px 10px; border-bottom: 1px solid #6B7A99; text-align: center">GSTIN {{c.gstin}} · PAN {{c.pan}}<sc-if value="{{hasUdyam}}" hint-placeholder-val="{{ true }}"> · MSME {{c.udyam}}</sc-if></div>
+<div style="position: relative; padding: 6px 10px; border-bottom: 1px solid #6B7A99; text-align: center; font-weight: 700; font-size: 14px">{{c.title}}</div>
+<div style="position: relative; padding: 6px 10px; border-bottom: 1px solid #6B7A99; display: flex; justify-content: space-between; font-weight: 600"><span>Invoice No: {{c.prefix}}001</span><span>Date: 27-10-2026</span></div>
+<div style="position: relative; padding: 18px 10px; border-bottom: 1px solid #6B7A99; text-align: center; color: #4B5563">… bill-to, LR table, totals …</div>
+<div style="position: relative; padding: 6px 10px">Note: {{c.note}}<br><b>Bank:</b> {{bankLine}}<br><b>LR terms:</b> POD within {{podDaysTxt}} · {{c.detention}}</div>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px; font-size: 14px; line-height: 1.6">
+<h2 style="margin: 0 0 10px; font-size: 17px">Where this data appears</h2>
+<div><b>Freight invoice</b> — logo, watermark, header, bank, note, prefix</div>
+<div><b>LR / consignment note</b> — logo, address, GSTIN, PAN</div>
+<div><b>POD receipt</b> — logo, header, signatory</div>
+<div><b>Tax invoice</b> — transporter name &amp; GSTIN</div>
+<div><b>Emails / WhatsApp</b> — name, phone, email</div>
+<p style="margin: 10px 0 0; font-size: 13px; color: #4B5563">New documents use the latest profile. Already-finalised ones keep their saved snapshot unless you click “Refresh company details” on that document.</p>
+</section>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = {
+      cur: 'acm', wmOn: true,
+      data: {
+        rs: { label: 'RS Logistics', name: 'RS LOGISTICS', office: 'Khata No 80, Plot No 2538-2540, Shop No 2, Budhibinor, Batbinor, Siyalori, Bokaro, Jharkhand - 827013', email: 'info@rslogistics.co.in', web: '', mob1: '9304151180', mob2: '7042239814', gstin: '20ABLFR4565P1ZN', pan: 'ABLFR4565P', udyam: 'UDYAMV - JH-01-0050188', accName: 'ABHIMANU', bank: 'HDFC BANK', accNo: '8787282868682', ifsc: 'JHISI9287872', title: 'FREIGHT INVOICE', note: 'GST (RCM) paid by consignee', prefix: 'FI-', sign: '', lrPrefix: '', lrNext: '', juris: '', podDays: '', podPenalty: '', copies: 'Consignor, Consignee, Driver, Office', detention: '', lrTerms: '', logo: '../assets/rs-logo.png' },
+        acm: { label: 'ACM Logistics', name: 'ACM LOGISTICS', office: '1st Floor, Near NRL Pump (West Side), Main Road, Bhagwat Nagar Road, Patna - 800026', email: 'Rajesh@acmlogistics.in', web: 'www.acmlogistics.in', mob1: '7070191216', mob2: '7070191221', gstin: '10AAXFA2859G1ZD', pan: 'AAXFA2859G', udyam: '', accName: '', bank: '', accNo: '', ifsc: '', title: 'FREIGHT INVOICE', note: 'GST (RCM) payable by recipient', prefix: 'ACM/FB/26-27/', sign: '', lrPrefix: '', lrNext: '19020', juris: 'Patna', podDays: '10', podPenalty: '50', copies: 'Consignor, Consignee, Driver, Office', detention: '7 MT ₹1,000/day · 15 MT ₹2,000/day', lrTerms: 'Not responsible for leakage & breakage. Delivery against payment.', logo: '../assets/acm-logo.png' }
+      }
+    };
+  }
+  upd(k, v) {
+    const cur = this.state.cur;
+    const data = Object.assign({}, this.state.data);
+    data[cur] = Object.assign({}, data[cur], { [k]: v });
+    this.setState({ data });
+  }
+  renderVals() {
+    const c = this.state.data[this.state.cur];
+    const keys = ['name','office','email','web','mob1','mob2','gstin','pan','udyam','accName','bank','accNo','ifsc','title','note','prefix','sign','lrPrefix','lrNext','juris','podDays','podPenalty','copies','detention','lrTerms'];
+    const set = {};
+    keys.forEach((k) => { set[k] = (e) => this.upd(k, e.target.value); });
+    const tabs = ['rs','acm'].map((id) => {
+      const on = this.state.cur === id;
+      return {
+        label: this.state.data[id].label, on: on, off: !on,
+        pick: () => this.setState({ cur: id })
+      };
+    });
+    const bankLine = c.accNo ? (c.accName + ' · ' + c.bank + ' · A/c ' + c.accNo + ' · IFSC ' + c.ifsc) : 'not set yet';
+    const podDaysTxt = c.podDays ? (c.podDays + ' days' + (c.podPenalty ? ', ₹' + c.podPenalty + '/day late' : '')) : '[not set]';
+    return { c, set, tabs, podDaysTxt, cur: this.state.cur, pickCo: (e) => this.setState({ cur: e.target.value }), bankLine, hasUdyam: !!c.udyam, wmOn: this.state.wmOn, toggleWm: () => this.setState({ wmOn: !this.state.wmOn }), wmOpacity: this.state.wmOn ? 0.07 : 0 };
+  }
+}
+</script>
+</body>
+</html>

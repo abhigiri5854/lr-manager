@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LR register – ACM LR Manager</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F3A8A}a:hover{color:#142867}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input,select{width:100%;height:44px;box-sizing:border-box;padding:0 12px;border:1px solid #C5CDDB;border-radius:8px;font:inherit;font-size:14px;background:#FFFFFF;color:#111827}
+th{text-align:left;font-weight:600;font-size:13px;color:#4B5563;padding:10px 12px;border-bottom:1px solid #D9DFEA;white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #EEF1F6;font-size:14px;white-space:nowrap}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6FA; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #111827">
+
+<nav aria-label="Main" style="flex: 1 1 240px; background: #0F1E3D; padding: 20px 14px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-weight: 700; font-size: 18px; color: #FFFFFF; padding: 0 10px 12px">LR <span style="color: #9DB4E8; font-weight: 500">Manager</span></div>
+<label for="nav-co" style="display: block; font-size: 12px; font-weight: 600; color: #9DB4E8; padding: 0 10px; margin: 0">Working as</label>
+<select id="nav-co" style="margin: 4px 0 8px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 10px; border: 1px solid #33497A; border-radius: 8px; background: #1A2C52; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600"><option>ACM Logistics · Patna</option><option>RS Logistics · Bokaro</option></select>
+<label for="nav-q" style="position: absolute; left: -9999px">Search everything</label>
+<input id="nav-q" placeholder="Search LR, invoice, truck, party…" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #33497A; border-radius: 8px; background: #FFFFFF; color: #111827; font: inherit; font-size: 14px; margin-bottom: 6px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">OPERATIONS</div>
+<a href="Main.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Dashboard</a>
+<a href="NewLR.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">New LR</a>
+<a href="Register.dc.html" aria-current="page" style="display: block; padding: 11px 12px; border-radius: 8px; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font-weight: 600">LR register</a>
+<a href="POD.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">POD &amp; delivery</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">BILLING</div>
+<a href="Invoice.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Tax invoices</a>
+<a href="Bills.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Bills &amp; payments</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">DATA</div>
+<a href="Parties.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Parties</a>
+<a href="Trucks.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Trucks &amp; drivers</a>
+<a href="Import.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Smart import</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">SETTINGS</div>
+<a href="Settings.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Company profile</a>
+<a href="Users.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Users &amp; roles</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between">
+<h1 style="margin: 0; font-size: 28px">LR register</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<button type="button" style="height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; font: inherit; font-weight: 600">Export Excel</button>
+<a href="NewLR.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 8px; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font-weight: 600">+ New LR</a>
+</div>
+</div>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px">
+<div><label for="r1">Search</label><input id="r1" placeholder="LR, invoice, e-way, truck"></div>
+<div><label for="r2">Date range</label><input id="r2" value="{{f.r2}}" onChange="{{on.r2}}"></div>
+<div><label for="r3">Party</label><select id="r3"><option>All parties</option><option>Ashirvad Pipes Pvt Ltd</option></select></div>
+<div><label for="r4">Truck</label><select id="r4"><option>All trucks</option><option>BR01GN8331</option><option>BR06GB7374</option></select></div>
+<div><label for="r5">Status</label><select id="r5"><option>All</option><option>Draft</option><option>In transit</option><option>Delivered – POD pending</option><option>Closed</option></select></div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 8px 8px 16px">
+<div style="overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%">
+<thead><tr><th>LR No</th><th>Date</th><th>Consignor</th><th>Consignee / billed to</th><th>Route</th><th>Truck</th><th>Pkgs</th><th>Value ₹</th><th>E-way exp.</th><th>Pay</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+<tr><td style="font-family: 'IBM Plex Mono', monospace"><a href="LRView.dc.html">19019</a></td><td>14-10-2026</td><td>Ashirvad Pipes</td><td>Maa Vaishno Hardware<br><span style="font-size: 12px; color: #4B5563">billed: Modern Sanitation</span></td><td>Painal → Gaighat</td><td style="font-family: 'IBM Plex Mono', monospace">BR01GN8331</td><td>28</td><td>1,79,356.00</td><td style="color: #7A3A04; font-weight: 600">15-10-2026</td><td>TBB</td><td><span style="background: #E8EEFB; color: #1F3A8A; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600">In transit</span></td><td><a href="LRPDF.dc.html">Print</a> · <a href="NewLR.dc.html">Repeat</a> · <a href="POD.dc.html">Mark delivered / POD</a></td></tr>
+<tr><td style="font-family: 'IBM Plex Mono', monospace">19020</td><td>—</td><td>Ashirvad Pipes</td><td>1789 India Trading</td><td>Painal → Motihari</td><td style="font-family: 'IBM Plex Mono', monospace">BR06GB7374</td><td>25</td><td>1,84,902.58</td><td>—</td><td>TBB</td><td><span style="background: #EEF1F6; color: #374151; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600">Draft</span></td><td><a href="NewLR.dc.html">Finish</a></td></tr>
+</tbody>
+</table>
+</div>
+<p style="margin: 16px 12px 0; font-size: 13px; color: #4B5563">Click any row to open the LR; Print gives the Consignor / Consignee / Driver / Office copies as one PDF.</p>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":860}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { f: {"r2": "01-10-2026 – 31-10-2026"} };
+  }
+  change(k, e) {
+    const t = e.target;
+    const f = Object.assign({}, this.state.f);
+    if (t.type === 'radio') {
+      const g = k.split('__')[0] + '__';
+      Object.keys(f).forEach((x) => { if (x.indexOf(g) === 0) f[x] = false; });
+      f[k] = true;
+    } else if (t.type === 'checkbox') {
+      f[k] = t.checked;
+    } else {
+      f[k] = t.value;
+    }
+    this.setState({ f: f });
+  }
+  renderVals() {
+    const f = this.state.f;
+    const on = {};
+    Object.keys(f).forEach((k) => { on[k] = (e) => this.change(k, e); });
+    return { f: f, on: on };
+  }
+}
+</script>
+</body>
+</html>

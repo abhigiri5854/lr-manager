@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New LR – ACM LR Manager</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F3A8A}a:hover{color:#142867}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input,select{width:100%;height:44px;box-sizing:border-box;padding:0 12px;border:1px solid #C5CDDB;border-radius:8px;font:inherit;font-size:14px;background:#FFFFFF;color:#111827}
+th{text-align:left;font-weight:600;font-size:13px;color:#4B5563;padding:10px 12px;border-bottom:1px solid #D9DFEA;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid #EEF1F6;font-size:14px;white-space:nowrap}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6FA; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #111827">
+
+<nav aria-label="Main" style="flex: 1 1 240px; background: #0F1E3D; padding: 20px 14px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-weight: 700; font-size: 18px; color: #FFFFFF; padding: 0 10px 12px">LR <span style="color: #9DB4E8; font-weight: 500">Manager</span></div>
+<label for="nav-co" style="display: block; font-size: 12px; font-weight: 600; color: #9DB4E8; padding: 0 10px; margin: 0">Working as</label>
+<select id="nav-co" style="margin: 4px 0 8px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 10px; border: 1px solid #33497A; border-radius: 8px; background: #1A2C52; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600"><option>ACM Logistics · Patna</option><option>RS Logistics · Bokaro</option></select>
+<label for="nav-q" style="position: absolute; left: -9999px">Search everything</label>
+<input id="nav-q" placeholder="Search LR, invoice, truck, party…" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #33497A; border-radius: 8px; background: #FFFFFF; color: #111827; font: inherit; font-size: 14px; margin-bottom: 6px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">OPERATIONS</div>
+<a href="Main.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Dashboard</a>
+<a href="NewLR.dc.html" aria-current="page" style="display: block; padding: 11px 12px; border-radius: 8px; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font-weight: 600">New LR</a>
+<a href="Register.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">LR register</a>
+<a href="POD.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">POD &amp; delivery</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">BILLING</div>
+<a href="Invoice.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Tax invoices</a>
+<a href="Bills.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Bills &amp; payments</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">DATA</div>
+<a href="Parties.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Parties</a>
+<a href="Trucks.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Trucks &amp; drivers</a>
+<a href="Import.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Smart import</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">SETTINGS</div>
+<a href="Settings.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Company profile</a>
+<a href="Users.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Users &amp; roles</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between">
+<div><div style="font-size: 13px; color: #4B5563"><a href="Main.dc.html">Dashboard</a> / New consignment note</div><h1 style="margin: 4px 0 0; font-size: 28px">New LR <span style="font-family: 'IBM Plex Mono', monospace; color: #1F3A8A">19020</span> <span style="font-size: 13px; font-weight: 500; color: #4B5563">auto-numbered</span></h1></div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<button type="button" style="height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; font: inherit; font-weight: 600">Save changes</button>
+<a href="LRPDF.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #C5CDDB; background: #FFFFFF; color: #111827; text-decoration: none; font-weight: 600">Preview PDF</a>
+<button type="button" style="height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #0F1E3D; color: #FFFFFF; font: inherit; font-weight: 600">Download PDF</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; background: #E8EEFB; border-radius: 10px; font-size: 14px; color: #1F3A8A">
+<b>Linked to tax invoice SQ2604002116</b><span style="color: #1F2937">· parties, goods, value, truck copied · e-way bill pending</span><a href="Invoice.dc.html" style="margin-left: auto">Open invoice</a>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 16px; background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 10px; font-size: 14px"><b>Defaults filled from this consignor’s last LR (19019):</b><span style="color: #374151">From Painal · FTL · T.B.B. · GST by consignor</span><button type="button" style="margin-left: auto; min-height: 36px; padding: 0 12px; border: 1px solid #C5CDDB; border-radius: 8px; background: #FFFFFF; font: inherit; font-weight: 600">Undo</button></div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Booking</h2>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<div><label for="d1">LR date</label><input id="d1" value="{{f.d1}}" onChange="{{on.d1}}"></div>
+<div><label for="d2">From</label><input id="d2" value="{{f.d2}}" onChange="{{on.d2}}"></div>
+<div><label for="d3">To</label><input id="d3" value="{{f.d3}}" onChange="{{on.d3}}"></div>
+<div><label for="d4">Risk</label><select id="d4"><option>At owner's risk</option></select></div>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Parties</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="p1">Consignor</label>
+<input id="p1" value="{{f.p1}}" onChange="{{on.p1}}">
+<div style="font-size: 13px; color: #146C43; line-height: 1.5">Saved party · GST 10AABCA7061K2ZZ · 7250015777<br>Plot 8461 &amp; 8462, Khata 1593/1594, Painal, Patna</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="p2">Consignee</label>
+<input id="p2" value="{{f.p2}}" onChange="{{on.p2}}">
+<div style="font-size: 13px; color: #7A3A04; line-height: 1.5">New party · will be saved on Save<br>GST 10APIPP4518H1Z3 · Bank Road, Motihari 845401 · 9199835232</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="p3">Billed to</label>
+<input id="p3" value="{{f.p3}}" onChange="{{on.p3}}">
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="p4">GST payable by</label>
+<select id="p4"><option>Consignor (remembered for Ashirvad)</option><option>Consignee</option><option>Transporter – charge extra</option></select>
+</div>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Vehicle &amp; documents</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div style="position: relative">
+<label for="v1">Truck no.</label>
+<input id="v1" value="{{f.v1}}" onChange="{{on.v1}}" style="border: 2px solid #1F3A8A">
+<div role="listbox" aria-label="Saved trucks" style="position: absolute; left: 0; right: 0; top: 76px; z-index: 2; background: #FFFFFF; border: 1px solid #C5CDDB; border-radius: 10px; box-shadow: 0 8px 24px rgba(15,30,61,0.14); padding: 6px; font-size: 14px; line-height: 1.45">
+<div style="padding: 10px; border-radius: 6px; background: #E8EEFB"><b style="font-family: 'IBM Plex Mono', monospace">BR06GB7374</b> <span style="font-size: 12px; color: #1F3A8A">from invoice</span><br><span style="color: #4B5563">Driver 8873764100 · new</span></div>
+<div style="padding: 10px"><b style="font-family: 'IBM Plex Mono', monospace">BR01GN8331</b><br><span style="color: #4B5563">Driver 7870015869 · last LR 19019</span></div>
+<div style="padding: 10px; color: #1F3A8A; font-weight: 600">+ Add new truck</div>
+</div>
+</div>
+<div><label for="v2">Driver mobile</label><input id="v2" value="{{f.v2}}" onChange="{{on.v2}}"></div>
+<div><label for="v3">Invoice no. / date</label><input id="v3" value="{{f.v3}}" onChange="{{on.v3}}"></div>
+<div><label for="v4">E-way bill no.</label><input id="v4" placeholder="Not on invoice – enter" style="border-color: #E08A1E; background: #FFFAF2"></div>
+<div><label for="v5">E-way expiry</label><input id="v5" placeholder="Auto from e-way bill"></div>
+<div><label for="v6">Goods value (₹)</label><input id="v6" value="{{f.v6}}" onChange="{{on.v6}}" style="border-color: #E08A1E; background: #FFFAF2"></div>
+</div>
+<div style="margin-top: 10px; font-size: 13px; color: #7A3A04">Value = taxable 1,56,697.10 + SGST 14,102.74 + CGST (assumed equal; cropped in photo — confirm).</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 12px; font-size: 17px">Goods</h2>
+<div style="overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%">
+<thead><tr><th>Item (said to contain)</th><th>Pkgs</th><th>Weight / size</th><th>Charged as</th></tr></thead>
+<tbody>
+<tr><td>500 LTR 4-layer white water tank</td><td>10</td><td rowspan="3" style="vertical-align: top"><input aria-label="Weight" placeholder="Enter weight / feet" style="width: 180px"></td><td rowspan="3" style="vertical-align: top"><select aria-label="Charged as" style="width: 120px"><option>FTL</option><option>Per kg</option><option>Per pkg</option></select></td></tr>
+<tr><td>1000 LTR 3-layer white water tank</td><td>5</td></tr>
+<tr><td>1000 LTR 4-layer white water tank</td><td>10</td></tr>
+<tr><td style="font-weight: 600">Total</td><td style="font-weight: 600">25</td><td></td><td></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 16px; font-size: 17px">Freight &amp; payment</h2>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<div><label for="f1">Freight</label><input id="f1" placeholder="₹"></div>
+<div><label for="f2">Packing</label><input id="f2" placeholder="₹"></div>
+<div><label for="f3">C.N. charge</label><input id="f3" placeholder="₹"></div>
+<div><label for="f4">Loading</label><input id="f4" placeholder="₹"></div>
+<div><label for="f5">Unloading</label><input id="f5" placeholder="₹"></div>
+<div><label for="f6">GST</label><input id="f6" placeholder="Auto"></div>
+<div><label for="f7">Advance</label><input id="f7" placeholder="₹"></div>
+<div><label for="f8">Balance</label><input id="f8" placeholder="Auto = total − advance" style="background: #F4F6FA"></div>
+</div>
+<fieldset style="border: 0; padding: 0; margin: 16px 0 0; display: flex; flex-wrap: wrap; gap: 12px">
+<legend style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px">Payment mode</legend>
+<label style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border: 1px solid #C5CDDB; border-radius: 8px; margin: 0; font-weight: 500"><input checked="{{f.pm__11}}" onChange="{{on.pm__11}}" type="radio" name="pm" style="width: auto; height: auto"> To pay</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border: 1px solid #C5CDDB; border-radius: 8px; margin: 0; font-weight: 500"><input checked="{{f.pm__12}}" onChange="{{on.pm__12}}" type="radio" name="pm" style="width: auto; height: auto"> Paid</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border: 2px solid #1F3A8A; background: #E8EEFB; border-radius: 8px; margin: 0; font-weight: 600"><input checked="{{f.pm__13}}" onChange="{{on.pm__13}}" type="radio" name="pm" style="width: auto; height: auto"> T.B.B.</label>
+</fieldset>
+</section>
+</div>
+
+<aside style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 16px">
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px; font-size: 14px; line-height: 1.6">
+<h2 style="margin: 0 0 10px; font-size: 17px">Before you save</h2>
+<div>✓ Consignor matched by GST</div>
+<div>✓ 25 packages totalled</div>
+<div style="color: #7A3A04">! E-way bill number missing</div>
+<div style="color: #7A3A04">! Goods value needs a check</div>
+<div style="color: #4B5563">○ Weight empty</div>
+</section>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { f: {"d1": "27-10-2026", "d2": "Painal", "d3": "Motihari", "p1": "Ashirvad Pipes Pvt Ltd – Painal", "p2": "1789 India Trading – Motihari", "p3": "Same as consignee", "v1": "BR0", "v2": "8873764100", "v3": "SQ2604002116 · 10-10-2026", "v6": "1,84,902.58", "pm__11": false, "pm__12": false, "pm__13": true} };
+  }
+  change(k, e) {
+    const t = e.target;
+    const f = Object.assign({}, this.state.f);
+    if (t.type === 'radio') {
+      const g = k.split('__')[0] + '__';
+      Object.keys(f).forEach((x) => { if (x.indexOf(g) === 0) f[x] = false; });
+      f[k] = true;
+    } else if (t.type === 'checkbox') {
+      f[k] = t.checked;
+    } else {
+      f[k] = t.value;
+    }
+    this.setState({ f: f });
+  }
+  renderVals() {
+    const f = this.state.f;
+    const on = {};
+    Object.keys(f).forEach((k) => { on[k] = (e) => this.change(k, e); });
+    return { f: f, on: on };
+  }
+}
+</script>
+</body>
+</html>

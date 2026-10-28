@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Users & roles – LR Manager</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F3A8A}a:hover{color:#142867}
+label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+input,select{width:100%;height:44px;box-sizing:border-box;padding:0 12px;border:1px solid #C5CDDB;border-radius:8px;font:inherit;font-size:14px;background:#FFFFFF;color:#111827}
+th{text-align:left;font-weight:600;font-size:13px;color:#4B5563;padding:10px 12px;border-bottom:1px solid #D9DFEA;white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #EEF1F6;font-size:14px;white-space:nowrap;vertical-align:top}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6FA; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #111827">
+<nav aria-label="Main" style="flex: 1 1 240px; background: #0F1E3D; padding: 20px 14px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-weight: 700; font-size: 18px; color: #FFFFFF; padding: 0 10px 12px">LR <span style="color: #9DB4E8; font-weight: 500">Manager</span></div>
+<label for="nav-co" style="display: block; font-size: 12px; font-weight: 600; color: #9DB4E8; padding: 0 10px; margin: 0">Working as</label>
+<select id="nav-co" style="margin: 4px 0 8px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 10px; border: 1px solid #33497A; border-radius: 8px; background: #1A2C52; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600"><option>ACM Logistics · Patna</option><option>RS Logistics · Bokaro</option></select>
+<label for="nav-q" style="position: absolute; left: -9999px">Search everything</label>
+<input id="nav-q" placeholder="Search LR, invoice, truck, party…" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #33497A; border-radius: 8px; background: #FFFFFF; color: #111827; font: inherit; font-size: 14px; margin-bottom: 6px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">OPERATIONS</div>
+<a href="Main.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Dashboard</a>
+<a href="NewLR.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">New LR</a>
+<a href="Register.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">LR register</a>
+<a href="POD.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">POD &amp; delivery</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">BILLING</div>
+<a href="Invoice.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Tax invoices</a>
+<a href="Bills.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Bills &amp; payments</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">DATA</div>
+<a href="Parties.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Parties</a>
+<a href="Trucks.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Trucks &amp; drivers</a>
+<a href="Import.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Smart import</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">SETTINGS</div>
+<a href="Settings.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Company profile</a>
+<a href="Users.dc.html" aria-current="page" style="display: block; padding: 11px 12px; border-radius: 8px; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font-weight: 600">Users &amp; roles</a>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between">
+<div><div style="font-size: 12px; letter-spacing: 0.08em; color: #1F3A8A; font-weight: 600">SETTINGS</div><h1 style="margin: 4px 0 0; font-size: 28px">Users &amp; roles</h1><p style="margin: 4px 0 0; font-size: 14px; color: #4B5563">Who can log in, for which company, and what they can do.</p></div>
+<button type="button" style="display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font: inherit; font-weight: 600">+ Invite user</button>
+</div>
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px"><div style="overflow-x: auto"><table style="border-collapse: collapse; width: 100%"><thead><tr><th>Name</th><th>Mobile / email</th><th>Role</th><th>Companies</th><th>Last login</th><th></th></tr></thead><tbody>
+<tr><td>[owner name]</td><td>[mobile]</td><td><span style="background: #E8EEFB; color: #1F3A8A; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600">Owner</span></td><td>ACM, RS</td><td>—</td><td><a href="Users.dc.html">Edit</a></td></tr>
+<tr><td>[staff name]</td><td>[mobile]</td><td><span style="background: #EEF1F6; color: #374151; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600">Booking staff</span></td><td>ACM</td><td>—</td><td><a href="Users.dc.html">Edit</a></td></tr>
+<tr><td>[driver name]</td><td>7870015869</td><td><span style="background: #FEF3E2; color: #7A3A04; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600">Driver</span></td><td>ACM</td><td>—</td><td><a href="Users.dc.html">Edit</a></td></tr>
+</tbody></table></div></section>
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px"><h2 style="margin: 0 0 8px; font-size: 17px">What each role can do</h2>
+<div style="overflow-x: auto"><table style="border-collapse: collapse; width: 100%"><thead><tr><th>Permission</th><th style="text-align: center">Owner</th><th style="text-align: center">Accountant</th><th style="text-align: center">Booking staff</th><th style="text-align: center">Driver</th></tr></thead><tbody><tr><td>Create / edit LR</td><td style="text-align: center">✓</td><td style="text-align: center">—</td><td style="text-align: center">✓</td><td style="text-align: center">—</td></tr><tr><td>Tax invoices</td><td style="text-align: center">✓</td><td style="text-align: center">✓</td><td style="text-align: center">✓</td><td style="text-align: center">—</td></tr><tr><td>Freight bills &amp; payments</td><td style="text-align: center">✓</td><td style="text-align: center">✓</td><td style="text-align: center">—</td><td style="text-align: center">—</td></tr><tr><td>Delete or cancel records</td><td style="text-align: center">✓</td><td style="text-align: center">—</td><td style="text-align: center">—</td><td style="text-align: center">—</td></tr><tr><td>Company profile &amp; users</td><td style="text-align: center">✓</td><td style="text-align: center">—</td><td style="text-align: center">—</td><td style="text-align: center">—</td></tr><tr><td>Smart import</td><td style="text-align: center">✓</td><td style="text-align: center">✓</td><td style="text-align: center">✓</td><td style="text-align: center">—</td></tr><tr><td>Upload POD photo</td><td style="text-align: center">✓</td><td style="text-align: center">—</td><td style="text-align: center">✓</td><td style="text-align: center">✓ own trips</td></tr><tr><td>See freight amounts</td><td style="text-align: center">✓</td><td style="text-align: center">✓</td><td style="text-align: center">✓</td><td style="text-align: center">—</td></tr></tbody></table></div>
+<p style="margin: 12px 0 0; font-size: 13px; color: #4B5563">Drivers only see the phone app (<a href="Driver.dc.html">My trips</a>). Every action is written to the activity log with the user’s name.</p></section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

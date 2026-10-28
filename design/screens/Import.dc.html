@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smart import – ACM LR Manager</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F3A8A}a:hover{color:#142867}
+th{text-align:left;font-weight:600;font-size:13px;color:#4B5563;padding:10px 12px;border-bottom:1px solid #D9DFEA;white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid #EEF1F6;font-size:14px;vertical-align:top}
+select{height:40px;box-sizing:border-box;padding:0 10px;border:1px solid #C5CDDB;border-radius:8px;font:inherit;font-size:14px;background:#FFFFFF;color:#111827}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6FA; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #111827">
+
+<nav aria-label="Main" style="flex: 1 1 240px; background: #0F1E3D; padding: 20px 14px; display: flex; flex-direction: column; gap: 2px">
+<div style="font-weight: 700; font-size: 18px; color: #FFFFFF; padding: 0 10px 12px">LR <span style="color: #9DB4E8; font-weight: 500">Manager</span></div>
+<label for="nav-co" style="display: block; font-size: 12px; font-weight: 600; color: #9DB4E8; padding: 0 10px; margin: 0">Working as</label>
+<select id="nav-co" style="margin: 4px 0 8px; width: 100%; height: 44px; box-sizing: border-box; padding: 0 10px; border: 1px solid #33497A; border-radius: 8px; background: #1A2C52; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600"><option>ACM Logistics · Patna</option><option>RS Logistics · Bokaro</option></select>
+<label for="nav-q" style="position: absolute; left: -9999px">Search everything</label>
+<input id="nav-q" placeholder="Search LR, invoice, truck, party…" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #33497A; border-radius: 8px; background: #FFFFFF; color: #111827; font: inherit; font-size: 14px; margin-bottom: 6px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">OPERATIONS</div>
+<a href="Main.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Dashboard</a>
+<a href="NewLR.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">New LR</a>
+<a href="Register.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">LR register</a>
+<a href="POD.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">POD &amp; delivery</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">BILLING</div>
+<a href="Invoice.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Tax invoices</a>
+<a href="Bills.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Bills &amp; payments</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">DATA</div>
+<a href="Parties.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Parties</a>
+<a href="Trucks.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Trucks &amp; drivers</a>
+<a href="Import.dc.html" aria-current="page" style="display: block; padding: 11px 12px; border-radius: 8px; background: #1F3A8A; color: #FFFFFF; text-decoration: none; font-weight: 600">Smart import</a>
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9DB4E8; padding: 12px 10px 4px">SETTINGS</div>
+<a href="Settings.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Company profile</a>
+<a href="Users.dc.html" style="display: block; padding: 11px 12px; border-radius: 8px; color: #C9D3E8; text-decoration: none">Users &amp; roles</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 32px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between">
+<div><div style="font-size: 12px; letter-spacing: 0.08em; color: #1F3A8A; font-weight: 600">DATA TOOLS</div><h1 style="margin: 4px 0 0; font-size: 28px">Smart import</h1><p style="margin: 4px 0 0; font-size: 14px; color: #4B5563; max-width: 720px">Drop Excel booking reports, invoices or LRs — as .xlsx, .csv, PDF or photo. AI reads each file, maps every field and shows where it will be saved. Nothing enters the system until you click Import.</p></div>
+<button type="button" style="height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #0F1E3D; color: #FFFFFF; font: inherit; font-weight: 600">Import valid records</button>
+</div>
+
+<ol aria-label="Import steps" style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; font-size: 14px">
+<li style="padding: 12px 14px; border-radius: 10px; background: #E6F4EC; color: #146C43; font-weight: 600">1 · Upload ✓</li>
+<li style="padding: 12px 14px; border-radius: 10px; background: #E6F4EC; color: #146C43; font-weight: 600">2 · AI read &amp; map ✓</li>
+<li style="padding: 12px 14px; border-radius: 10px; background: #1F3A8A; color: #FFFFFF; font-weight: 600">3 · Review</li>
+<li style="padding: 12px 14px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D9DFEA; color: #4B5563; font-weight: 600">4 · Import</li>
+</ol>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 17px">Excel booking import</h2>
+<p style="margin: 0; font-size: 14px; color: #4B5563; line-height: 1.5">Booking report workbook (.xlsx / .xls / .csv, up to 10 MB). AI finds the right sheet and header row, matches columns in any order or naming, reads formula results as values.</p>
+<div style="padding: 22px; border: 2px dashed #9DB4E8; border-radius: 12px; background: #F7F9FD; text-align: center; font-size: 14px; color: #374151; line-height: 1.6"><b style="font-size: 16px; color: #111827">Drop workbook here</b><br><button type="button" style="min-height: 44px; border: 0; background: none; color: #1F3A8A; font: inherit; font-weight: 600; text-decoration: underline">Choose file</button></div>
+<div style="font-size: 13px; color: #4B5563">Saves into: LR register · parties · trucks · freight charges · Saved mapping: <b>RSL Booking Report</b></div>
+<button type="button" style="height: 44px; border-radius: 8px; border: 0; background: #1F3A8A; color: #FFFFFF; font: inherit; font-weight: 600">Upload and validate</button>
+</section>
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 17px">Smart invoice &amp; document import</h2>
+<p style="margin: 0; font-size: 14px; color: #4B5563; line-height: 1.5">Tax invoices, LRs, PODs, e-way bills — PDF (typed or scanned), JPG / PNG photo, or invoice-format Excel. Many files at once; AI detects the document type.</p>
+<div style="padding: 22px; border: 2px dashed #9DB4E8; border-radius: 12px; background: #F7F9FD; text-align: center; font-size: 14px; color: #374151; line-height: 1.6"><b style="font-size: 16px; color: #111827">Drop PDFs, photos or .xlsx here</b><br><button type="button" style="min-height: 44px; border: 0; background: none; color: #1F3A8A; font: inherit; font-weight: 600; text-decoration: underline">Choose files</button> · <button type="button" style="min-height: 44px; border: 0; background: none; color: #1F3A8A; font: inherit; font-weight: 600; text-decoration: underline">Take photo</button></div>
+<div style="font-size: 13px; color: #4B5563">Saves into: tax invoices · LRs · POD · parties · items · original file attached</div>
+<button type="button" style="height: 44px; border-radius: 8px; border: 0; background: #1F3A8A; color: #FFFFFF; font: inherit; font-weight: 600">Upload and read with AI</button>
+</section>
+</div>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 8px 8px 12px">
+<h2 style="margin: 12px 12px 4px; font-size: 17px">Files read by AI</h2>
+<div style="overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%">
+<thead><tr><th>File</th><th>Detected as</th><th>What AI found</th><th>Records</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">RSL_Booking_Report.xlsx</td><td>Excel booking report</td><td>Sheet1 · header on row [n] · [n] columns</td><td>[n] rows</td><td><span style="background: #FEF3E2; color: #7A3A04; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600">2 columns to confirm</span></td></tr>
+<tr><td style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">invoice_SQ2604002116.png<br><a href="Invoice.dc.html" style="font-size: 13px">Open in Tax invoice</a></td><td>Tax invoice · photo</td><td>Seller, buyer, 3 items, taxable ₹1,56,697.10, truck BR06GB7374</td><td>1 invoice</td><td><span style="background: #E6F4EC; color: #146C43; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600">Ready</span></td></tr>
+<tr><td style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">LR_19019.png</td><td>Consignment note · photo</td><td>LR 19019, 28 pkgs water tank, Painal → Gaighat, e-way 801755453075</td><td>1 LR</td><td><span style="background: #EEF1F6; color: #374151; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600">Already exists</span></td></tr>
+<tr><td style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">[any invoice].pdf</td><td>Tax invoice · PDF</td><td>Text PDFs read directly; scanned PDFs read page by page like photos</td><td>per page</td><td style="color: #4B5563">—</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section style="flex: 1 1 520px; min-width: 0; background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 8px 8px 12px">
+<h2 style="margin: 12px 12px 4px; font-size: 17px">Excel column mapping</h2>
+<p style="margin: 0 12px 8px; font-size: 13px; color: #4B5563">AI matches your headers to system fields. Confirm once — saved for next upload.</p>
+<div style="overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%">
+<thead><tr><th>Column in file</th><th>Saved into</th><th>Match</th></tr></thead>
+<tbody>
+<tr><td>LR No</td><td>LR → LR number</td><td style="color: #146C43; font-weight: 600">Sure</td></tr>
+<tr><td>LR Date</td><td>LR → date</td><td style="color: #146C43; font-weight: 600">Sure</td></tr>
+<tr><td>Consignor / Consignee</td><td>Parties (matched by GSTIN or name)</td><td style="color: #146C43; font-weight: 600">Sure</td></tr>
+<tr><td>Invoice No</td><td>Tax invoice → number</td><td style="color: #146C43; font-weight: 600">Sure</td></tr>
+<tr><td>Vehicle No</td><td>Trucks → number</td><td style="color: #146C43; font-weight: 600">Sure</td></tr>
+<tr><td>Wt / Billing weight</td><td><select aria-label="Map weight column"><option>LR → billing weight</option><option>LR → actual weight</option></select></td><td style="color: #7A3A04; font-weight: 600">Confirm</td></tr>
+<tr><td>Rate, Freight</td><td>LR charges → rate, freight</td><td style="color: #146C43; font-weight: 600">Sure</td></tr>
+<tr><td>Remarks 2</td><td><select aria-label="Map remarks column"><option>Don't import</option><option>LR → remarks</option></select></td><td style="color: #7A3A04; font-weight: 600">Confirm</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section style="flex: 1 1 380px; background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 20px">
+<h2 style="margin: 0 0 4px; font-size: 17px">Where the data will be saved</h2>
+<p style="margin: 0 0 14px; font-size: 13px; color: #4B5563">Each record goes to its own place and gets linked</p>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.5">
+<a href="Register.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>LR register</b><br><span style="color: #4B5563">new LRs from Excel · LR 19019 skipped (exists)</span></a>
+<a href="Invoice.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>Tax invoices</b><br><span style="color: #4B5563">SQ2604002116 → updates draft, links to LR 19020</span></a>
+<a href="Parties.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>Parties</b><br><span style="color: #4B5563">new ones created, existing matched by GSTIN</span></a>
+<a href="Parties.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>Trucks &amp; drivers</b><br><span style="color: #4B5563">BR06GB7374 + driver 8873764100</span></a>
+<a href="POD.dc.html" style="display: block; padding: 12px; border: 1px solid #D9DFEA; border-radius: 8px; text-decoration: none; color: #111827"><b>Documents</b><br><span style="color: #4B5563">original file attached to each record</span></a>
+</div>
+</section>
+</div>
+
+<section style="background: #FFFFFF; border: 1px solid #D9DFEA; border-radius: 12px; padding: 8px 8px 12px">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin: 12px 12px 8px">
+<h2 style="margin: 0; font-size: 17px">Row review</h2>
+<div style="display: flex; gap: 8px; font-size: 13px; font-weight: 600"><span style="background: #E6F4EC; color: #146C43; padding: 4px 10px; border-radius: 999px">Valid [n]</span><span style="background: #FEF3E2; color: #7A3A04; padding: 4px 10px; border-radius: 999px">Warning [n]</span><span style="background: #FDE8E8; color: #9B1C1C; padding: 4px 10px; border-radius: 999px">Error [n]</span></div>
+</div>
+<div style="overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%">
+<thead><tr><th>Source</th><th>Record</th><th>Check</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td>invoice photo</td><td>SQ2604002116 · 1789 India Trading</td><td style="color: #146C43">Totals match line items · GSTIN valid</td><td><select aria-label="Action for invoice"><option>Update draft</option><option>Create new</option><option>Skip</option></select></td></tr>
+<tr><td>LR photo</td><td>LR 19019 · Ashirvad → Maa Vaishno</td><td style="color: #374151">Same LR no. already in system</td><td><select aria-label="Action for LR"><option>Skip</option><option>Update existing</option></select></td></tr>
+<tr><td>Excel row [n]</td><td>[LR no.] · [party]</td><td style="color: #7A3A04">Vehicle no. format unusual — check</td><td><select aria-label="Action for row"><option>Import</option><option>Skip</option></select></td></tr>
+<tr><td>Excel row [n]</td><td>[LR no.] · [party]</td><td style="color: #9B1C1C">GSTIN has 14 characters (needs 15)</td><td><select aria-label="Action for row"><option>Fix &amp; import</option><option>Skip</option></select></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
