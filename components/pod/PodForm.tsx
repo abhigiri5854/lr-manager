@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
-import { savePodAction } from "@/app/(app)/lr/[id]/pod/pod-actions";
+import { savePodAction, uploadPodFileAction } from "@/app/(app)/lr/[id]/pod/pod-actions";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -12,6 +12,7 @@ import { Field, Select, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cx } from "@/lib/cx";
 import { formatDate, formatRupeesShort } from "@/lib/format";
+import { formatFileSize, prepareUpload } from "@/lib/image-upload";
 import { podDueDate, podLateDays } from "@/lib/pod-rules";
 import type { Paise } from "@/lib/types";
 import { uploadName } from "@/lib/upload-name";
@@ -51,12 +52,12 @@ export type PodFormProps = {
   readOnlyReason?: string | null;
 };
 
-type NewFile = { key: string; file: File; preview: string | null };
+/** A file picked on this screen; `url` is set once it has been uploaded (kept on a retry). */
+type NewFile = { key: string; file: File; preview: string | null; url?: string };
 type ErrorKey = "deliveredOn" | "receiverPhone" | "packagesReceived" | "remarks" | "files";
 type Errors = Partial<Record<ErrorKey, string>>;
 
 const FIELD_KEYS = new Set<string>(["deliveredOn", "receiverPhone", "packagesReceived", "remarks"]);
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const STATUS_NOTE: Record<string, string> = {
   Booked: "saving delivery details marks it Delivered",
@@ -89,6 +90,7 @@ export function PodForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(notice ?? null);
+  const [preparing, setPreparing] = useState(false);
   const pick = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
 
@@ -103,7 +105,7 @@ export function PodForm({
   );
 
   const readOnly = Boolean(readOnlyReason);
-  const disabled = readOnly || pending;
+  const disabled = readOnly || pending || preparing;
   const received = Number(packages) || 0;
   const shortBy = packages !== "" && lr.totalPackages > received ? lr.totalPackages - received : 0;
   const due = deliveredOn ? podDueDate(deliveredOn, podDays) : null;
@@ -111,24 +113,25 @@ export function PodForm({
   const rateKnown = podPenaltyPerDay != null && podPenaltyPerDay > 0;
   const needsRemarks = condition !== "good";
 
-  function addFiles(e: ChangeEvent<HTMLInputElement>) {
+  async function addFiles(e: ChangeEvent<HTMLInputElement>) {
     const list = Array.from(e.target.files ?? []);
     e.target.value = "";
+    if (!list.length) return;
     const bad = list.find((f) => !(f.type.startsWith("image/") || f.type === "application/pdf"));
-    const big = list.find((f) => f.size > MAX_FILE_BYTES);
-    if (bad || big) {
-      setErrors((p) => ({
-        ...p,
-        files: bad
-          ? `${bad.name}: only photos and PDFs can be uploaded`
-          : `${big!.name}: larger than 10 MB`,
-      }));
+    if (bad) {
+      setErrors((p) => ({ ...p, files: `${bad.name}: only photos and PDFs can be uploaded` }));
       return;
     }
-    setErrors((p) => ({ ...p, files: undefined }));
+    // Photos are shrunk here (1800px, JPEG 80%); only a file still over 3 MB is refused.
+    setPreparing(true);
+    const prepared = await Promise.all(list.map((f) => prepareUpload(f)));
+    setPreparing(false);
+    const ok = prepared.flatMap((p) => (p.ok ? [p.file] : []));
+    const tooBig = prepared.flatMap((p) => (p.ok ? [] : [p.message]));
+    setErrors((p) => ({ ...p, files: tooBig.length ? tooBig.join(" ") : undefined }));
     setAdded((p) => [
       ...p,
-      ...list.map((file) => ({
+      ...ok.map((file) => ({
         key: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
         file,
         preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
@@ -182,8 +185,27 @@ export function PodForm({
       }),
     );
     kept.forEach((u) => fd.append("keep", u));
-    added.forEach((f) => fd.append("files", f.file));
     startTransition(async () => {
+      // One request per new file (each under the 3 MB limit); already uploaded ones are reused.
+      const urls: string[] = [];
+      for (const f of added) {
+        let url = f.url;
+        if (!url) {
+          const one = new FormData();
+          one.set("file", f.file);
+          const up = await uploadPodFileAction(one);
+          if (!up.ok) {
+            setErrors((p) => ({ ...p, files: up.message }));
+            setFormError("A file couldn't be uploaded — remove it or choose a smaller one.");
+            return;
+          }
+          url = up.url;
+          const done = url;
+          setAdded((p) => p.map((x) => (x.key === f.key ? { ...x, url: done } : x)));
+        }
+        urls.push(url);
+      }
+      urls.forEach((u) => fd.append("keep", u));
       const r = await savePodAction(fd);
       if (r.ok) {
         router.replace(`/lr/${lr.id}/pod?saved=${r.received ? "received" : "delivered"}`);
@@ -393,7 +415,16 @@ export function PodForm({
                 aria-label="Choose signed copy photos or PDFs"
                 onChange={addFiles}
               />
-              {errors.files && <div className="mt-2 text-[13px] text-danger">{errors.files}</div>}
+              {preparing && (
+                <div role="status" className="mt-2 text-[13px] text-muted">
+                  Preparing photos…
+                </div>
+              )}
+              {errors.files && (
+                <div role="alert" className="mt-2 text-[13px] text-danger">
+                  {errors.files}
+                </div>
+              )}
               {(kept.length > 0 || added.length > 0) && (
                 <ul className="m-0 mt-3 flex list-none flex-wrap gap-3 p-0">
                   {kept.map((url) => (
@@ -411,6 +442,7 @@ export function PodForm({
                     <FileTile
                       key={f.key}
                       name={f.file.name}
+                      size={f.file.size}
                       src={f.preview}
                       isNew
                       onRemove={disabled ? undefined : () => removeNew(f.key)}
@@ -463,12 +495,15 @@ function FileTile({
   name,
   src,
   href,
+  size,
   isNew,
   onRemove,
 }: {
   name: string;
   src: string | null;
   href?: string;
+  /** Size after compression, for new files. */
+  size?: number;
   isNew?: boolean;
   onRemove?: () => void;
 }) {
@@ -492,6 +527,7 @@ function FileTile({
       <div className="mt-1 truncate text-xs text-muted" title={name}>
         {isNew && <b className="text-primary">New · </b>}
         {name}
+        {size !== undefined && <div>{formatFileSize(size)}</div>}
       </div>
       {onRemove && (
         <button

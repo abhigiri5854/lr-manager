@@ -24,8 +24,31 @@ type Fields = {
 };
 
 /**
- * Saves the delivery details and any newly added signed copies (FormData "files").
- * `keep` = URLs of already uploaded copies that stay. No POD yet → create, else update at
+ * Uploads one signed copy (FormData "file"). One file per request keeps each under the
+ * 3 MB server-action limit; the form then saves the returned URL with the POD.
+ */
+export async function uploadPodFileAction(
+  formData: FormData,
+): Promise<{ ok: true; url: string } | { ok: false; message: string }> {
+  const companyId = await getActiveCompanyId();
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, message: "No file chosen" };
+  try {
+    const { url } = await uploadPodFile(companyId, {
+      name: file.name,
+      type: file.type,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    });
+    return { ok: true, url };
+  } catch (e) {
+    if (e instanceof ValidationError) return { ok: false, message: e.message };
+    throw e;
+  }
+}
+
+/**
+ * Saves the delivery details. `keep` = URLs of the signed copies on the POD (already uploaded
+ * ones that stay, plus new ones from uploadPodFileAction). No POD yet → create, else update at
  * `expectedVersion`.
  */
 export async function savePodAction(formData: FormData): Promise<SavePodResult> {
@@ -36,17 +59,6 @@ export async function savePodAction(formData: FormData): Promise<SavePodResult> 
     const f = JSON.parse(String(formData.get("fields") ?? "{}")) as Fields;
     const keep = formData.getAll("keep").map(String);
 
-    const uploaded: string[] = [];
-    for (const file of formData.getAll("files")) {
-      if (!(file instanceof File) || file.size === 0) continue;
-      const { url } = await uploadPodFile(companyId, {
-        name: file.name,
-        type: file.type,
-        bytes: new Uint8Array(await file.arrayBuffer()),
-      });
-      uploaded.push(url);
-    }
-
     const packages = f.packagesReceived.trim();
     const common = {
       deliveredOn: f.deliveredOn,
@@ -55,7 +67,7 @@ export async function savePodAction(formData: FormData): Promise<SavePodResult> 
       packagesReceived: packages === "" ? undefined : Number(packages),
       condition: f.condition,
       remarks: f.remarks,
-      documentUrls: [...keep, ...uploaded],
+      documentUrls: keep,
     };
 
     const existing = await getPodByLrId(companyId, lrId);

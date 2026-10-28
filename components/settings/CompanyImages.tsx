@@ -5,8 +5,11 @@ import { uploadCompanyImageAction } from "@/app/(app)/settings/company/actions";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { prepareUpload } from "@/lib/image-upload";
 
-const ACCEPT = "image/png,image/svg+xml,image/jpeg";
+// WebP is accepted from the picker because it is re-encoded to JPEG/PNG before upload.
+const ACCEPT = "image/png,image/svg+xml,image/jpeg,image/webp";
+const STORED_TYPES = ["image/png", "image/svg+xml", "image/jpeg"];
 const MAX_BYTES = 2 * 1024 * 1024;
 
 type Images = { logoUrl: string | null; signatureUrl: string | null; useLogoWatermark: boolean };
@@ -32,24 +35,29 @@ export function CompanyImages({
   const logoInput = useRef<HTMLInputElement>(null);
   const signatureInput = useRef<HTMLInputElement>(null);
 
-  function upload(kind: "logo" | "signature", file: File | undefined) {
-    if (!file) return;
+  function upload(kind: "logo" | "signature", picked: File | undefined) {
+    if (!picked) return;
     const key = kind === "logo" ? "logoUrl" : "signatureUrl";
-    if (!ACCEPT.split(",").includes(file.type)) {
-      setUploadError({ [kind]: `${file.name}: use a PNG, SVG or JPG image` });
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setUploadError({ [kind]: `${file.name}: larger than 2 MB` });
+    if (!ACCEPT.split(",").includes(picked.type)) {
+      setUploadError({ [kind]: `${picked.name}: use a PNG, SVG or JPG image` });
       return;
     }
     setUploadError({});
     setBusy(kind);
-    const fd = new FormData();
-    fd.set("companyId", companyId);
-    fd.set("kind", kind);
-    fd.set("file", file);
     startTransition(async () => {
+      // Shrunk to 1800px / JPEG 80% (transparent PNGs stay PNG); SVGs go up unchanged.
+      const prepared = await prepareUpload(picked, { maxBytes: MAX_BYTES, keepTransparency: true });
+      if (!prepared.ok || !STORED_TYPES.includes(prepared.file.type)) {
+        setBusy(null);
+        setUploadError({
+          [kind]: prepared.ok ? `${picked.name}: use a PNG, SVG or JPG image` : prepared.message,
+        });
+        return;
+      }
+      const fd = new FormData();
+      fd.set("companyId", companyId);
+      fd.set("kind", kind);
+      fd.set("file", prepared.file);
       const r = await uploadCompanyImageAction(fd);
       setBusy(null);
       if (r.ok) onChange({ [key]: r.url });

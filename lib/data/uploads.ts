@@ -1,3 +1,4 @@
+import { UPLOAD_MAX_BYTES } from "@/lib/image-upload";
 import { fail, newId } from "./_store";
 import { assertOwner } from "./session";
 
@@ -9,7 +10,8 @@ type Stored = { companyId: string; name: string; type: string; bytes: Uint8Array
 const globalStore = globalThis as typeof globalThis & { __lrManagerUploads?: Map<string, Stored> };
 const files = (globalStore.__lrManagerUploads ??= new Map<string, Stored>());
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/** One file per request; matches the 3 MB server-action limit. Photos are shrunk in the browser first. */
+export const MAX_UPLOAD_BYTES = UPLOAD_MAX_BYTES;
 const allowed = (type: string) => type.startsWith("image/") || type === "application/pdf";
 
 /** Stores one photo / PDF and returns the URL to keep on the record. */
@@ -21,7 +23,7 @@ export async function uploadPodFile(
     fail("documentUrls", `${file.name}: only photos and PDFs can be uploaded`);
   if (file.bytes.byteLength === 0) fail("documentUrls", `${file.name}: the file is empty`);
   if (file.bytes.byteLength > MAX_UPLOAD_BYTES)
-    fail("documentUrls", `${file.name}: larger than 10 MB`);
+    fail("documentUrls", `${file.name}: larger than 3 MB`);
   const id = newId();
   const name = file.name.slice(0, 100) || "signed-copy";
   files.set(id, { companyId, name, type: file.type, bytes: file.bytes });
