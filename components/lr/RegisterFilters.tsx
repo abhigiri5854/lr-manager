@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
 import { DateField } from "@/components/ui/DateField";
 import { Field, Select } from "@/components/ui/Field";
+import { partyLabel } from "@/lib/self-party";
 import type { LrStatus } from "@/lib/types";
 import {
   LR_STATUS_SLUGS,
@@ -11,7 +12,7 @@ import {
   type LrRegisterQuery,
 } from "@/lib/validators/lr-register";
 
-export type PartyOption = { id: string; name: string; place: string | null };
+export type PartyOption = { id: string; name: string; place: string | null; isSelf?: boolean };
 export type TruckOption = { id: string; number: string };
 
 type Filters = Required<{ [K in "q" | "from" | "to" | "party" | "truck" | "status"]: string }>;
@@ -157,7 +158,11 @@ export function RegisterFilters({
           <option value="">All parties</option>
           {parties.map((p) => (
             <option key={p.id} value={p.id}>
-              {names.get(p.name)! > 1 && p.place ? `${p.name} · ${p.place}` : p.name}
+              {p.isSelf
+                ? partyLabel(p)
+                : names.get(p.name)! > 1 && p.place
+                  ? `${p.name} · ${p.place}`
+                  : p.name}
             </option>
           ))}
         </Select>

@@ -16,6 +16,7 @@ async function partyOption(companyId: string, id: string | null): Promise<PartyO
         phone: p.phone,
         address: p.address,
         stateCode: p.stateCode,
+        isSelf: p.isSelf,
       }
     : null;
 }

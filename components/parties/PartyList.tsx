@@ -5,6 +5,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
 import type { PartyStats } from "@/lib/data/parties";
 import { formatDate, formatRupees } from "@/lib/format";
+import { partyLabel } from "@/lib/self-party";
 import type { Page, Party } from "@/lib/types";
 import { hasPartyFilters, partyListSearch, type PartyListQuery } from "@/lib/validators/party-list";
 import { PartyFilters } from "./PartyFilters";
@@ -15,7 +16,7 @@ const columns: Column<PartyRow>[] = [
   {
     key: "name",
     header: "Party",
-    cell: (r) => (r.place ? `${r.name} – ${r.place}` : r.name),
+    cell: (r) => (r.isSelf ? partyLabel(r) : r.place ? `${r.name} – ${r.place}` : r.name),
     wrap: true,
     sticky: true,
   },

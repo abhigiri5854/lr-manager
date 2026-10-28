@@ -11,7 +11,7 @@ import {
   getLrById,
   peekNextLrNo,
 } from "@/lib/data/lrs";
-import { getPartyById } from "@/lib/data/parties";
+import { getPartyById, getSelfParty } from "@/lib/data/parties";
 import { getActiveCompanyId } from "@/lib/data/session";
 import { todayInIndia } from "@/lib/fy";
 import { applyConsignorDefaults, emptyLrForm, invoiceToForm, lrToForm } from "@/lib/lr-form";
@@ -57,8 +57,10 @@ async function NewLr({ searchParams }: { searchParams: SearchParams }) {
     }
   }
 
+  // Invoices we issue have no seller party: we are the consignor.
+  const selfPartyId = invoice && !invoice.sellerPartyId ? (await getSelfParty(companyId)).id : null;
   let initial = invoice
-    ? invoiceToForm(invoice, { today })
+    ? invoiceToForm(invoice, { today, selfPartyId })
     : source
       ? lrToForm(source, { copy: true, today })
       : emptyLrForm(today);
@@ -79,8 +81,8 @@ async function NewLr({ searchParams }: { searchParams: SearchParams }) {
     loadPicked(companyId, initial),
     peekNextLrNo(companyId, today),
     // From an invoice, the parties are already known: fill their usual values too.
-    invoice?.sellerPartyId
-      ? getConsignorDefaults(companyId, invoice.sellerPartyId)
+    invoice && initial.consignorId
+      ? getConsignorDefaults(companyId, initial.consignorId)
       : prefillConsignor && initial.consignorId === prefillConsignor.id
         ? getConsignorDefaults(companyId, prefillConsignor.id)
         : null,

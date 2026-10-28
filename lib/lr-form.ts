@@ -97,7 +97,7 @@ export type LrFormValues = {
 /** Party details the form shows under a picker (and the checklist reads). */
 export type PartyOption = Pick<
   Party,
-  "id" | "name" | "place" | "gstin" | "phone" | "address" | "stateCode"
+  "id" | "name" | "place" | "gstin" | "phone" | "address" | "stateCode" | "isSelf"
 >;
 
 export type TruckOption = {
@@ -239,7 +239,14 @@ export function lrToForm(lr: Lr, opts: { copy?: boolean; today: string }): LrFor
  * New LR from a goods (tax) invoice (?invoice=): seller → consignor, bill-to → consignee,
  * invoice lines → goods rows, invoice total → goods value, plus its truck and driver.
  */
-export function invoiceToForm(inv: TaxInvoice, opts: { today: string }): LrFormValues {
+/**
+ * LR prefilled from a tax invoice. The consignor is the invoice's seller: the consignor party for
+ * an imported invoice, or our own "self" party for one we issued.
+ */
+export function invoiceToForm(
+  inv: TaxInvoice,
+  opts: { today: string; selfPartyId?: string | null },
+): LrFormValues {
   const base = emptyLrForm(opts.today);
   const items: LrItemRow[] = inv.lines.map((l) => {
     const qty = Number(l.qty);
@@ -253,7 +260,7 @@ export function invoiceToForm(inv: TaxInvoice, opts: { today: string }): LrFormV
   });
   return {
     ...base,
-    consignorId: inv.sellerPartyId,
+    consignorId: inv.sellerPartyId ?? opts.selfPartyId ?? null,
     consigneeId: inv.billToId,
     truckId: inv.truckId,
     driverMobile: inv.driverMobile ?? "",

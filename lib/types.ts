@@ -136,6 +136,11 @@ export type Party = BaseRecord & {
   defaultGstPayer: GstPayer | null;
   defaultChargedAs: ChargedAs | null;
   source: RecordSource;
+  /**
+   * The company itself (one per company, created automatically). Its name, GSTIN, address and
+   * phone are synced from the Company profile; not editable or cancellable from Parties.
+   */
+  isSelf: boolean;
   /** Why it was cancelled (set with cancelledAt). */
   cancelReason?: string;
 };

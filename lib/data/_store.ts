@@ -21,6 +21,7 @@ import type {
   Truck,
   User,
 } from "@/lib/types";
+import { selfPartyFields } from "@/lib/self-party";
 import type { RuleError } from "@/lib/validators/common";
 import { ConflictError, NotFoundError, ValidationError } from "./errors";
 
@@ -43,7 +44,7 @@ type Store = {
 };
 
 function seed(): Store {
-  return structuredClone({
+  const store: Store = structuredClone({
     companies: mock.mockCompanies,
     users: mock.mockUsers,
     memberships: mock.mockMemberships,
@@ -60,11 +61,30 @@ function seed(): Store {
     audit: [],
     numberSeries: mock.mockNumberSeries,
   });
+  // Every company gets its "self" party, as it will when a company is created.
+  for (const c of store.companies) {
+    store.parties.push({
+      id: crypto.randomUUID(),
+      companyId: c.id,
+      createdAt: c.createdAt,
+      updatedAt: c.createdAt,
+      version: 1,
+      ...selfPartyFields(c),
+      logoUrl: null,
+      defaultFrom: null,
+      defaultPaymentMode: null,
+      defaultGstPayer: null,
+      defaultChargedAs: null,
+      source: "manual",
+      isSelf: true,
+    });
+  }
+  return store;
 }
 
 // Kept on globalThis so dev-server hot reloads don't wipe edits. Bump STORE_VERSION when the
 // record shapes change so a running dev server reseeds instead of serving old-shaped rows.
-const STORE_VERSION = 2; // 2: tax-invoice numbering, round-off, items audit
+const STORE_VERSION = 3; // 3: self party per company
 const g = globalThis as typeof globalThis & {
   __lrManagerStore?: Store;
   __lrManagerStoreV?: number;

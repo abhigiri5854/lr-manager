@@ -19,6 +19,7 @@ const toOption = (p: Party | PartySnapshot): PartyOption => ({
   phone: p.phone,
   address: p.address,
   stateCode: p.stateCode,
+  isSelf: "isSelf" in p ? p.isSelf : false,
 });
 
 async function partyOption(

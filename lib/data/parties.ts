@@ -1,3 +1,4 @@
+import { SELF_PARTY_LOCKED, selfPartyFields } from "@/lib/self-party";
 import { normaliseGstin } from "@/lib/validators/common";
 import type { Page, Party } from "@/lib/types";
 import {
@@ -22,6 +23,7 @@ import {
   parseInput,
   scoped,
   updateRecord,
+  writeAudit,
   type ListParams,
 } from "./_store";
 
@@ -47,9 +49,9 @@ export async function listParties(
 /** Every active party as id + name + place, for filter dropdowns (not paginated). */
 export async function listPartyOptions(
   companyId: string,
-): Promise<{ id: string; name: string; place: string | null }[]> {
+): Promise<{ id: string; name: string; place: string | null; isSelf: boolean }[]> {
   return scoped(db.parties, companyId)
-    .map((p) => ({ id: p.id, name: p.name, place: p.place }))
+    .map((p) => ({ id: p.id, name: p.name, place: p.place, isSelf: p.isSelf }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -88,6 +90,7 @@ export async function createParty(companyId: string, input: PartyInput): Promise
     defaultGstPayer: v.defaultGstPayer ?? null,
     defaultChargedAs: v.defaultChargedAs ?? null,
     source: v.source ?? "manual",
+    isSelf: false,
   };
   assertRules(partyRuleErrors(party));
   assertUniqueGstin(companyId, party.gstin);
@@ -108,6 +111,7 @@ export async function updateParty(
     id,
     expectedVersion,
     (current) => {
+      if (current.isSelf) fail("", SELF_PARTY_LOCKED);
       const next = { ...current, ...p };
       assertRules(partyRuleErrors(next));
       assertUniqueGstin(companyId, next.gstin, id);
@@ -226,6 +230,7 @@ export async function listShipsTo(companyId: string, consignorId: string): Promi
  * because those documents (and their snapshots) point at it.
  */
 export async function cancelParty(companyId: string, id: string, reason?: string): Promise<Party> {
+  if (findById(db.parties, companyId, id)?.isSelf) fail("", SELF_PARTY_LOCKED);
   const usage = await getPartyUsage(companyId, id);
   const blocked = partyBlockedReason(usage);
   if (blocked) fail("", blocked);
@@ -238,4 +243,55 @@ export async function cancelParty(companyId: string, id: string, reason?: string
     "Party",
     why ? { cancelReason: why } : {},
   );
+}
+
+// ---------- the company's own "self" party ----------
+
+/** This company as a party (consignor of goods we invoice, etc.). Created if missing. */
+export async function getSelfParty(companyId: string): Promise<Party> {
+  return clone(syncSelfParty(companyId));
+}
+
+/**
+ * Creates the self party or copies the Company profile onto it (name, GSTIN, PAN, address,
+ * phone, state, PIN). Called whenever the company is saved; writes audit when something changed.
+ */
+export function syncSelfParty(companyId: string): Party {
+  const company = db.companies.find((c) => c.id === companyId);
+  if (!company) fail("", "Company not found");
+  const fields = selfPartyFields(company);
+  const current = db.parties.find((p) => p.companyId === companyId && p.isSelf);
+  if (!current) {
+    const t = now();
+    const party: Party = {
+      id: newId(),
+      companyId,
+      createdAt: t,
+      updatedAt: t,
+      version: 1,
+      ...fields,
+      logoUrl: null,
+      defaultFrom: null,
+      defaultPaymentMode: null,
+      defaultGstPayer: null,
+      defaultChargedAs: null,
+      source: "manual",
+      isSelf: true,
+    };
+    insertRecord("parties", db.parties, party);
+    return party;
+  }
+  const changed = (Object.keys(fields) as (keyof typeof fields)[]).some(
+    (k) => current[k] !== fields[k],
+  );
+  if (!changed) return current;
+  const next: Party = {
+    ...current,
+    ...fields,
+    updatedAt: now(),
+    version: current.version + 1,
+  };
+  db.parties[db.parties.indexOf(current)] = next;
+  writeAudit(companyId, "parties", current.id, "update", current, next);
+  return next;
 }

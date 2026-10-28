@@ -5,14 +5,20 @@ import { searchPartiesAction } from "@/app/(app)/lr/form-actions";
 import { Combobox, type ComboboxPinned } from "@/components/ui/Combobox";
 import { cx } from "@/lib/cx";
 import type { PartyOption } from "@/lib/lr-form";
+import { partyLabel } from "@/lib/self-party";
 import { NewPartyDialog } from "./NewPartyDialog";
 
-const partyName = (p: PartyOption) => (p.place ? `${p.name} – ${p.place}` : p.name);
+const partyName = (p: PartyOption) =>
+  p.isSelf ? partyLabel(p) : p.place ? `${p.name} – ${p.place}` : p.name;
 
 /** What's saved for the picked party, under the field (green; amber for one just added). */
 function PartyDetails({ party, isNew }: { party: PartyOption; isNew: boolean }) {
   const first = [
-    isNew ? "New party · added to Parties" : "Saved party",
+    party.isSelf
+      ? "Our company · details from Company profile"
+      : isNew
+        ? "New party · added to Parties"
+        : "Saved party",
     party.gstin ? `GST ${party.gstin}` : "no GSTIN",
     party.phone,
   ]

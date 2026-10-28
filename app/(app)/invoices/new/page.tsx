@@ -31,6 +31,7 @@ async function NewInvoice({ searchParams }: Pick<PageProps<"/invoices/new">, "se
       phone: party.phone,
       address: party.address,
       stateCode: party.stateCode,
+      isSelf: party.isSelf,
     };
   }
   return (

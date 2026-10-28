@@ -42,7 +42,8 @@ describe("company scoping", () => {
   it("only returns the asked company's rows", async () => {
     expect((await listLrs(acmId())).total).toBe(2);
     expect((await listLrs(rsId())).total).toBe(0);
-    expect((await listParties(rsId())).total).toBe(0);
+    // RS has only its own "self" party.
+    expect((await listParties(rsId())).rows.map((p) => p.isSelf)).toEqual([true]);
     expect(await getLrById(rsId(), lrId("19019"))).toBeNull();
   });
 
@@ -167,9 +168,10 @@ describe("updates", () => {
   });
 
   it("fills PAN and state from GSTIN for a new party", async () => {
-    const p = await createParty(rsId(), { name: "New Co", gstin: "20ABLFR4565P1ZN" });
-    expect(p.pan).toBe("ABLFR4565P");
-    expect(p.stateCode).toBe("20");
+    // (RS's own GSTIN belongs to its self party, so use another valid one.)
+    const p = await createParty(rsId(), { name: "New Co", gstin: "10AAXFA2859G1ZD" });
+    expect(p.pan).toBe("AAXFA2859G");
+    expect(p.stateCode).toBe("10");
   });
 });
 

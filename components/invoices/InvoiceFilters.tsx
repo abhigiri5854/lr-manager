@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
 import { DateField } from "@/components/ui/DateField";
 import { Field, Select } from "@/components/ui/Field";
+import { partyLabel } from "@/lib/self-party";
 import {
   INVOICE_STATUSES,
   invoiceListSearch,
@@ -11,7 +12,12 @@ import {
 } from "@/lib/validators/invoice-list";
 import { invoiceStatusLabel } from "./InvoiceStatusChip";
 
-export type InvoicePartyOption = { id: string; name: string; place: string | null };
+export type InvoicePartyOption = {
+  id: string;
+  name: string;
+  place: string | null;
+  isSelf?: boolean;
+};
 
 type Filters = Required<{ [K in "q" | "from" | "to" | "party" | "status"]: string }>;
 
@@ -153,7 +159,11 @@ export function InvoiceFilters({
           <option value="">All parties</option>
           {parties.map((p) => (
             <option key={p.id} value={p.id}>
-              {names.get(p.name)! > 1 && p.place ? `${p.name} · ${p.place}` : p.name}
+              {p.isSelf
+                ? partyLabel(p)
+                : names.get(p.name)! > 1 && p.place
+                  ? `${p.name} · ${p.place}`
+                  : p.name}
             </option>
           ))}
         </Select>

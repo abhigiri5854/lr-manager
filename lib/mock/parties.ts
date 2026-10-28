@@ -14,6 +14,7 @@ const base = {
   defaultPaymentMode: null,
   defaultGstPayer: null,
   defaultChargedAs: null,
+  isSelf: false,
 } as const;
 
 export const mockParties: Party[] = [

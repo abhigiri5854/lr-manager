@@ -119,6 +119,7 @@ describe("checklist and labels", () => {
       phone: null,
       address: null,
       stateCode: "10",
+      isSelf: false,
     };
     const lines = lrChecklist(lrToForm(lr19020, { today }), consignor);
     expect(lines).toEqual(
@@ -157,6 +158,15 @@ describe("dates", () => {
 });
 
 describe("New LR from a tax invoice", () => {
+  it("uses our own self party as consignor for an invoice we issued", () => {
+    const own = { ...mockTaxInvoices[0], sellerPartyId: null };
+    expect(invoiceToForm(own, { today, selfPartyId: "self-id" }).consignorId).toBe("self-id");
+    // An imported invoice keeps the consignor who sold the goods.
+    expect(invoiceToForm(mockTaxInvoices[0], { today, selfPartyId: "self-id" }).consignorId).toBe(
+      mockTaxInvoices[0].sellerPartyId,
+    );
+  });
+
   it("fills parties, goods, value and truck, linked to the invoice", () => {
     const inv = mockTaxInvoices[0];
     const v = invoiceToForm(inv, { today });

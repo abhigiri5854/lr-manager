@@ -13,6 +13,7 @@ import {
   writeAudit,
 } from "./_store";
 import { ConflictError, NotFoundError } from "./errors";
+import { syncSelfParty } from "./parties";
 import { getCurrentUserId } from "./session";
 
 /** nextLrNo always comes from the number series (single source of truth). */
@@ -74,5 +75,7 @@ export async function updateCompany(
     ...next,
     nextLrNo: nextLrNo ?? current.nextLrNo,
   });
+  // Our own party (used on LRs) always mirrors the profile.
+  syncSelfParty(companyId);
   return withNextLrNo(next);
 }
