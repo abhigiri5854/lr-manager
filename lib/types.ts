@@ -448,3 +448,60 @@ export type PodPendingRow = {
   /** Penalty accrued so far, in paise (per company POD rules). */
   penaltyPaise: Paise;
 };
+
+// ---------- dashboard ----------
+/** Something on the dashboard's "Needs attention" list. The screen writes the wording. */
+export type AttentionItem =
+  | {
+      kind: "eway_expired" | "eway_expiring";
+      lrId: Uuid;
+      lrNo: string;
+      ewayBillNo: string;
+      expiresAt: IsoDateTime;
+    }
+  | {
+      kind: "pod_overdue";
+      lrId: Uuid;
+      lrNo: string;
+      daysOverdue: number;
+      podDays: number;
+      penaltyPerDayPaise: Paise | null;
+      penaltyPaise: Paise;
+    }
+  | {
+      kind: "draft_incomplete";
+      lrId: Uuid;
+      lrNo: string;
+      /** Short labels, e.g. ["e-way bill no.", "weight"]. */
+      missing: string[];
+    };
+
+/** A consignor → consignee pair, with the latest LR to copy from. */
+export type RepeatRoute = {
+  /** Latest LR for this pair (used for /lr/new?from=). */
+  lrId: Uuid;
+  consignorName: string;
+  consigneeName: string;
+  fromPlace: string | null;
+  toPlace: string | null;
+  chargedAs: ChargedAs | null;
+  paymentMode: LrPaymentMode | null;
+  lastUsedOn: IsoDate;
+  count: number;
+};
+
+export type Dashboard = {
+  openLrs: { total: number; draft: number; booked: number; inTransit: number };
+  /** E-way bills on undelivered LRs that expire within 24 h or have expired. */
+  eway: { total: number; expired: number };
+  pod: { pending: number; podDays: number | null };
+  freight: {
+    /** Due on finalised freight bills. Null when nothing has been billed yet. */
+    toCollectPaise: Paise | null;
+    /** Booked TBB LRs not on any bill. */
+    unbilledTbbLrs: number;
+  };
+  recentLrs: LrView[];
+  attention: AttentionItem[];
+  repeatRoutes: RepeatRoute[];
+};

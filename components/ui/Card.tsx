@@ -7,12 +7,22 @@ type CardProps = {
   action?: ReactNode;
   /** "table": tight padding for a DataTable that runs edge to edge (Register). */
   padding?: "default" | "table";
+  /** "large": 18px heading with a 12px gap below (Main.dc.html). Others use 17px. */
+  heading?: "default" | "large";
   className?: string;
   children: ReactNode;
 };
 
-export function Card({ title, action, padding = "default", className, children }: CardProps) {
+export function Card({
+  title,
+  action,
+  padding = "default",
+  heading = "default",
+  className,
+  children,
+}: CardProps) {
   const isTable = padding === "table";
+  const large = heading === "large";
 
   return (
     <section
@@ -26,10 +36,10 @@ export function Card({ title, action, padding = "default", className, children }
         <div
           className={cx(
             "flex flex-wrap items-center justify-between gap-3",
-            isTable ? "mx-3 mt-3 mb-1" : action ? "mb-3" : "mb-4",
+            isTable ? "mx-3 mt-3 mb-1" : action || large ? "mb-3" : "mb-4",
           )}
         >
-          <h2 className="m-0 text-[17px] font-bold">{title}</h2>
+          <h2 className={cx("m-0 font-bold", large ? "text-[18px]" : "text-[17px]")}>{title}</h2>
           {action && <div className="text-sm">{action}</div>}
         </div>
       )}

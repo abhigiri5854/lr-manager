@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amountInWords, formatDate, formatPaise, formatRupees } from "./format";
+import { amountInWords, formatDate, formatPaise, formatRupees, formatRupeesShort } from "./format";
 
 describe("formatPaise", () => {
   it.each([
@@ -59,5 +59,14 @@ describe("amountInWords", () => {
   it("rejects negative and fractional paise", () => {
     expect(() => amountInWords(-1)).toThrow(RangeError);
     expect(() => amountInWords(1.5)).toThrow(RangeError);
+  });
+});
+
+describe("formatRupeesShort", () => {
+  it("drops .00 for whole rupees only", () => {
+    expect(formatRupeesShort(5000)).toBe("₹50");
+    expect(formatRupeesShort(10000000)).toBe("₹1,00,000");
+    expect(formatRupeesShort(18490258)).toBe("₹1,84,902.58");
+    expect(formatRupeesShort(-5000)).toBe("-₹50");
   });
 });

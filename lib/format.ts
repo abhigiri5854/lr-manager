@@ -10,6 +10,15 @@ export function formatRupees(paise: number): string {
   return paise < 0 ? `-₹${formatPaise(-paise)}` : `₹${formatPaise(paise)}`;
 }
 
+const inrWhole = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+
+/** Drops ".00" for whole rupees: 5000 → "₹50", 123456789 → "₹12,34,567.89". */
+export function formatRupeesShort(paise: number): string {
+  if (paise % 100 !== 0) return formatRupees(paise);
+  const sign = paise < 0 ? "-" : "";
+  return `${sign}₹${inrWhole.format(Math.abs(paise) / 100)}`;
+}
+
 /** "2026-10-14" or a full ISO timestamp → "14-10-2026" (UTC date). */
 export function formatDate(iso: string): string {
   const d = new Date(iso);
