@@ -1,4 +1,4 @@
-import type { ChargedAs, LrPaymentMode } from "@/lib/types";
+import type { ChargedAs, LrPaymentMode, RecordSource } from "@/lib/types";
 
 /** Display names for stored codes. */
 export const chargedAsLabel: Record<ChargedAs, string> = {
@@ -18,3 +18,10 @@ export function joinAnd(parts: string[]): string {
   if (parts.length < 2) return parts.join("");
   return `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
+
+export const recordSourceLabel: Record<RecordSource, string> = {
+  manual: "Added manually",
+  lr: "Saved from LR",
+  invoice_scan: "From invoice scan",
+  excel_import: "From Excel import",
+};

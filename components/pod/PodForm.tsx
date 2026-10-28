@@ -7,6 +7,7 @@ import { savePodAction } from "@/app/(app)/lr/[id]/pod/pod-actions";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { DateField, focusFirstInvalidDate } from "@/components/ui/DateField";
 import { Field, Select, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cx } from "@/lib/cx";
@@ -156,6 +157,7 @@ export function PodForm({
   }
 
   function save() {
+    if (focusFirstInvalidDate()) return;
     setFormError(null);
     setConflict(null);
     setSavedNote(null);
@@ -271,13 +273,12 @@ export function PodForm({
         <div className="min-w-0 flex-[999_1_640px]">
           <Card title="Delivery details">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Field
+              <DateField
                 label="Delivered on"
-                type="date"
                 value={deliveredOn}
                 min={lr.lrDate ?? undefined}
                 max={today}
-                onChange={(e) => setDeliveredOn(e.target.value)}
+                onChange={setDeliveredOn}
                 error={errors.deliveredOn}
                 disabled={disabled}
                 required

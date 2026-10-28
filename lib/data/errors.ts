@@ -25,3 +25,18 @@ export class NotFoundError extends Error {
     this.name = "NotFoundError";
   }
 }
+
+/** What a server action hands back to a form when a data call throws. */
+export type ActionFailure =
+  | { ok: false; kind: "validation"; issues: RuleError[]; message: string }
+  | { ok: false; kind: "conflict"; message: string }
+  | { ok: false; kind: "error"; message: string };
+
+/** Known data errors become an ActionFailure; anything else is a bug and is re-thrown. */
+export function toActionFailure(e: unknown): ActionFailure {
+  if (e instanceof ValidationError)
+    return { ok: false, kind: "validation", issues: e.issues, message: e.message };
+  if (e instanceof ConflictError) return { ok: false, kind: "conflict", message: e.message };
+  if (e instanceof NotFoundError) return { ok: false, kind: "error", message: e.message };
+  throw e;
+}

@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
+import { DateField } from "@/components/ui/DateField";
 import { Field, Select } from "@/components/ui/Field";
 import type { LrStatus } from "@/lib/types";
 import {
@@ -68,6 +69,13 @@ export function RegisterFilters({
     startTransition(() => router[mode](`${pathname}${search}`, { scroll: false }));
   }
 
+  function changeDate(key: "from" | "to", value: string) {
+    if (value === filters[key]) return;
+    const next = { ...filters, [key]: value };
+    setFilters(next);
+    go(next, "push");
+  }
+
   function change(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const key = e.target.name as keyof Filters;
     const next = { ...filters, [key]: e.target.value };
@@ -112,31 +120,29 @@ export function RegisterFilters({
 
         <fieldset className="m-0 min-w-0 border-0 p-0">
           <legend className="mb-1.5 p-0 text-[13px] font-semibold text-label">Date range</legend>
-          <div className="flex items-center gap-2">
-            <Field
+          <div className="flex flex-wrap items-center gap-2">
+            <DateField
               label="From date"
               hideLabel
               name="from"
-              type="date"
               value={filters.from}
               max={filters.to || undefined}
-              onChange={change}
+              onChange={(from) => changeDate("from", from)}
               disabled={disabled}
-              className="flex-1"
+              className="min-w-36 flex-1"
             />
-            <span aria-hidden className="text-muted">
+            <span aria-hidden className="hidden text-muted @sm:inline">
               –
             </span>
-            <Field
+            <DateField
               label="To date"
               hideLabel
               name="to"
-              type="date"
               value={filters.to}
               min={filters.from || undefined}
-              onChange={change}
+              onChange={(to) => changeDate("to", to)}
               disabled={disabled}
-              className="flex-1"
+              className="min-w-36 flex-1"
             />
           </div>
         </fieldset>

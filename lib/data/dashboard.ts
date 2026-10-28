@@ -4,6 +4,7 @@ import { lrBookingErrors } from "@/lib/validators/lr";
 import { billForLr, receivedForBill, toLrView } from "./_derive";
 import { db, now, scoped } from "./_store";
 import { listPodPending } from "./pod";
+import { listExpiryAlerts } from "./trucks";
 
 type EwayAlert = Extract<AttentionItem, { kind: "eway_expired" | "eway_expiring" }>;
 
@@ -128,6 +129,8 @@ export async function getDashboard(companyId: string): Promise<Dashboard> {
     0,
   );
 
+  const expiryAlerts = await listExpiryAlerts(companyId);
+
   return {
     openLrs: { total: openLrs.draft + openLrs.booked + openLrs.inTransit, ...openLrs },
     eway: {
@@ -142,7 +145,7 @@ export async function getDashboard(companyId: string): Promise<Dashboard> {
       ).length,
     },
     recentLrs: lrs.slice(0, RECENT_LRS),
-    attention: [...ewayAlerts, ...podAlerts, ...draftAlerts],
+    attention: [...ewayAlerts, ...podAlerts, ...expiryAlerts, ...draftAlerts],
     repeatRoutes: repeatRoutes(lrs),
   };
 }

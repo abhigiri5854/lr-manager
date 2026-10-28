@@ -87,7 +87,13 @@ function pendingRows(companyId: string): PodPendingItem[] {
 
 /** LRs of the company that are delivered and still waiting for the signed POD. */
 export async function listPodPending(companyId: string): Promise<PodPendingRow[]> {
-  return pendingRows(companyId);
+  // Pages are capped at 50 rows, so walk them all.
+  const all: PodPendingRow[] = [];
+  for (let page = 1; ; page++) {
+    const { rows, total } = await listPodPendingPage(companyId, { page });
+    all.push(...rows);
+    if (all.length >= total || rows.length === 0) return all;
+  }
 }
 
 /** POD pending list: searchable, optionally only the overdue ones, 50 per page. */

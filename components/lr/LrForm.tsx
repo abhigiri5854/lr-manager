@@ -14,6 +14,7 @@ import { LrStatusChip } from "@/components/LrStatusChip";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { DateField, focusFirstInvalidDate } from "@/components/ui/DateField";
 import { Field, Select } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cx } from "@/lib/cx";
@@ -226,6 +227,7 @@ export function LrForm({
   }
 
   function save(book: boolean) {
+    if (focusFirstInvalidDate()) return;
     setFormError(null);
     setConflict(null);
     setNotice(null);
@@ -404,12 +406,11 @@ export function LrForm({
           <div className="flex min-w-0 flex-[999_1_640px] flex-col gap-5">
             <Card title="Booking">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Field
+                <DateField
                   id="lrDate"
                   label="LR date"
-                  type="date"
                   value={values.lrDate}
-                  onChange={(e) => set({ lrDate: e.target.value })}
+                  onChange={(lrDate) => set({ lrDate })}
                   error={errors.lrDate}
                 />
                 <Field

@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { DateField } from "@/components/ui/DateField";
+import { DateTimeField } from "@/components/ui/DateTimeField";
 import { Field } from "@/components/ui/Field";
 import { formatRupees } from "@/lib/format";
 import {
@@ -87,11 +89,10 @@ export function LrInvoicesEditor({
                   </div>
                 ) : null}
               </div>
-              <Field
+              <DateField
                 label="Invoice date"
-                type="date"
                 value={r.invoiceDate}
-                onChange={(e) => update(r.key, { invoiceDate: e.target.value })}
+                onChange={(invoiceDate) => update(r.key, { invoiceDate })}
                 error={err("invoiceDate")}
               />
               <Field
@@ -115,11 +116,10 @@ export function LrInvoicesEditor({
                 className="[&_input]:font-mono [&_input]:placeholder:font-sans"
                 error={err("ewayBillNo")}
               />
-              <Field
+              <DateTimeField
                 label="E-way expiry"
-                type="datetime-local"
                 value={r.ewayExpiresAt}
-                onChange={(e) => update(r.key, { ewayExpiresAt: e.target.value })}
+                onChange={(ewayExpiresAt) => update(r.key, { ewayExpiresAt })}
                 error={err("ewayExpiresAt")}
               />
             </div>

@@ -432,6 +432,15 @@ export type TruckView = Truck & { driverMobile: string | null; driverName: strin
 /** drivers.list / getById: driver plus the trucks that point at them (Truck.driverId). */
 export type DriverView = Driver & { truckNumbers: string[] };
 
+/** The LR a truck last carried, or is carrying now (an undelivered one wins). */
+export type TruckTrip = { lrId: Uuid; lrNo: string; status: LrStatus };
+
+/** Trucks table row: the truck, its driver, its trip, and why it can't be cancelled (if so). */
+export type TruckRow = TruckView & { trip: TruckTrip | null; cancelBlockedBy: string | null };
+
+/** Drivers table row. */
+export type DriverRow = DriverView & { cancelBlockedBy: string | null };
+
 /** bills.list / getById: bill plus what has been received against it. */
 export type FreightBillView = FreightBill & {
   partyName: string;
@@ -478,6 +487,18 @@ export type AttentionItem =
       lrNo: string;
       /** Short labels, e.g. ["e-way bill no.", "weight"]. */
       missing: string[];
+    }
+  | {
+      /** A truck document (RC, insurance, permit, fitness) or a driver's licence. */
+      kind: "doc_expiry";
+      owner: "truck" | "driver";
+      /** Truck number, or the driver's name / mobile. */
+      ownerLabel: string;
+      /** "RC", "Insurance", "Permit", "Fitness" or "Licence". */
+      doc: string;
+      expiresOn: IsoDate;
+      /** Negative once expired. */
+      daysLeft: number;
     };
 
 /** A consignor → consignee pair from booked LRs, with the latest one to copy from. */

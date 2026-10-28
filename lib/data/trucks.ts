@@ -1,5 +1,17 @@
+import { daysUntil, EXPIRY_WARN_DAYS } from "@/lib/expiry";
+import { isGoodsMoving } from "@/lib/lr-status";
+import type {
+  AttentionItem,
+  Driver,
+  DriverRow,
+  DriverView,
+  LrView,
+  Page,
+  Truck,
+  TruckRow,
+  TruckView,
+} from "@/lib/types";
 import { normaliseMobile, normaliseVehicleNo } from "@/lib/validators/common";
-import type { Driver, DriverView, Page, Truck, TruckView } from "@/lib/types";
 import {
   driverFields,
   driverPatchSchema,
@@ -10,12 +22,14 @@ import {
   type TruckInput,
   type TruckPatch,
 } from "@/lib/validators/truck";
+import { toLrView } from "./_derive";
 import {
   assertRef,
   cancelRecord,
   db,
   fail,
   findById,
+  getOrThrow,
   insertRecord,
   matchesSearch,
   newId,
@@ -23,6 +37,7 @@ import {
   paginate,
   parseInput,
   scoped,
+  today,
   updateRecord,
   type ListParams,
 } from "./_store";
@@ -149,7 +164,11 @@ export async function updateTruck(
   return toTruckView(saved);
 }
 
+/** Cancels a truck that isn't on an undelivered LR. */
 export async function cancelTruck(companyId: string, id: string): Promise<TruckView> {
+  const truck = getOrThrow(db.trucks, companyId, id, "Truck");
+  const blocked = cancelBlockedReason("truck", openLrsFor(companyId, { truckIds: [truck.id] }));
+  if (blocked) fail("", blocked);
   return toTruckView(cancelRecord("trucks", db.trucks, companyId, id, "Truck"));
 }
 
@@ -215,6 +234,140 @@ export async function updateDriver(
   return toDriverView(saved);
 }
 
+/** Cancels a driver who isn't on an undelivered LR, and unlinks them from their trucks. */
 export async function cancelDriver(companyId: string, id: string): Promise<DriverView> {
+  const driver = getOrThrow(db.drivers, companyId, id, "Driver");
+  const open = openLrsFor(companyId, driverMatch(companyId, driver));
+  const blocked = cancelBlockedReason("driver", open);
+  if (blocked) fail("", blocked);
+  for (const t of scoped(db.trucks, companyId).filter((x) => x.driverId === id)) {
+    const unlink = (c: Truck): Truck => ({ ...c, driverId: null });
+    updateRecord("trucks", db.trucks, companyId, t.id, t.version, unlink, "Truck");
+  }
   return toDriverView(cancelRecord("drivers", db.drivers, companyId, id, "Driver"));
+}
+
+/** "Invite to driver app": records when it was sent. No SMS goes out until messaging is wired. */
+export async function inviteDriver(companyId: string, id: string): Promise<DriverView> {
+  const d = getOrThrow(db.drivers, companyId, id, "Driver");
+  const stamp = (c: Driver): Driver => ({ ...c, invitedAt: now() });
+  return toDriverView(
+    updateRecord("drivers", db.drivers, companyId, id, d.version, stamp, "Driver"),
+  );
+}
+
+// ---------- table rows, cancel rules, expiry alerts ----------
+type OpenLrQuery = { truckIds: string[]; driverMobile?: string };
+
+/** Undelivered (draft, booked or in transit) LRs for these trucks or this driver mobile. */
+function openLrsFor(companyId: string, q: OpenLrQuery): LrView[] {
+  return scoped(db.lrs, companyId)
+    .filter(
+      (lr) =>
+        (lr.truckId !== null && q.truckIds.includes(lr.truckId)) ||
+        (q.driverMobile !== undefined && lr.driverMobile === q.driverMobile),
+    )
+    .map(toLrView)
+    .filter((lr) => isGoodsMoving(lr.status))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+function driverMatch(companyId: string, d: Driver): OpenLrQuery {
+  const truckIds = scoped(db.trucks, companyId)
+    .filter((t) => t.driverId === d.id)
+    .map((t) => t.id);
+  return { truckIds, driverMobile: d.mobile };
+}
+
+function cancelBlockedReason(what: "truck" | "driver", open: LrView[]): string | null {
+  if (open.length === 0) return null;
+  const list = open
+    .slice(0, 3)
+    .map((lr) => `LR ${lr.lrNo} (${lr.status.toLowerCase()})`)
+    .join(", ");
+  const more = open.length > 3 ? ` and ${open.length - 3} more` : "";
+  const them = open.length === 1 ? "it" : "them";
+  return `On ${list}${more}. Deliver or cancel ${them} first, then this ${what} can be cancelled.`;
+}
+
+/** Truck's current trip: an undelivered LR if any, else the latest one. */
+function tripFor(companyId: string, truckId: string): TruckRow["trip"] {
+  const lrs = scoped(db.lrs, companyId)
+    .filter((lr) => lr.truckId === truckId)
+    .map(toLrView)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const lr = lrs.find((x) => isGoodsMoving(x.status)) ?? lrs[0];
+  return lr ? { lrId: lr.id, lrNo: lr.lrNo, status: lr.status } : null;
+}
+
+/** Trucks list with each truck's trip and cancel rule, for /trucks. */
+export async function listTruckRows(
+  companyId: string,
+  params: TruckListParams = {},
+): Promise<Page<TruckRow>> {
+  const page = await listTrucks(companyId, params);
+  return {
+    ...page,
+    rows: page.rows.map((t) => ({
+      ...t,
+      trip: tripFor(companyId, t.id),
+      cancelBlockedBy: cancelBlockedReason("truck", openLrsFor(companyId, { truckIds: [t.id] })),
+    })),
+  };
+}
+
+/** Drivers list with each driver's cancel rule, for /trucks. */
+export async function listDriverRows(
+  companyId: string,
+  params: TruckListParams = {},
+): Promise<Page<DriverRow>> {
+  const page = await listDrivers(companyId, params);
+  return {
+    ...page,
+    rows: page.rows.map((d) => {
+      const open = openLrsFor(companyId, driverMatch(companyId, d));
+      return { ...d, cancelBlockedBy: cancelBlockedReason("driver", open) };
+    }),
+  };
+}
+
+/** Every active driver, for the "Driver" dropdowns (not paginated). */
+export async function listDriverOptions(
+  companyId: string,
+): Promise<{ id: string; label: string }[]> {
+  return scoped(db.drivers, companyId)
+    .sort((a, b) => a.mobile.localeCompare(b.mobile))
+    .map((d) => ({ id: d.id, label: d.name ? `${d.name} · ${d.mobile}` : d.mobile }));
+}
+
+const TRUCK_DOCS = [
+  ["rcExpiry", "RC"],
+  ["insuranceExpiry", "Insurance"],
+  ["permitExpiry", "Permit"],
+  ["fitnessExpiry", "Fitness"],
+] as const;
+
+/** Truck documents and driver licences that are expired or lapse within 15 days, soonest first. */
+export async function listExpiryAlerts(companyId: string): Promise<AttentionItem[]> {
+  const day = today();
+  const items: Extract<AttentionItem, { kind: "doc_expiry" }>[] = [];
+  const add = (
+    owner: "truck" | "driver",
+    ownerLabel: string,
+    doc: string,
+    expiresOn: string | null,
+  ) => {
+    if (!expiresOn) return;
+    const daysLeft = daysUntil(expiresOn, day);
+    if (daysLeft <= EXPIRY_WARN_DAYS) {
+      items.push({ kind: "doc_expiry", owner, ownerLabel, doc, expiresOn, daysLeft });
+    }
+  };
+  for (const t of scoped(db.trucks, companyId)) {
+    for (const [field, doc] of TRUCK_DOCS) add("truck", t.number, doc, t[field]);
+  }
+  for (const d of scoped(db.drivers, companyId)) {
+    add("driver", d.name ?? d.mobile, "Licence", d.licenceExpiry);
+  }
+  return items.sort((a, b) => a.expiresOn.localeCompare(b.expiresOn));
 }

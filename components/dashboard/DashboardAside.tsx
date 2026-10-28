@@ -47,6 +47,23 @@ function AttentionNote({ item }: { item: AttentionItem }) {
         </Note>
       );
     }
+    case "doc_expiry": {
+      const when =
+        item.daysLeft < 0
+          ? `expired ${formatDate(item.expiresOn)}`
+          : item.daysLeft === 0
+            ? "expires today"
+            : `expires ${formatDate(item.expiresOn)} (${item.daysLeft} day${item.daysLeft === 1 ? "" : "s"} left)`;
+      return (
+        <Note warning>
+          <b>
+            {item.doc} for {item.owner === "truck" ? "truck " : "driver "}
+            {item.ownerLabel}
+          </b>{" "}
+          {when} — update it. <Link href="/trucks">Open Trucks &amp; drivers</Link>
+        </Note>
+      );
+    }
     case "draft_incomplete":
       return (
         <Note>
@@ -73,7 +90,7 @@ export function NeedsAttention({ items }: { items: AttentionItem[] }) {
       {shown.length === 0 ? (
         <p className="m-0 text-muted">Nothing needs attention right now.</p>
       ) : (
-        shown.map((item, i) => <AttentionNote key={`${item.kind}:${item.lrId}:${i}`} item={item} />)
+        shown.map((item, i) => <AttentionNote key={`${item.kind}:${i}`} item={item} />)
       )}
       {hidden > 0 && (
         <p className="m-0 text-muted">
