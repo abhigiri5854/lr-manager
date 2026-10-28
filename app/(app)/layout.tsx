@@ -5,7 +5,9 @@ import { Sidebar } from "@/components/ui/Sidebar";
 // (The design's 560px basis excludes its 32px padding; ours includes it.)
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
-    <div className="flex min-h-screen flex-wrap bg-page font-sans text-text">
+    // @container: the sidebar uses the shell's own width (not the viewport, which
+    // includes the scrollbar) to know whether it is side by side or stacked.
+    <div className="@container flex min-h-screen flex-wrap bg-page font-sans text-text">
       <Sidebar />
       <main className="flex min-w-0 flex-[999_1_624px] flex-col gap-6 p-page">{children}</main>
     </div>
