@@ -8,7 +8,15 @@ import type { LrFormValues, PartyOption, TruckOption } from "@/lib/lr-form";
 async function partyOption(companyId: string, id: string | null): Promise<PartyOption | null> {
   const p = id ? await getPartyById(companyId, id) : null;
   return p
-    ? { id: p.id, name: p.name, place: p.place, gstin: p.gstin, phone: p.phone, address: p.address }
+    ? {
+        id: p.id,
+        name: p.name,
+        place: p.place,
+        gstin: p.gstin,
+        phone: p.phone,
+        address: p.address,
+        stateCode: p.stateCode,
+      }
     : null;
 }
 
@@ -30,5 +38,5 @@ export async function loadPicked(companyId: string, v: LrFormValues) {
 export async function loadLinkedInvoice(companyId: string, v: LrFormValues) {
   const id = v.invoices.find((r) => r.taxInvoiceId)?.taxInvoiceId;
   const inv = id ? await getTaxInvoiceById(companyId, id) : null;
-  return inv ? { id: inv.id, invoiceNo: inv.invoiceNo } : null;
+  return inv ? { id: inv.id, invoiceNo: inv.invoiceNo ?? "draft" } : null;
 }

@@ -31,6 +31,7 @@ export const mockTaxInvoices: TaxInvoice[] = [
     soDate: null,
     doNo: "801445107",
     sapRef: null,
+    transporterName: null,
     truckId: IDS.truck.br06gb7374,
     driverMobile: "8873764100",
     shipFrom: null,

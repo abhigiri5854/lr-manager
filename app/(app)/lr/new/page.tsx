@@ -33,10 +33,13 @@ async function NewLr({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const companyId = await getActiveCompanyId();
   const today = todayInIndia();
-  const [source, invoice] = await Promise.all([
+  const [source, found] = await Promise.all([
     one(params.from) ? getLrById(companyId, one(params.from)!) : null,
     one(params.invoice) ? getTaxInvoiceById(companyId, one(params.invoice)!) : null,
   ]);
+  // Only a numbered, live invoice can go on an LR (own drafts get their number on Finalise).
+  const invoice =
+    found?.invoiceNo && !found.cancelledAt ? { ...found, invoiceNo: found.invoiceNo } : null;
 
   if (invoice && params.again !== "1") {
     const onLrs = await findLrsWithInvoice(companyId, {

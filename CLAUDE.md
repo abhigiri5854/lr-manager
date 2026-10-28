@@ -22,6 +22,7 @@ payments, parties, trucks, AI import, branded PDFs. Used by many companies and u
 | New freight bill | FreightBill.dc.html | /bills/new |
 | Parties | Parties.dc.html | /parties, /parties/[id] |
 | Trucks & drivers | Trucks.dc.html | /trucks |
+| Item master | — (no design; follows Parties/Trucks lists) | /items |
 | Smart import | Import.dc.html | /import |
 | Company profile | Settings.dc.html | /settings/company |
 | Users & roles | Users.dc.html | /settings/users |

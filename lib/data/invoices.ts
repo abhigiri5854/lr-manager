@@ -1,7 +1,21 @@
+import { financialYear } from "@/lib/fy";
+import { partyState } from "@/lib/gst";
+import { invoiceStatus } from "@/lib/invoice-status";
 import { companySnapshot, partySnapshot } from "@/lib/snapshots";
 import { computeInvoiceTax } from "@/lib/tax";
-import type { LrView, Page, TaxInvoice, TaxInvoiceLine } from "@/lib/types";
+import type {
+  Company,
+  LrView,
+  Page,
+  Party,
+  TaxInvoice,
+  TaxInvoiceLine,
+  TaxInvoiceRow,
+  TaxInvoiceStatus,
+} from "@/lib/types";
 import {
+  cancelReasonSchema,
+  formatInvoiceNo,
   taxInvoiceFields,
   taxInvoicePatchSchema,
   type TaxInvoiceInput,
@@ -9,12 +23,14 @@ import {
 } from "@/lib/validators/invoice";
 import { toLrView } from "./_derive";
 import {
+  allocateNumber,
   assertRef,
   cancelRecord,
   clone,
   db,
   fail,
   findById,
+  findSeries,
   insertRecord,
   matchesSearch,
   newId,
@@ -23,32 +39,57 @@ import {
   parseInput,
   scoped,
   updateRecord,
+  writeAudit,
   type ListParams,
 } from "./_store";
 
 export type TaxInvoiceListParams = ListParams & {
-  status?: TaxInvoice["status"];
+  status?: TaxInvoiceStatus;
   /** Seller, bill-to or ship-to. */
   partyId?: string;
+  /** Invoice date range, yyyy-mm-dd inclusive (India date). */
+  from?: string;
+  to?: string;
 };
 
 type ParsedLine = ReturnType<typeof taxInvoiceFields.parse>["lines"][number];
-type Header = Pick<TaxInvoice, "companyId" | "sellerPartyId" | "placeOfSupplyStateCode">;
+type Header = Pick<
+  TaxInvoice,
+  "companyId" | "sellerPartyId" | "placeOfSupplyStateCode" | "billToId" | "shipToId"
+>;
+
+const company = (companyId: string): Company => db.companies.find((c) => c.id === companyId)!;
+const partyById = (id: string | null): Party | undefined =>
+  id ? db.parties.find((p) => p.id === id) : undefined;
 
 /** Seller's GST state: the seller party's, or this company's when we are the seller. */
-function sellerState(inv: Header): string | null {
-  if (inv.sellerPartyId) {
-    const p = db.parties.find((x) => x.id === inv.sellerPartyId);
-    return p?.stateCode ?? p?.gstin?.slice(0, 2) ?? null;
-  }
-  return db.companies.find((c) => c.id === inv.companyId)?.gstin.slice(0, 2) ?? null;
+function sellerState(inv: Pick<Header, "companyId" | "sellerPartyId">): string | null {
+  if (inv.sellerPartyId) return partyState(partyById(inv.sellerPartyId));
+  return company(inv.companyId).gstin.slice(0, 2);
 }
 
+/**
+ * Place of supply = ship-to state (bill-to when shipped to the same party). The typed state is only
+ * used when that party has none — an unregistered buyer.
+ */
+function placeOfSupply(h: Omit<Header, "placeOfSupplyStateCode">, typed: string | null): string {
+  const state = partyState(partyById(h.shipToId ?? h.billToId)) ?? typed;
+  if (!state) fail("placeOfSupplyStateCode", "Choose the buyer's state");
+  return state;
+}
+
+/** Day of the invoice in India (invoiceAt is UTC). */
+const invoiceDay = (iso: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(iso));
+
 /** Recalculates every line's tax and the totals from rate × qty. */
-function priced(inv: Header, lines: ParsedLine[]) {
+function priced(inv: Header, lines: Array<ParsedLine | TaxInvoiceLine>) {
   const intraState = sellerState(inv) === inv.placeOfSupplyStateCode;
   const input = lines.map((l) => ({ ...l, discountPaise: l.discountPaise ?? 0 }));
-  const tax = computeInvoiceTax(input, intraState);
+  // Round-off is our setting: an imported invoice keeps the seller's own total.
+  const tax = computeInvoiceTax(input, intraState, {
+    roundOff: !inv.sellerPartyId && company(inv.companyId).invoiceRoundOff,
+  });
   const out: TaxInvoiceLine[] = input.map((l, i) => ({
     id: l.id ?? newId(),
     lineNo: i + 1,
@@ -74,33 +115,64 @@ function assertInvoiceRefs(companyId: string, v: ReturnType<typeof taxInvoicePat
   v.lines?.forEach((l, i) => assertRef(db.items, companyId, l.itemId, `lines.${i}.itemId`, "Item"));
 }
 
+/** Invoice numbers are unique per seller and financial year (cancelled ones still hold theirs). */
 function assertUniqueNo(
   companyId: string,
-  inv: Pick<TaxInvoice, "invoiceNo" | "sellerPartyId">,
+  inv: Pick<TaxInvoice, "invoiceNo" | "sellerPartyId" | "invoiceAt">,
   exceptId?: string,
 ) {
-  const clash = scoped(db.taxInvoices, companyId).some(
+  if (!inv.invoiceNo) return;
+  const fy = financialYear(invoiceDay(inv.invoiceAt));
+  const clash = scoped(db.taxInvoices, companyId, true).some(
     (x) =>
-      x.invoiceNo === inv.invoiceNo && x.sellerPartyId === inv.sellerPartyId && x.id !== exceptId,
+      x.invoiceNo === inv.invoiceNo &&
+      x.sellerPartyId === inv.sellerPartyId &&
+      x.id !== exceptId &&
+      financialYear(invoiceDay(x.invoiceAt)) === fy,
   );
-  if (clash) fail("invoiceNo", `Invoice ${inv.invoiceNo} from this seller is already saved`);
+  if (clash) fail("invoiceNo", `Invoice ${inv.invoiceNo} is already used in FY ${fy}`);
+}
+
+/** Imported invoices carry the seller's own number. */
+function assertImportedHasNo(inv: Pick<TaxInvoice, "invoiceNo" | "sellerPartyId">) {
+  if (inv.sellerPartyId && !inv.invoiceNo) fail("invoiceNo", "Enter the seller's invoice number");
+}
+
+function toRow(i: TaxInvoice): TaxInvoiceRow {
+  const billTo = i.snapshot?.billTo ?? partyById(i.billToId);
+  return {
+    ...clone(i),
+    displayStatus: invoiceStatus(i),
+    billToName: billTo?.name ?? "",
+    billToGstin: billTo?.gstin ?? null,
+    linkedLrs: scoped(db.lrs, i.companyId)
+      .filter((lr) => lr.lrInvoices.some((x) => x.taxInvoiceId === i.id))
+      .map((lr) => ({ id: lr.id, lrNo: lr.lrNo })),
+  };
 }
 
 export async function listTaxInvoices(
   companyId: string,
   params: TaxInvoiceListParams = {},
-): Promise<Page<TaxInvoice>> {
-  const name = (id: string | null) => (id ? db.parties.find((p) => p.id === id)?.name : undefined);
-  const rows = scoped(db.taxInvoices, companyId)
-    .filter((i) => !params.status || i.status === params.status)
+): Promise<Page<TaxInvoiceRow>> {
+  const rows = scoped(db.taxInvoices, companyId, true)
+    .filter((i) => !params.status || invoiceStatus(i) === params.status)
     .filter(
       (i) => !params.partyId || [i.sellerPartyId, i.billToId, i.shipToId].includes(params.partyId),
     )
-    .filter((i) =>
-      matchesSearch(params.search, i.invoiceNo, name(i.sellerPartyId), name(i.billToId)),
+    .filter((i) => !params.from || invoiceDay(i.invoiceAt) >= params.from)
+    .filter((i) => !params.to || invoiceDay(i.invoiceAt) <= params.to)
+    .map(toRow)
+    .filter((r) =>
+      matchesSearch(
+        params.search,
+        r.invoiceNo,
+        r.billToName,
+        r.billToGstin,
+        partyById(r.sellerPartyId)?.name,
+      ),
     )
-    .sort((a, b) => b.invoiceAt.localeCompare(a.invoiceAt))
-    .map(clone);
+    .sort((a, b) => b.invoiceAt.localeCompare(a.invoiceAt));
   return paginate(rows, params);
 }
 
@@ -116,6 +188,16 @@ export async function listLrsForInvoice(companyId: string, invoiceId: string): P
     .map(toLrView);
 }
 
+/** The number the next own invoice dated `date` would get (not reserved). */
+export async function peekNextInvoiceNo(
+  companyId: string,
+  date: string,
+): Promise<{ invoiceNo: string | null; fy: string; counter: number }> {
+  const fy = financialYear(date);
+  const counter = findSeries(companyId, "tax_invoice", fy)?.nextValue ?? 1;
+  return { invoiceNo: formatInvoiceNo(company(companyId).taxInvoicePrefix, counter), fy, counter };
+}
+
 /** Saves a draft tax invoice; line taxes and totals are always recalculated here. */
 export async function createTaxInvoice(
   companyId: string,
@@ -123,12 +205,16 @@ export async function createTaxInvoice(
 ): Promise<TaxInvoice> {
   const v = parseInput(taxInvoiceFields, input);
   assertInvoiceRefs(companyId, v);
-  const header = {
-    companyId,
-    sellerPartyId: v.sellerPartyId ?? null,
-    placeOfSupplyStateCode: v.placeOfSupplyStateCode,
+  const sellerPartyId = v.sellerPartyId ?? null;
+  // Own invoices get their number on Finalise only.
+  const invoiceNo = sellerPartyId ? (v.invoiceNo ?? null) : null;
+  assertImportedHasNo({ invoiceNo, sellerPartyId });
+  assertUniqueNo(companyId, { invoiceNo, sellerPartyId, invoiceAt: v.invoiceAt });
+  const parties = { companyId, sellerPartyId, billToId: v.billToId, shipToId: v.shipToId ?? null };
+  const header: Header = {
+    ...parties,
+    placeOfSupplyStateCode: placeOfSupply(parties, v.placeOfSupplyStateCode ?? null),
   };
-  assertUniqueNo(companyId, { invoiceNo: v.invoiceNo, sellerPartyId: header.sellerPartyId });
   const t = now();
   const invoice: TaxInvoice = {
     id: newId(),
@@ -136,17 +222,16 @@ export async function createTaxInvoice(
     updatedAt: t,
     version: 1,
     ...header,
-    invoiceNo: v.invoiceNo,
+    invoiceNo,
     invoiceAt: v.invoiceAt,
     status: "draft",
-    billToId: v.billToId,
-    shipToId: v.shipToId ?? null,
     customerRef: v.customerRef ?? null,
     customerRefDate: v.customerRefDate ?? null,
     soNo: v.soNo ?? null,
     soDate: v.soDate ?? null,
     doNo: v.doNo ?? null,
     sapRef: v.sapRef ?? null,
+    transporterName: v.transporterName ?? null,
     truckId: v.truckId ?? null,
     driverMobile: v.driverMobile ?? null,
     shipFrom: v.shipFrom ?? null,
@@ -161,6 +246,7 @@ export async function createTaxInvoice(
   return insertRecord("tax_invoices", db.taxInvoices, invoice);
 }
 
+/** Draft edits only. Own drafts never take a number here; imported ones may correct theirs. */
 export async function updateTaxInvoice(
   companyId: string,
   id: string,
@@ -176,20 +262,37 @@ export async function updateTaxInvoice(
     id,
     expectedVersion,
     (current) => {
-      if (current.status === "final")
-        fail("", "Finalised invoices can't be edited — cancel and re-issue");
-      const { lines, ...fields } = p;
-      const next: TaxInvoice = { ...current, ...fields };
+      if (current.status === "final") fail("", "Finalised invoices can't be edited");
+      const { lines, placeOfSupplyStateCode, sellerPartyId, invoiceNo, ...fields } = p;
+      void sellerPartyId; // who the seller is never changes after the invoice is created
+      const next: TaxInvoice = {
+        ...current,
+        ...fields,
+        invoiceNo: current.sellerPartyId
+          ? invoiceNo === undefined
+            ? current.invoiceNo
+            : invoiceNo
+          : null,
+      };
+      assertImportedHasNo(next);
       assertUniqueNo(companyId, next, id);
-      // Re-price whenever lines, seller or place of supply changed.
-      const repriced = priced(next, lines ?? current.lines);
-      return { ...next, ...repriced };
+      const typed =
+        placeOfSupplyStateCode === undefined
+          ? current.placeOfSupplyStateCode
+          : placeOfSupplyStateCode;
+      next.placeOfSupplyStateCode = placeOfSupply(next, typed);
+      // Re-price every save: lines, parties or place of supply may have changed.
+      return { ...next, ...priced(next, lines ?? current.lines) };
     },
     "Tax invoice",
   );
 }
 
-/** Draft → final: stores the seller / buyer snapshot. */
+/**
+ * Draft → final: locks the invoice and stores the seller / buyer snapshot. Own invoices take the
+ * next number from the company + FY tax-invoice series (checked before it is taken, so a failure
+ * never leaves a gap). Imported invoices keep the seller's number.
+ */
 export async function finaliseTaxInvoice(
   companyId: string,
   id: string,
@@ -203,13 +306,37 @@ export async function finaliseTaxInvoice(
     expectedVersion,
     (current) => {
       if (current.status === "final") fail("", "Invoice is already final");
-      const party = (pid: string) => partySnapshot(db.parties.find((p) => p.id === pid)!);
-      const company = db.companies.find((c) => c.id === companyId)!;
+      const co = company(companyId);
+      let invoiceNo = current.invoiceNo;
+      if (!current.sellerPartyId) {
+        const fy = financialYear(invoiceDay(current.invoiceAt));
+        const next = findSeries(companyId, "tax_invoice", fy)?.nextValue ?? 1;
+        invoiceNo = formatInvoiceNo(co.taxInvoicePrefix, next);
+        if (!invoiceNo) {
+          fail(
+            "invoiceNo",
+            "Invoice number would be longer than 16 characters — shorten the prefix in Company profile",
+          );
+        }
+        assertUniqueNo(companyId, { ...current, invoiceNo }, id);
+        allocateNumber(companyId, "tax_invoice", fy);
+      }
+      const party = (pid: string) => partySnapshot(partyById(pid)!);
+      // Items remember the last rate they were sold at.
+      for (const l of current.lines) {
+        const item = l.itemId ? findById(db.items, companyId, l.itemId) : undefined;
+        if (item && item.lastRatePaise !== l.ratePaise) {
+          const before = clone(item);
+          item.lastRatePaise = l.ratePaise;
+          writeAudit(companyId, "items", item.id, "update", before, item);
+        }
+      }
       return {
         ...current,
+        invoiceNo,
         status: "final" as const,
         snapshot: {
-          seller: current.sellerPartyId ? party(current.sellerPartyId) : companySnapshot(company),
+          seller: current.sellerPartyId ? party(current.sellerPartyId) : companySnapshot(co),
           billTo: party(current.billToId),
           shipTo: current.shipToId ? party(current.shipToId) : null,
         },
@@ -219,6 +346,14 @@ export async function finaliseTaxInvoice(
   );
 }
 
-export async function cancelTaxInvoice(companyId: string, id: string): Promise<TaxInvoice> {
-  return cancelRecord("tax_invoices", db.taxInvoices, companyId, id, "Tax invoice");
+/** Cancels a draft or final invoice. The number stays used; the invoice shows as CANCELLED. */
+export async function cancelTaxInvoice(
+  companyId: string,
+  id: string,
+  reason: string,
+): Promise<TaxInvoice> {
+  const cancelReason = parseInput(cancelReasonSchema, reason);
+  return cancelRecord("tax_invoices", db.taxInvoices, companyId, id, "Tax invoice", {
+    cancelReason,
+  });
 }

@@ -62,9 +62,18 @@ function seed(): Store {
   });
 }
 
-// Kept on globalThis so dev-server hot reloads don't wipe edits.
-const g = globalThis as typeof globalThis & { __lrManagerStore?: Store };
-export const db: Store = (g.__lrManagerStore ??= seed());
+// Kept on globalThis so dev-server hot reloads don't wipe edits. Bump STORE_VERSION when the
+// record shapes change so a running dev server reseeds instead of serving old-shaped rows.
+const STORE_VERSION = 2; // 2: tax-invoice numbering, round-off, items audit
+const g = globalThis as typeof globalThis & {
+  __lrManagerStore?: Store;
+  __lrManagerStoreV?: number;
+};
+if (g.__lrManagerStoreV !== STORE_VERSION) {
+  g.__lrManagerStore = seed();
+  g.__lrManagerStoreV = STORE_VERSION;
+}
+export const db: Store = g.__lrManagerStore!;
 
 /** Tests only: put the sample data back. */
 export function resetStore(): void {
@@ -82,6 +91,7 @@ export type TableName =
   | "parties"
   | "trucks"
   | "drivers"
+  | "items"
   | "lrs"
   | "tax_invoices"
   | "pods"

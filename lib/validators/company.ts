@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { taxInvoicePrefixSchema } from "./invoice";
 import {
   gstinSchema,
   mobileSchema,
@@ -37,6 +38,8 @@ export const companyFields = z.object({
   invoiceTitle: text(60),
   invoiceNote: optionalText(300),
   freightBillPrefix: z.string().trim().max(30),
+  taxInvoicePrefix: taxInvoicePrefixSchema,
+  invoiceRoundOff: z.boolean(),
   signatoryName: optionalText(100),
   lrPrefix: z.string().trim().max(10),
   nextLrNo: optional(z.number().int().positive()),

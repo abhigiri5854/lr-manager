@@ -42,6 +42,7 @@ const toPartyOption = (p: Party): PartyOption => ({
   gstin: p.gstin,
   phone: p.phone,
   address: p.address,
+  stateCode: p.stateCode,
 });
 
 /** Party autocomplete: name, place, GSTIN or phone. */

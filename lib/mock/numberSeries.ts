@@ -3,7 +3,7 @@ import { IDS } from "./ids";
 /** Mirrors the future number_series table: one row per company + series + financial year. */
 export type NumberSeriesRow = {
   companyId: string;
-  series: "lr" | "freight_bill";
+  series: "lr" | "freight_bill" | "tax_invoice";
   fy: string;
   nextValue: number;
 };

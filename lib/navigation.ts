@@ -44,6 +44,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Parties", href: "/parties", isActive: startsWith("/parties") },
       { label: "Trucks & drivers", href: "/trucks", isActive: startsWith("/trucks") },
+      { label: "Items", href: "/items", isActive: startsWith("/items") },
       { label: "Smart import", href: "/import", isActive: startsWith("/import") },
     ],
   },

@@ -78,6 +78,10 @@ export type Company = {
   invoiceNote: string | null;
   /** "ACM/FB/26-27/" */
   freightBillPrefix: string;
+  /** "ACM/TI/" — own tax invoices; number = prefix + 3-digit counter per FY, max 16 chars. */
+  taxInvoicePrefix: string;
+  /** Round tax-invoice totals to the nearest rupee (shown as its own line). */
+  invoiceRoundOff: boolean;
   signatoryName: string | null;
   // LR terms & numbering (null = not set yet)
   /** "" allowed */
@@ -308,7 +312,8 @@ export type TaxInvoiceTotals = {
 };
 
 export type TaxInvoice = BaseRecord & {
-  invoiceNo: string;
+  /** Null = own draft; the number is allocated on Finalise. Imported invoices keep the seller's. */
+  invoiceNo: string | null;
   invoiceAt: IsoDateTime;
   status: "draft" | "final";
   /** Null = this company is the seller. */
@@ -324,6 +329,7 @@ export type TaxInvoice = BaseRecord & {
   doNo: string | null;
   sapRef: string | null;
   /** The LR link lives on LrInvoice only. */
+  transporterName: string | null;
   truckId: Uuid | null;
   driverMobile: string | null;
   shipFrom: string | null;
@@ -339,6 +345,19 @@ export type TaxInvoice = BaseRecord & {
     billTo: PartySnapshot;
     shipTo: PartySnapshot | null;
   } | null;
+  /** Why it was cancelled (set with cancelledAt). The number stays used. */
+  cancelReason?: string;
+};
+
+/** Status shown on screens: cancelled wins over draft / final. */
+export type TaxInvoiceStatus = "draft" | "final" | "cancelled";
+
+/** One row of the tax invoice list. */
+export type TaxInvoiceRow = TaxInvoice & {
+  displayStatus: TaxInvoiceStatus;
+  billToName: string;
+  billToGstin: string | null;
+  linkedLrs: Array<{ id: string; lrNo: string }>;
 };
 
 // ---------- POD ----------

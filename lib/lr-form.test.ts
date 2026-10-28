@@ -118,6 +118,7 @@ describe("checklist and labels", () => {
       gstin: "10AABCA7061K2ZZ",
       phone: null,
       address: null,
+      stateCode: "10",
     };
     const lines = lrChecklist(lrToForm(lr19020, { today }), consignor);
     expect(lines).toEqual(

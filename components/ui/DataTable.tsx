@@ -62,7 +62,7 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const p = pad[density];
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table aria-label={label} className="w-full border-collapse">
         <thead>
           <tr>

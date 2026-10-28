@@ -9,11 +9,13 @@ import { NewTruckDialog } from "./NewTruckDialog";
 /** Truck no. picker: search by number ("br01" finds BR01GN8331) or add a new truck inline. */
 export function TruckPicker({
   id,
+  label = "Truck no.",
   truck,
   onChange,
   error,
 }: {
   id: string;
+  label?: string;
   truck: TruckOption | null;
   onChange: (truck: TruckOption | null) => void;
   error?: string;
@@ -24,7 +26,7 @@ export function TruckPicker({
     <div className="min-w-0">
       <Combobox<TruckOption>
         id={id}
-        label="Truck no."
+        label={label}
         listLabel="Saved trucks"
         placeholder="Search truck number"
         selectedText={truck?.number ?? ""}

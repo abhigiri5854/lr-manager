@@ -95,7 +95,10 @@ export type LrFormValues = {
 };
 
 /** Party details the form shows under a picker (and the checklist reads). */
-export type PartyOption = Pick<Party, "id" | "name" | "place" | "gstin" | "phone" | "address">;
+export type PartyOption = Pick<
+  Party,
+  "id" | "name" | "place" | "gstin" | "phone" | "address" | "stateCode"
+>;
 
 export type TruckOption = {
   id: string;
@@ -258,7 +261,7 @@ export function invoiceToForm(inv: TaxInvoice, opts: { today: string }): LrFormV
       {
         ...emptyInvoiceRow(),
         taxInvoiceId: inv.id,
-        invoiceNo: inv.invoiceNo,
+        invoiceNo: inv.invoiceNo ?? "",
         invoiceDate: todayInIndia(new Date(inv.invoiceAt)),
         value: moneyText(inv.totals.totalPaise),
         ewayBillNo: inv.ewayBillNo ?? "",
