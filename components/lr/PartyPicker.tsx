@@ -13,11 +13,15 @@ const partyName = (p: PartyOption) =>
 
 /** What's saved for the picked party, under the field (green; amber for one just added). */
 function PartyDetails({ party, isNew }: { party: PartyOption; isNew: boolean }) {
+  // Smart import: a party read from a file only exists on screen until the invoice is saved.
+  const unsaved = party.id.startsWith("new:");
   const first = [
     party.isSelf
       ? "Our company · details from Company profile"
       : isNew
-        ? "New party · added to Parties"
+        ? unsaved
+          ? "New party · saved when you save the invoice"
+          : "New party · added to Parties"
         : "Saved party",
     party.gstin ? `GST ${party.gstin}` : "no GSTIN",
     party.phone,

@@ -5,7 +5,7 @@ import { searchItemsAction } from "@/app/(app)/items/actions";
 import { ItemForm } from "@/components/items/ItemForm";
 import { Combobox } from "@/components/ui/Combobox";
 import { Dialog } from "@/components/ui/Dialog";
-import { Field, Select } from "@/components/ui/Field";
+import { Field, Select, type AiFlag } from "@/components/ui/Field";
 import { amountInWords, formatPaise } from "@/lib/format";
 import { formatGstRate, GST_RATES_BP } from "@/lib/gst";
 import { emptyLine, lineFromItem, type InvoiceLineRow } from "@/lib/invoice-form";
@@ -83,6 +83,7 @@ export function InvoiceItemsTable({
   intraState,
   readOnly,
   errors,
+  flags,
 }: {
   rows: InvoiceLineRow[];
   onChange: (rows: InvoiceLineRow[]) => void;
@@ -92,6 +93,8 @@ export function InvoiceItemsTable({
   intraState: boolean;
   readOnly: boolean;
   errors: Record<string, string>;
+  /** Smart import: line field path ("lines.0.hsn") -> why it is orange. */
+  flags?: Record<string, AiFlag>;
 }) {
   const [adding, setAdding] = useState<{ key: string; text: string } | null>(null);
   const update = (key: string, patch: Partial<InvoiceLineRow>) =>
@@ -140,6 +143,7 @@ export function InvoiceItemsTable({
             {rows.map((r, i) => {
               const t = taxes[i];
               const err = (f: string) => errors[`lines.${i}.${f}`];
+              const flag = (f: string) => flags?.[`lines.${i}.${f}`];
               if (readOnly) {
                 return (
                   <tr key={r.key}>
@@ -209,6 +213,7 @@ export function InvoiceItemsTable({
                       value={r.description}
                       onChange={(e) => update(r.key, { description: e.target.value })}
                       error={err("description")}
+                      aiFlag={flag("description")}
                     />
                   </td>
                   <td className={`${tdEdit} w-28 min-w-28`}>
@@ -219,6 +224,7 @@ export function InvoiceItemsTable({
                       value={r.hsn}
                       onChange={(e) => update(r.key, { hsn: e.target.value })}
                       error={err("hsn")}
+                      aiFlag={flag("hsn")}
                     />
                   </td>
                   <td className={`${tdEdit} w-20 min-w-20`}>
@@ -228,6 +234,7 @@ export function InvoiceItemsTable({
                       value={r.uom}
                       onChange={(e) => update(r.key, { uom: e.target.value })}
                       error={err("uom")}
+                      aiFlag={flag("uom")}
                     />
                   </td>
                   <td className={`${tdEdit} w-24 min-w-20`}>
@@ -238,6 +245,7 @@ export function InvoiceItemsTable({
                       value={r.qty}
                       onChange={(e) => update(r.key, { qty: e.target.value })}
                       error={err("qty")}
+                      aiFlag={flag("qty")}
                       className="[&_input]:text-right"
                     />
                   </td>
@@ -250,6 +258,7 @@ export function InvoiceItemsTable({
                       onChange={(e) => update(r.key, { rate: e.target.value })}
                       onBlur={(e) => update(r.key, { rate: tidyRupees(e.target.value) })}
                       error={err("ratePaise")}
+                      aiFlag={flag("ratePaise")}
                       className="[&_input]:text-right"
                     />
                   </td>

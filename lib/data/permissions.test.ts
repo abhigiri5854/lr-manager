@@ -11,6 +11,7 @@ vi.mock("next/server", () => ({ connection: async () => {} }));
 import * as bills from "./bills";
 import * as companies from "./companies";
 import { ForbiddenError } from "./errors";
+import * as imports from "./import";
 import * as invoices from "./invoices";
 import * as items from "./items";
 import * as lrs from "./lrs";
@@ -43,6 +44,7 @@ beforeEach(() => resetStore());
 // Every write function in lib/data, the action it needs and a call with throwaway arguments.
 // The permission check runs first, so other failures (not found, validation) don't matter.
 const c = () => acmId();
+const png8 = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0]);
 const png = { name: "a.png", type: "image/png", bytes: new Uint8Array([1]) };
 const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   createFreightBill: ["bill.edit", () => bills.createFreightBill(c(), {} as never)],
@@ -60,6 +62,31 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   createItem: ["master.edit", () => items.createItem(c(), {} as never)],
   updateItem: ["master.edit", () => items.updateItem(c(), X, 1, {})],
   createLr: ["lr.edit", () => lrs.createLr(c(), {})],
+  createImportedLr: ["lr.edit", () => lrs.createImportedLr(c(), {}, "19100", X)],
+  createImportBatch: [
+    "import.run",
+    () => imports.createImportBatch(c(), { source: "document", fileName: "a.png", bytes: png8 }),
+  ],
+  removeImportBatch: ["import.run", () => imports.removeImportBatch(c(), X)],
+  setColumnMapping: ["import.run", () => imports.setColumnMapping(c(), X, "LR No", "lr_no")],
+  setRowAction: ["import.run", () => imports.setRowAction(c(), X, 4, "skip")],
+  saveImportMapping: ["import.run", () => imports.saveImportMapping(c(), X, "Mapping")],
+  applyImportMapping: ["import.run", () => imports.applyImportMapping(c(), X, X)],
+  // Also needs lr.edit (it creates LRs), so an Accountant is refused.
+  commitExcelBatch: ["lr.edit", () => imports.commitExcelBatch(c(), X)],
+  saveImportedInvoice: [
+    "import.run",
+    () =>
+      imports.saveImportedInvoice(c(), {
+        batchId: X,
+        input: {} as never,
+        pending: { parties: {}, trucks: {} },
+      }),
+  ],
+  uploadImportFile: [
+    "import.run",
+    () => uploads.uploadImportFile(c(), { name: "a.png", format: "png", bytes: png8 }),
+  ],
   updateLr: ["lr.edit", () => lrs.updateLr(c(), X, 1, {})],
   bookLr: ["lr.edit", () => lrs.bookLr(c(), X, 1)],
   dispatchLr: ["lr.edit", () => lrs.dispatchLr(c(), X, 1)],
@@ -101,7 +128,7 @@ describe("every lib/data write checks lib/permissions", () => {
       .flatMap((f) =>
         [
           ...readFileSync(join(dir, f), "utf8").matchAll(
-            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset)\w*)/g,
+            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit)\w*)/g,
           ),
         ].map((m) => m[1]),
       )

@@ -11,6 +11,7 @@ import type {
   Driver,
   FreightBill,
   ImportBatch,
+  ImportMapping,
   Item,
   Lr,
   Membership,
@@ -40,6 +41,7 @@ type Store = {
   freightBills: FreightBill[];
   payments: Payment[];
   importBatches: ImportBatch[];
+  importMappings: ImportMapping[];
   audit: AuditEntry[];
   numberSeries: mock.NumberSeriesRow[];
   /** Mock logins (Supabase Auth later): salted scrypt hash per user. */
@@ -74,6 +76,7 @@ function seed(): Store {
     freightBills: [],
     payments: [],
     importBatches: [],
+    importMappings: [],
     audit: [],
     numberSeries: mock.mockNumberSeries,
     credentials: [],
@@ -102,7 +105,7 @@ function seed(): Store {
 
 // Kept on globalThis so dev-server hot reloads don't wipe edits. Bump STORE_VERSION when the
 // record shapes change so a running dev server reseeds instead of serving old-shaped rows.
-const STORE_VERSION = 5; // 5: logins, accountant sample user
+const STORE_VERSION = 6; // 6: Smart import batches and saved mappings
 const g = globalThis as typeof globalThis & {
   __lrManagerStore?: Store;
   __lrManagerStoreV?: number;
@@ -129,10 +132,54 @@ export function setAuditActor(userId: string): void {
   auditActor = userId;
 }
 
+// Inside runAsSystem every audit row is written as "system" for that Smart import file, whatever
+// the signed-in user is (getSessionUserId() keeps calling setAuditActor on every read).
+let systemBatchId: string | null = null;
+let batchContextId: string | null = null;
+
+/** Runs `fn` with audit rows written as "system" + this batch id (bulk imports). */
+export async function runAsSystem<T>(batchId: string, fn: () => Promise<T>): Promise<T> {
+  const before = systemBatchId;
+  systemBatchId = batchId;
+  try {
+    return await fn();
+  } finally {
+    systemBatchId = before;
+  }
+}
+
+/** Runs `fn` with audit rows stamped with this batch id; the actor stays the signed-in user. */
+export async function withBatchContext<T>(batchId: string, fn: () => Promise<T>): Promise<T> {
+  const before = batchContextId;
+  batchContextId = batchId;
+  try {
+    return await fn();
+  } finally {
+    batchContextId = before;
+  }
+}
+
+/**
+ * All-or-nothing: if `fn` throws, every change it made (records, audit rows, number series)
+ * is undone. In Postgres this is one transaction around the whole import.
+ */
+export async function withTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  const snapshot = structuredClone({ ...db, credentials: [] as Credential[] });
+  const credentials = db.credentials;
+  try {
+    return await fn();
+  } catch (e) {
+    Object.assign(db, snapshot, { credentials });
+    throw e;
+  }
+}
+
 export type TableName =
   | "companies"
   | "memberships"
   | "users"
+  | "import_batches"
+  | "import_mappings"
   | "parties"
   | "trucks"
   | "drivers"
@@ -250,7 +297,8 @@ export function writeAudit(
     id: newId(),
     companyId,
     createdAt: now(),
-    userId: auditActor ?? "system",
+    userId: systemBatchId ? "system" : (auditActor ?? "system"),
+    ...(systemBatchId || batchContextId ? { batchId: systemBatchId ?? batchContextId! } : {}),
     table,
     recordId,
     action,

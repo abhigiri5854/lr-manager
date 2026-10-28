@@ -1,5 +1,6 @@
 // Domain types shared by screens and the data layer (lib/data).
 // Money is integer paise; weights are Postgres numeric kept as strings; dates are ISO strings.
+import type { ImportReadResult } from "@/lib/import/types";
 
 // ---------- shared ----------
 export type Uuid = string;
@@ -236,6 +237,8 @@ export type LrSnapshot = {
 };
 
 export type Lr = BaseRecord & {
+  /** Set when Smart import created it. */
+  importBatchId?: Uuid | null;
   /** Prefix + number, allocated on create. */
   lrNo: string;
   /** Null while draft. */
@@ -430,15 +433,43 @@ export type Payment = BaseRecord & {
 };
 
 // ---------- import & audit ----------
+export type ImportRowAction = "import" | "update" | "skip";
+
+/** One uploaded file in Smart import. The reader's output is kept on it until it is imported. */
 export type ImportBatch = BaseRecord & {
+  /** Which upload card it came from. */
+  source: "excel" | "document";
   fileName: string;
+  /** /uploads/<id>?n=<name> — the original file, shown beside the Tax invoice form. */
   fileUrl: string | null;
+  format: "xlsx" | "xls" | "csv" | "pdf" | "jpg" | "png";
   kind: "excel" | "csv" | "pdf" | "image";
+  mimeType: string;
+  sizeBytes: number;
+  createdBy: Uuid;
   detectedAs: "booking_report" | "tax_invoice" | "lr" | "pod" | "eway_bill" | "unknown";
   status: "uploaded" | "read" | "reviewed" | "imported" | "failed";
+  /** Why it failed (reader or import). */
+  error: string | null;
+  result: ImportReadResult | null;
+  /** Excel: header → system field key ("skip" = don't import). */
+  mapping: Record<string, string>;
+  /** Excel: headers whose "Confirm" match the user has answered. */
+  confirmedColumns: string[];
   mappingName: string | null;
+  /** Excel: row number → chosen action (rows not listed use their default). */
+  rowActions: Record<string, ImportRowAction>;
   counts: { valid: number; warning: number; error: number };
-  createdRecordIds: Uuid[];
+  /** Records this import made, so they can be traced back to the file. */
+  createdRecords: { table: string; id: Uuid }[];
+  importedAt: IsoDateTime | null;
+};
+
+/** A saved Excel column mapping ("RSL Booking Report"), per company. */
+export type ImportMapping = BaseRecord & {
+  name: string;
+  /** header → system field key */
+  columns: Record<string, string>;
 };
 
 export type AuditEntry = {
@@ -447,6 +478,8 @@ export type AuditEntry = {
   createdAt: IsoDateTime;
   /** "system" for imports and scheduled jobs. */
   userId: Uuid | "system";
+  /** The Smart import file this change came from. */
+  batchId?: Uuid;
   table: string;
   recordId: Uuid;
   action: "create" | "update" | "cancel";

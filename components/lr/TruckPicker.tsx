@@ -11,12 +11,15 @@ export function TruckPicker({
   id,
   label = "Truck no.",
   truck,
+  isNew = false,
   onChange,
   error,
 }: {
   id: string;
   label?: string;
   truck: TruckOption | null;
+  /** A truck that isn't saved yet (Smart import): shown amber. */
+  isNew?: boolean;
   onChange: (truck: TruckOption | null) => void;
   error?: string;
 }) {
@@ -50,6 +53,11 @@ export function TruckPicker({
         inputClassName="font-mono uppercase placeholder:font-sans placeholder:normal-case"
         error={error}
       />
+      {isNew && truck && (
+        <div className="mt-1.5 text-[13px] leading-normal text-warning">
+          New truck · saved when you save the invoice
+        </div>
+      )}
       <NewTruckDialog
         open={adding !== null}
         initialText={adding ?? ""}

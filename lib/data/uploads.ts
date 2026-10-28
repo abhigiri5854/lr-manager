@@ -1,4 +1,5 @@
 import { UPLOAD_MAX_BYTES } from "@/lib/image-upload";
+import { IMPORT_MAX_BYTES, type ImportFormat } from "@/lib/import/file-types";
 import { fail, newId } from "./_store";
 import { assertCan } from "./session";
 
@@ -55,5 +56,38 @@ export async function uploadCompanyImage(
   const id = newId();
   const name = file.name.slice(0, 100) || kind;
   files.set(id, { companyId, name, type: file.type, bytes: file.bytes });
+  return { url: `/uploads/${id}?n=${encodeURIComponent(name)}`, name };
+}
+
+/** Content types we serve import files with (never the browser's claim). */
+export const IMPORT_CONTENT_TYPE: Record<ImportFormat, string> = {
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xls: "application/vnd.ms-excel",
+  csv: "text/csv; charset=utf-8",
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  png: "image/png",
+};
+
+/**
+ * Smart import: keeps the original file (PDF, photo or workbook, up to 10 MB) so it can be
+ * shown beside the Tax invoice form and downloaded later. Callers have already checked the
+ * type with checkImportBytes; this is the backstop on size and role.
+ */
+export async function uploadImportFile(
+  companyId: string,
+  file: { name: string; format: ImportFormat; bytes: Uint8Array },
+): Promise<{ url: string; name: string }> {
+  await assertCan(companyId, "import.run");
+  if (file.bytes.byteLength === 0) fail("file", `${file.name}: the file is empty`);
+  if (file.bytes.byteLength > IMPORT_MAX_BYTES) fail("file", `${file.name}: larger than 10 MB`);
+  const id = newId();
+  const name = file.name.slice(0, 100) || "import-file";
+  files.set(id, {
+    companyId,
+    name,
+    type: IMPORT_CONTENT_TYPE[file.format],
+    bytes: file.bytes,
+  });
   return { url: `/uploads/${id}?n=${encodeURIComponent(name)}`, name };
 }

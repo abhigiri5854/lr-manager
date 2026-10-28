@@ -36,6 +36,7 @@ import {
   now,
   paginate,
   parseInput,
+  raiseNumber,
   scoped,
   today,
   updateRecord,
@@ -294,22 +295,10 @@ export type SaveLrOptions = {
   book?: boolean;
 };
 
-/**
- * Creates an LR (a draft, or booked when `book` is set). Its number is taken from the
- * company's LR series on create — only after validation passes, so a failed save leaves no gap.
- */
-export async function createLr(
-  companyId: string,
-  input: LrInput,
-  options: SaveLrOptions = {},
-): Promise<LrView> {
-  await assertCan(companyId, "lr.edit");
-  const v = parseInput(lrFields, input);
-  assertLrRefs(companyId, v);
-  const company = db.companies.find((c) => c.id === companyId)!;
+/** The LR record for validated input, without a number or a booking (shared by create and import). */
+function buildLr(companyId: string, v: ParsedLr, t: string): Lr {
   const nested = normaliseNested(v);
-  const t = now();
-  const lr: Lr = {
+  return {
     id: newId(),
     companyId,
     createdAt: t,
@@ -338,6 +327,23 @@ export async function createLr(
     deliveredAt: null,
     snapshot: null,
   };
+}
+
+/**
+ * Creates an LR (a draft, or booked when `book` is set). Its number is taken from the
+ * company's LR series on create — only after validation passes, so a failed save leaves no gap.
+ */
+export async function createLr(
+  companyId: string,
+  input: LrInput,
+  options: SaveLrOptions = {},
+): Promise<LrView> {
+  await assertCan(companyId, "lr.edit");
+  const v = parseInput(lrFields, input);
+  assertLrRefs(companyId, v);
+  const company = db.companies.find((c) => c.id === companyId)!;
+  const t = now();
+  const lr = buildLr(companyId, v, t);
   if (options.book) {
     assertRules(lrBookingErrors(lr));
     lr.bookedAt = t;
@@ -345,6 +351,35 @@ export async function createLr(
   const no = allocateNumber(companyId, "lr", financialYear(v.lrDate ?? today()));
   lr.lrNo = `${company.lrPrefix}${no}`;
   if (options.book) lr.snapshot = snapshotFor(lr);
+  return toLrView(insertRecord("lrs", db.lrs, lr));
+}
+
+/**
+ * Smart import: a draft LR that keeps the number from the sheet (digits; the company prefix is
+ * added). Moves the LR series past it so the next new LR can't collide. Callers run it inside
+ * the import's transaction.
+ */
+export async function createImportedLr(
+  companyId: string,
+  input: LrInput,
+  lrDigits: string,
+  importBatchId: string,
+): Promise<LrView> {
+  await assertCan(companyId, "lr.edit");
+  const v = parseInput(lrFields, input);
+  assertLrRefs(companyId, v);
+  const company = db.companies.find((c) => c.id === companyId)!;
+  const n = Number(lrDigits);
+  const lrNo = `${company.lrPrefix}${n}`;
+  if (db.lrs.some((l) => l.companyId === companyId && l.lrNo === lrNo)) {
+    fail("lrNo", `LR ${lrNo} already exists`);
+  }
+  const lr = buildLr(companyId, v, now());
+  lr.lrNo = lrNo;
+  lr.importBatchId = importBatchId;
+  const fy = financialYear(today());
+  const next = peekNumber(companyId, "lr", fy);
+  if (next === null || n + 1 > next) raiseNumber(companyId, "lr", fy, n + 1, "lrNo");
   return toLrView(insertRecord("lrs", db.lrs, lr));
 }
 

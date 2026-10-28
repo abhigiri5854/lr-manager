@@ -6,6 +6,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import {
   cancelInvoiceAction,
   finaliseInvoiceAction,
+  saveImportedInvoiceAction,
   saveInvoiceAction,
 } from "@/app/(app)/invoices/actions";
 import { PartyPicker } from "@/components/lr/PartyPicker";
@@ -19,6 +20,8 @@ import { Field, Select, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useCan } from "@/components/ui/Permissions";
 import { cx } from "@/lib/cx";
+import { isPending, type ImportFlag, type PendingRecords } from "@/lib/import/invoice-prefill";
+import { uploadName } from "@/lib/upload-name";
 import { formatDate, formatRupees } from "@/lib/format";
 import { EWAY_BILL_THRESHOLD_PAISE, GST_STATES, stateLabel } from "@/lib/gst";
 import {
@@ -50,6 +53,29 @@ export type InvoiceMeta = {
   intraState: boolean;
 };
 
+/** Smart import: an invoice read from a file, opened here to be checked and saved. */
+export type ImportInfo = {
+  batchId: string;
+  fileName: string;
+  fileUrl: string | null;
+  /** Form field path -> why it is orange. */
+  flags: Record<string, ImportFlag>;
+  /** Parties and a truck that are new on this invoice; created when the user saves. */
+  pending: PendingRecords;
+  /** An invoice with the same number from the same seller is already in the system. */
+  existing: {
+    id: string;
+    version: number;
+    status: "draft" | "final" | "cancelled";
+    invoiceNo: string | null;
+  } | null;
+};
+
+const FLAG_NOTE: Record<ImportFlag, string> = {
+  "low-confidence": "Not sure about this one — please check it",
+  "new-record": "New — saved when you save the invoice",
+};
+
 export type LinkedLr = { id: string; lrNo: string; status: string; lrDate: string | null };
 
 const section = "rounded-card border border-border bg-surface p-5";
@@ -69,7 +95,9 @@ export function InvoiceForm({
   roundOff,
   nextInvoiceNo,
   linkedLrs,
+  importInfo = null,
 }: {
+  importInfo?: ImportInfo | null;
   invoice: InvoiceMeta | null;
   initial: InvoiceFormValues;
   seller: { name: string; gstin: string | null; state: string | null; partyId: string | null };
@@ -112,11 +140,17 @@ export function InvoiceForm({
 
   const set = <K extends keyof InvoiceFormValues>(key: K, value: InvoiceFormValues[K]) =>
     setValues((v) => ({ ...v, [key]: value }));
+  /** Orange border + note for a field the reader wasn't sure about (Smart import). */
+  const flag = (path: string) => {
+    const f = importInfo?.flags[path];
+    return f ? { aiFlag: f, aiNote: FLAG_NOTE[f] } : {};
+  };
   const text = (key: keyof InvoiceFormValues) => ({
     value: values[key] as string,
     onChange: (e: { target: { value: string } }) => set(key, e.target.value as never),
     disabled: readOnly,
     error: errors[key === "driverMobile" ? "driverMobile" : key],
+    ...flag(key),
   });
 
   function showErrors(e: InvoiceFormErrors, message?: string) {
@@ -134,11 +168,27 @@ export function InvoiceForm({
       showErrors(built.errors);
       return null;
     }
-    const r = await saveInvoiceAction({
-      id: invoice?.id,
-      expectedVersion: invoice?.version,
-      input: built.input,
-    });
+    if (importInfo?.existing && importInfo.existing.status !== "draft") {
+      showErrors(
+        {},
+        `${importInfo.existing.invoiceNo} is already in the system (${importInfo.existing.status}), so it can't be saved again.`,
+      );
+      return null;
+    }
+    const r = importInfo
+      ? await saveImportedInvoiceAction({
+          batchId: importInfo.batchId,
+          input: built.input,
+          pending: importInfo.pending,
+          update: importInfo.existing
+            ? { id: importInfo.existing.id, expectedVersion: importInfo.existing.version }
+            : null,
+        })
+      : await saveInvoiceAction({
+          id: invoice?.id,
+          expectedVersion: invoice?.version,
+          input: built.input,
+        });
     if (r.ok) {
       setErrors({});
       setFormError(null);
@@ -265,10 +315,22 @@ export function InvoiceForm({
         />
       </div>
 
-      {invoice?.importBatchId && (
+      {importInfo?.existing?.status === "draft" && (
+        <Alert
+          tone="warning"
+          title={`Updates the existing draft ${importInfo.existing.invoiceNo}.`}
+        >
+          An invoice with this number from the same seller is already saved as a draft. Saving
+          replaces its details with what was read from the file.
+        </Alert>
+      )}
+      {(invoice?.importBatchId || importInfo) && (
         <Alert
           tone="info"
-          title="Read by AI from the uploaded invoice"
+          title={`Read by AI from ${
+            importInfo?.fileName ??
+            (invoice?.sourceFileUrl ? uploadName(invoice.sourceFileUrl) : "the uploaded invoice")
+          }`}
           action={<Link href="/import">Back to import</Link>}
         >
           · orange fields are new records or low-confidence — check them, everything is editable
@@ -318,6 +380,12 @@ export function InvoiceForm({
                   value={`${seller.name}${seller.gstin ? ` · ${seller.gstin}` : ""}`}
                   readOnly
                   disabled
+                  {...(isPending(seller.partyId)
+                    ? {
+                        aiFlag: "new-record" as const,
+                        aiNote: "New party — saved when you save the invoice",
+                      }
+                    : {})}
                 />
               </div>
               <Field
@@ -342,6 +410,7 @@ export function InvoiceForm({
                 onChange={(v) => set("customerRefDate", v)}
                 disabled={readOnly}
                 error={errors.customerRefDate}
+                {...flag("customerRefDate")}
               />
               <Field label="SO no." {...text("soNo")} />
               <DateField
@@ -350,6 +419,7 @@ export function InvoiceForm({
                 onChange={(v) => set("soDate", v)}
                 disabled={readOnly}
                 error={errors.soDate}
+                {...flag("soDate")}
               />
               <Field label="DO no." {...text("doNo")} />
               <Field label="SAP ref." {...text("sapRef")} />
@@ -368,6 +438,7 @@ export function InvoiceForm({
                     label="Bill to"
                     role="buyer"
                     party={values.billTo}
+                    isNew={isPending(values.billTo?.id)}
                     onChange={(p) => set("billTo", p)}
                     error={errors.billToId}
                   />
@@ -390,6 +461,7 @@ export function InvoiceForm({
                         label="Ship to"
                         role="ship-to party"
                         party={values.shipTo}
+                        isNew={isPending(values.shipTo?.id)}
                         onChange={(p) => set("shipTo", p)}
                         error={errors.shipToId}
                       />
@@ -459,6 +531,7 @@ export function InvoiceForm({
                   id="vehicle"
                   label="Vehicle no."
                   truck={values.truck}
+                  isNew={isPending(values.truck?.id)}
                   onChange={(t) =>
                     setValues((v) => ({
                       ...v,
@@ -518,19 +591,14 @@ export function InvoiceForm({
               intraState={shown.intraState}
               readOnly={readOnly}
               errors={errors}
+              flags={importInfo?.flags}
             />
           </section>
         </div>
 
         <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-          {invoice?.sourceFileUrl && (
-            <section className="rounded-card border border-border bg-surface p-4">
-              <h2 className="m-0 mb-2.5 text-[17px] font-bold">Source file</h2>
-              <a href={invoice.sourceFileUrl} target="_blank" rel="noopener">
-                Open the uploaded invoice
-              </a>
-              <p className="mt-2 mb-0 text-[13px] text-muted">Compare side by side</p>
-            </section>
+          {(importInfo?.fileUrl ?? invoice?.sourceFileUrl) && (
+            <SourceFile url={(importInfo?.fileUrl ?? invoice?.sourceFileUrl)!} />
           )}
 
           <section className={section}>
@@ -559,7 +627,7 @@ export function InvoiceForm({
                   value {formatRupees(total)} &gt; ₹50,000 → e-way bill needed
                 </div>
               )}
-              {values.billTo && (
+              {values.billTo && !isPending(values.billTo.id) && (
                 <Link href={`/parties/${values.billTo.id}`} className={tile}>
                   <b>{values.billTo.name}</b>
                   <br />
@@ -695,5 +763,38 @@ function PartyReadOnly({
         </div>
       )}
     </>
+  );
+}
+
+/** The uploaded invoice shown beside the form so the two can be compared (Invoice.dc.html). */
+function SourceFile({ url }: { url: string }) {
+  const name = uploadName(url);
+  const kind = /\.(jpe?g|png)$/i.test(name) ? "image" : /\.pdf$/i.test(name) ? "pdf" : "file";
+  return (
+    <section className="rounded-card border border-border bg-surface p-4">
+      <h2 className="m-0 mb-2.5 text-[17px] font-bold">Source file</h2>
+      {kind === "image" && (
+        // Private upload served from /uploads, not an optimisable static image.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={`Uploaded invoice ${name}`}
+          className="w-full rounded-control border border-border"
+        />
+      )}
+      {kind === "pdf" && (
+        <iframe
+          src={url}
+          title={`Uploaded invoice ${name}`}
+          className="h-[520px] w-full rounded-control border border-border"
+        />
+      )}
+      <p className="mt-2 mb-0 text-[13px] text-muted">
+        Compare side by side ·{" "}
+        <a href={url} target="_blank" rel="noopener">
+          open {kind === "file" ? "the file" : "full size"}
+        </a>
+      </p>
+    </section>
   );
 }

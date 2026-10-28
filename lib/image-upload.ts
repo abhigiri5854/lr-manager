@@ -89,15 +89,19 @@ export async function compressImage(
 
 export type PreparedUpload = { ok: true; file: File } | { ok: false; message: string };
 
-/** Compress (images only), then check the size. maxBytes is capped at the request limit. */
+/**
+ * Compress (images only), then check the size. maxBytes is capped at `requestLimit`, which is
+ * the 3 MB server-action limit unless the upload goes through a route handler (Smart import).
+ */
 export async function prepareUpload(
   file: File,
-  opts: { maxBytes?: number; keepTransparency?: boolean } = {},
+  opts: { maxBytes?: number; keepTransparency?: boolean; requestLimit?: number } = {},
 ): Promise<PreparedUpload> {
-  const max = Math.min(opts.maxBytes ?? UPLOAD_MAX_BYTES, UPLOAD_MAX_BYTES);
+  const limit = opts.requestLimit ?? UPLOAD_MAX_BYTES;
+  const max = Math.min(opts.maxBytes ?? limit, limit);
   const out = await compressImage(file, opts);
   // The request also carries other fields, so leave a little room under the hard limit.
-  const room = max === UPLOAD_MAX_BYTES ? max - REQUEST_OVERHEAD : max;
+  const room = max === limit ? max - REQUEST_OVERHEAD : max;
   if (out.size > room) return { ok: false, message: tooBigMessage(out, max) };
   return { ok: true, file: out };
 }
