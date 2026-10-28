@@ -7,6 +7,7 @@ import { getCompany, getNumbering } from "@/lib/data/companies";
 import { getActiveCompanyId, getRole } from "@/lib/data/session";
 import { formatDate } from "@/lib/format";
 import { todayInIndia } from "@/lib/fy";
+import { can } from "@/lib/permissions";
 
 export const metadata: Metadata = { title: "Company profile" };
 
@@ -24,7 +25,7 @@ async function CompanyProfile() {
       key={company.id}
       company={company}
       numbering={numbering}
-      canEdit={role === "owner"}
+      canEdit={can(role, "company.manage")}
       today={formatDate(todayInIndia())}
     />
   );

@@ -14,6 +14,7 @@ import { KpiCards } from "@/components/dashboard/KpiCards";
 import { RecentLrs } from "@/components/dashboard/RecentLrs";
 import { getDashboard } from "@/lib/data/dashboard";
 import { getActiveCompanyId } from "@/lib/data/session";
+import { IfCan } from "@/components/ui/Permissions";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -27,7 +28,9 @@ async function DashboardData() {
         <RecentLrs lrs={data.recentLrs} />
         <DashboardAside>
           <NeedsAttention items={data.attention} />
-          <OneClickRepeat routes={data.repeatRoutes} />
+          <IfCan action="lr.edit">
+            <OneClickRepeat routes={data.repeatRoutes} />
+          </IfCan>
         </DashboardAside>
       </DashboardColumns>
     </>

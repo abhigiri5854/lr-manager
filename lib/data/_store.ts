@@ -1,6 +1,7 @@
 // In-memory stand-in for the database. The only file that imports lib/mock.
 // Each helper mirrors what the Postgres version will do (company filter, version check,
 // audit row, number series row lock) so swapping it out doesn't change any screen.
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { z } from "zod";
 import * as mock from "@/lib/mock";
 import type {
@@ -41,7 +42,22 @@ type Store = {
   importBatches: ImportBatch[];
   audit: AuditEntry[];
   numberSeries: mock.NumberSeriesRow[];
+  /** Mock logins (Supabase Auth later): salted scrypt hash per user. */
+  credentials: Credential[];
 };
+
+type Credential = { userId: string; salt: string; hash: string };
+
+/** Salted scrypt hash, as the mock stand-in for Supabase Auth. */
+export function hashPassword(userId: string, password: string): Credential {
+  const salt = randomBytes(16).toString("hex");
+  return { userId, salt, hash: scryptSync(password, salt, 32).toString("hex") };
+}
+
+export function passwordMatches(c: Credential, password: string): boolean {
+  const given = scryptSync(password, c.salt, 32);
+  return timingSafeEqual(given, Buffer.from(c.hash, "hex"));
+}
 
 function seed(): Store {
   const store: Store = structuredClone({
@@ -60,7 +76,9 @@ function seed(): Store {
     importBatches: [],
     audit: [],
     numberSeries: mock.mockNumberSeries,
+    credentials: [],
   });
+  store.credentials = store.users.map((u) => hashPassword(u.id, mock.MOCK_PASSWORD));
   // Every company gets its "self" party, as it will when a company is created.
   for (const c of store.companies) {
     store.parties.push({
@@ -84,7 +102,7 @@ function seed(): Store {
 
 // Kept on globalThis so dev-server hot reloads don't wipe edits. Bump STORE_VERSION when the
 // record shapes change so a running dev server reseeds instead of serving old-shaped rows.
-const STORE_VERSION = 4; // 4: numbering reset + freight GST rate on companies
+const STORE_VERSION = 5; // 5: logins, accountant sample user
 const g = globalThis as typeof globalThis & {
   __lrManagerStore?: Store;
   __lrManagerStoreV?: number;
@@ -100,15 +118,21 @@ export function resetStore(): void {
   Object.assign(db, seed());
 }
 
-/** Session defaults until auth exists (see session.ts). */
-export const DEFAULT_SESSION = { companyId: mock.IDS.company.acm, userId: mock.IDS.user.owner };
+/** Sample company/user ids for tests and the first-login fallback. */
+export const SAMPLE_IDS = { companyId: mock.IDS.company.acm, ownerId: mock.IDS.user.owner };
 
-// Audit rows are written as the session user until auth exists.
-const currentUserId: string = DEFAULT_SESSION.userId;
+// Who audit rows are written as. lib/data/session.ts sets it whenever it reads the signed-in
+// user, which every write does first (assertCan) — after that the write runs synchronously.
+// In Postgres this is auth.uid() inside the transaction.
+let auditActor: string | null = null;
+export function setAuditActor(userId: string): void {
+  auditActor = userId;
+}
 
 export type TableName =
   | "companies"
   | "memberships"
+  | "users"
   | "parties"
   | "trucks"
   | "drivers"
@@ -226,7 +250,7 @@ export function writeAudit(
     id: newId(),
     companyId,
     createdAt: now(),
-    userId: currentUserId,
+    userId: auditActor ?? "system",
     table,
     recordId,
     action,

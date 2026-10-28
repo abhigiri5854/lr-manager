@@ -10,8 +10,10 @@ import { Card } from "@/components/ui/Card";
 import { DateField, focusFirstInvalidDate } from "@/components/ui/DateField";
 import { Field, Select, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useCan, useRole } from "@/components/ui/Permissions";
 import { cx } from "@/lib/cx";
 import { formatDate, formatRupeesShort } from "@/lib/format";
+import { deniedMessage } from "@/lib/permissions";
 import { formatFileSize, prepareUpload } from "@/lib/image-upload";
 import { podDueDate, podLateDays } from "@/lib/pod-rules";
 import type { Paise } from "@/lib/types";
@@ -74,9 +76,12 @@ export function PodForm({
   podPenaltyPerDay,
   today,
   notice,
-  readOnlyReason,
+  readOnlyReason: statusReason,
 }: PodFormProps) {
   const router = useRouter();
+  const role = useRole();
+  const canUpload = useCan("pod.upload");
+  const readOnlyReason = statusReason ?? (canUpload ? null : deniedMessage(role, "pod.upload"));
   const [pending, startTransition] = useTransition();
   const [deliveredOn, setDeliveredOn] = useState(lr.deliveredOn);
   const [receivedBy, setReceivedBy] = useState(pod?.receivedBy ?? "");

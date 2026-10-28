@@ -1,6 +1,10 @@
+import type { Action } from "@/lib/permissions";
+
 export type NavItem = {
   label: string;
   href: string;
+  /** Hidden for roles that can't do this (lib/permissions.ts). Unset = everyone. */
+  action?: Action;
   /** True when this item should be highlighted for the given pathname. */
   isActive: (pathname: string) => boolean;
 };
@@ -22,7 +26,7 @@ export const navGroups: NavGroup[] = [
     heading: "OPERATIONS",
     items: [
       { label: "Dashboard", href: "/", isActive: (p) => p === "/" },
-      { label: "New LR", href: "/lr/new", isActive: (p) => p === "/lr/new" },
+      { label: "New LR", href: "/lr/new", isActive: (p) => p === "/lr/new", action: "lr.edit" },
       {
         label: "LR register",
         href: "/lr",
@@ -45,7 +49,12 @@ export const navGroups: NavGroup[] = [
       { label: "Parties", href: "/parties", isActive: startsWith("/parties") },
       { label: "Trucks & drivers", href: "/trucks", isActive: startsWith("/trucks") },
       { label: "Items", href: "/items", isActive: startsWith("/items") },
-      { label: "Smart import", href: "/import", isActive: startsWith("/import") },
+      {
+        label: "Smart import",
+        href: "/import",
+        isActive: startsWith("/import"),
+        action: "import.run",
+      },
     ],
   },
   {

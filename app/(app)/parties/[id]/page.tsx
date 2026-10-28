@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CancelPartyButton } from "@/components/parties/CancelPartyButton";
+import { IfCan } from "@/components/ui/Permissions";
 import { PartyForm } from "@/components/parties/PartyForm";
 import { PartyShipments } from "@/components/parties/PartyShipments";
 import { PartyPageSkeleton } from "@/components/parties/PartyPageSkeleton";
@@ -77,7 +78,9 @@ async function PartyPageContent({ params }: Pick<PageProps<"/parties/[id]">, "pa
                 Save changes
               </Button>
             )}
-            <Button href={`/lr/new?consignor=${party.id}`}>New LR for this party</Button>
+            <IfCan action="lr.edit">
+              <Button href={`/lr/new?consignor=${party.id}`}>New LR for this party</Button>
+            </IfCan>
           </>
         }
       />
@@ -110,7 +113,9 @@ async function PartyPageContent({ params }: Pick<PageProps<"/parties/[id]">, "pa
           <p className="m-0 mb-3 text-sm text-muted">
             Cancelled parties disappear from lists and pickers. Nothing is deleted.
           </p>
-          <CancelPartyButton partyId={party.id} blockedBy={partyBlockedReason(usage)} />
+          <IfCan action="record.cancel">
+            <CancelPartyButton partyId={party.id} blockedBy={partyBlockedReason(usage)} />
+          </IfCan>
         </Card>
       )}
     </>

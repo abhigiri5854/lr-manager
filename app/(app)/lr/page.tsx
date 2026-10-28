@@ -21,6 +21,7 @@ import {
   parseLrRegisterQuery,
   toLrListParams,
 } from "@/lib/validators/lr-register";
+import { IfCan } from "@/components/ui/Permissions";
 
 export const metadata: Metadata = { title: "LR register" };
 
@@ -70,8 +71,12 @@ async function Register({ searchParams }: { searchParams: SearchParams }) {
       </>
     ) : (
       <>
-        No consignment notes yet. <Link href="/lr/new">Create the first LR</Link> or{" "}
-        <Link href="/import">import a booking report</Link>.
+        No consignment notes yet.
+        <IfCan action="lr.edit">
+          {" "}
+          <Link href="/lr/new">Create the first LR</Link> or{" "}
+          <Link href="/import">import a booking report</Link>.
+        </IfCan>
       </>
     );
 

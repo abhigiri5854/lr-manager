@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { formatDate } from "@/lib/format";
 import type { LrView } from "@/lib/types";
+import { IfCan } from "@/components/ui/Permissions";
 
 const dash = (v: string | null) => v ?? "—";
 
@@ -91,8 +92,12 @@ export function RecentLrs({ lrs }: { lrs: LrView[] }) {
         density="compact"
         empty={
           <>
-            No consignment notes yet. <Link href="/lr/new">Create the first LR</Link> or{" "}
-            <Link href="/import">import a booking report</Link>.
+            No consignment notes yet.
+            <IfCan action="lr.edit">
+              {" "}
+              <Link href="/lr/new">Create the first LR</Link> or{" "}
+              <Link href="/import">import a booking report</Link>.
+            </IfCan>
           </>
         }
       />

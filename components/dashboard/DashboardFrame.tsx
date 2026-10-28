@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { DashboardAsideLoading } from "./DashboardAside";
 import { KpiCardsLoading } from "./KpiCards";
 import { RecentLrsLoading } from "./RecentLrs";
+import { IfCan } from "@/components/ui/Permissions";
 
 /** Table on the left, attention + repeat on the right; wraps into one column when narrow. */
 export function DashboardColumns({ children }: { children: ReactNode }) {
@@ -31,10 +32,14 @@ export function DashboardHeader() {
               className="h-control w-[380px] max-w-[calc(100vw-64px)] rounded-control border border-border-input bg-surface px-3.5 text-sm text-text"
             />
           </Form>
-          <Button href="/import" variant="outline">
-            Smart import
-          </Button>
-          <Button href="/lr/new">+ New LR</Button>
+          <IfCan action="import.run">
+            <Button href="/import" variant="outline">
+              Smart import
+            </Button>
+          </IfCan>
+          <IfCan action="lr.edit">
+            <Button href="/lr/new">+ New LR</Button>
+          </IfCan>
         </>
       }
     />

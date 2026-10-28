@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { listCompanies } from "@/lib/data/companies";
-import { getActiveCompanyId } from "@/lib/data/session";
+import { getActiveCompanyId, getCurrentUser, getRole } from "@/lib/data/session";
+import { ROLE_LABEL } from "@/lib/permissions";
 import { CompanySelect } from "./CompanySwitcher";
 import { SidebarLinks, SidebarNav } from "./SidebarNav";
 
@@ -16,6 +17,29 @@ async function CompanySwitcher() {
       activeId={activeId}
       className={selectClass}
     />
+  );
+}
+
+/** Who is signed in, their role here, and Log out (bottom of the sidebar). */
+async function SidebarUser() {
+  const user = await getCurrentUser();
+  const role = await getRole(await getActiveCompanyId());
+  return (
+    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-navy-border px-2.5 pt-4">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-white">{user.name}</div>
+        {role && <div className="text-xs text-navy-muted">{ROLE_LABEL[role]}</div>}
+      </div>
+      {/* Plain POST to app/logout/route.ts: a full reload clears the client cache. */}
+      <form action="/logout" method="post">
+        <button
+          type="submit"
+          className="h-control cursor-pointer rounded-control border border-navy-border bg-transparent px-3 text-sm font-semibold text-navy-text hover:bg-navy-raised hover:text-white"
+        >
+          Log out
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -57,6 +81,11 @@ export function Sidebar() {
 
       <Suspense fallback={<SidebarLinks pathname={null} />}>
         <SidebarNav />
+      </Suspense>
+
+      <div className="h-6" aria-hidden />
+      <Suspense>
+        <SidebarUser />
       </Suspense>
     </nav>
   );

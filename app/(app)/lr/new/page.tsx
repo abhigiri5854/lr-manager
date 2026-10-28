@@ -12,7 +12,9 @@ import {
   peekNextLrNo,
 } from "@/lib/data/lrs";
 import { getPartyById, getSelfParty } from "@/lib/data/parties";
-import { getActiveCompanyId } from "@/lib/data/session";
+import { NoAccess } from "@/components/ui/NoAccess";
+import { getActiveCompanyId, getActiveRole } from "@/lib/data/session";
+import { can } from "@/lib/permissions";
 import { todayInIndia } from "@/lib/fy";
 import { applyConsignorDefaults, emptyLrForm, invoiceToForm, lrToForm } from "@/lib/lr-form";
 import { loadPicked } from "../load-form";
@@ -30,6 +32,17 @@ const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : u
  * invoice is already on an LR, it only warns until the user adds `&again=1` ("Create another").
  */
 async function NewLr({ searchParams }: { searchParams: SearchParams }) {
+  const role = await getActiveRole();
+  if (!can(role, "lr.edit")) {
+    return (
+      <NoAccess
+        title="New LR"
+        role={role}
+        action="lr.edit"
+        back={{ href: "/lr", label: "Open the LR register" }}
+      />
+    );
+  }
   const params = await searchParams;
   const companyId = await getActiveCompanyId();
   const today = todayInIndia();

@@ -5,6 +5,7 @@ import { cx } from "@/lib/cx";
 import { formatDate, formatRupeesShort } from "@/lib/format";
 import { chargedAsLabel, joinAnd, paymentModeLabel } from "@/lib/labels";
 import type { AttentionItem, RepeatRoute } from "@/lib/types";
+import { IfCan } from "@/components/ui/Permissions";
 
 const MAX_ATTENTION = 8;
 
@@ -43,7 +44,9 @@ function AttentionNote({ item }: { item: AttentionItem }) {
         <Note warning>
           <b>POD for LR {item.lrNo}</b> — {item.daysOverdue} day{item.daysOverdue === 1 ? "" : "s"}{" "}
           past the {item.podDays}-day limit{penalty}.{" "}
-          <Link href={`/lr/${item.lrId}/pod`}>Record POD</Link>
+          <IfCan action="pod.upload">
+            <Link href={`/lr/${item.lrId}/pod`}>Record POD</Link>
+          </IfCan>
         </Note>
       );
     }
@@ -68,7 +71,9 @@ function AttentionNote({ item }: { item: AttentionItem }) {
       return (
         <Note>
           <b>Draft LR {item.lrNo}</b> — {joinAnd(item.missing)} still empty.{" "}
-          <Link href={`/lr/${item.lrId}/edit`}>Finish</Link>
+          <IfCan action="lr.edit">
+            <Link href={`/lr/${item.lrId}/edit`}>Finish</Link>
+          </IfCan>
         </Note>
       );
   }

@@ -3,12 +3,13 @@ const id = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12,
 
 export const IDS = {
   company: { acm: id(0x101), rs: id(0x102) },
-  user: { owner: id(0x201), staff: id(0x202), driver: id(0x203) },
+  user: { owner: id(0x201), staff: id(0x202), driver: id(0x203), accountant: id(0x204) },
   membership: {
     ownerAcm: id(0x211),
     ownerRs: id(0x212),
     staffAcm: id(0x213),
     driverAcm: id(0x214),
+    accountantAcm: id(0x215),
   },
   party: {
     ashirvad: id(0x301),

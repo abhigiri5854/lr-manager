@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, useTransition, type KeyboardEvent }
 import { cancelLrAction } from "@/app/(app)/lr/actions";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Field";
+import { useCan } from "@/components/ui/Permissions";
 import { cx } from "@/lib/cx";
 
 /** Where the open menu sits (fixed, so the table's sideways scroll can't clip it). */
@@ -24,13 +25,16 @@ export function LrRowMenu({
   lrId,
   lrNo,
   canPrint,
-  canCancel,
+  canCancel: cancellable,
 }: {
   lrId: string;
   lrNo: string;
   canPrint: boolean;
+  /** The LR's status allows cancelling (the role is checked here too). */
   canCancel: boolean;
 }) {
+  const canRepeat = useCan("lr.edit");
+  const canCancel = useCan("record.cancel") && cancellable;
   const menuId = useId();
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -144,6 +148,9 @@ export function LrRowMenu({
     });
   }
 
+  // Nothing this role can do from the menu → no "⋯" button at all.
+  if (!canPrint && !canRepeat && !canCancel) return null;
+
   return (
     <>
       <button
@@ -184,15 +191,17 @@ export function LrRowMenu({
               Print
             </a>
           )}
-          <Link
-            role="menuitem"
-            tabIndex={-1}
-            href={`/lr/new?from=${lrId}`}
-            onClick={() => close(false)}
-            className={cx(item, "text-text")}
-          >
-            Repeat
-          </Link>
+          {canRepeat && (
+            <Link
+              role="menuitem"
+              tabIndex={-1}
+              href={`/lr/new?from=${lrId}`}
+              onClick={() => close(false)}
+              className={cx(item, "text-text")}
+            >
+              Repeat
+            </Link>
+          )}
           {canCancel && (
             <button
               type="button"

@@ -7,4 +7,4 @@ export { mockLrs } from "./lrs";
 export { mockNumberSeries, type NumberSeriesRow } from "./numberSeries";
 export { mockParties } from "./parties";
 export { mockDrivers, mockTrucks } from "./trucks";
-export { mockMemberships, mockUsers } from "./users";
+export { MOCK_PASSWORD, mockMemberships, mockUsers } from "./users";

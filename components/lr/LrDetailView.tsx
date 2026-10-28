@@ -16,6 +16,7 @@ import { CANCELLABLE, lrPrimaryAction } from "./LrActions";
 import { DetailRow, DocTile } from "./LrDetailParts";
 import { LrRowMenu } from "./LrRowMenu";
 import { LrTimeline } from "./LrTimeline";
+import { IfCan } from "@/components/ui/Permissions";
 
 const gstPayerLabel: Record<GstPayer, string> = {
   consignor: "Consignor",
@@ -202,10 +203,10 @@ function ShipmentCard({ detail, nowMs }: { detail: LrDetail; nowMs: number }) {
         <DetailRow label="Freight">
           Not entered
           {lr.status !== "Cancelled" && (
-            <>
+            <IfCan action="lr.edit">
               {" · "}
               <Link href={`/lr/${lr.id}/edit#freight`}>Add freight</Link>
-            </>
+            </IfCan>
           )}
         </DetailRow>
       ) : (
@@ -257,7 +258,9 @@ function DocumentsCard({ detail }: { detail: LrDetail }) {
               note={inv.invoiceDate ? formatDate(inv.invoiceDate) : undefined}
               action={
                 inv.taxInvoice?.hasSourceFile ? undefined : (
-                  <Link href={`/import?lr=${lr.id}`}>Attach</Link>
+                  <IfCan action="import.run">
+                    <Link href={`/import?lr=${lr.id}`}>Attach</Link>
+                  </IfCan>
                 )
               }
             >
@@ -319,13 +322,15 @@ export function LrDetailView({ detail, nowMs }: { detail: LrDetail; nowMs: numbe
         subtitle={subtitle}
         actions={
           <>
-            <Button
-              variant="secondary"
-              href={`/lr/${lr.id}/edit`}
-              disabled={lr.status === "Cancelled"}
-            >
-              Edit
-            </Button>
+            <IfCan action="lr.edit">
+              <Button
+                variant="secondary"
+                href={`/lr/${lr.id}/edit`}
+                disabled={lr.status === "Cancelled"}
+              >
+                Edit
+              </Button>
+            </IfCan>
             <Button variant="secondary" href={`/pdf/lr/${lr.id}`} newTab disabled={!pdfReady}>
               Preview PDF
             </Button>
@@ -333,9 +338,11 @@ export function LrDetailView({ detail, nowMs }: { detail: LrDetail; nowMs: numbe
               Download PDF
             </Button>
             {primary && (
-              <Button variant="dark" href={primary.href}>
-                {primary.label}
-              </Button>
+              <IfCan action={primary.action}>
+                <Button variant="dark" href={primary.href}>
+                  {primary.label}
+                </Button>
+              </IfCan>
             )}
             <LrRowMenu
               lrId={lr.id}

@@ -17,6 +17,7 @@ import { DateTimeField } from "@/components/ui/DateTimeField";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field, Select, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useCan } from "@/components/ui/Permissions";
 import { cx } from "@/lib/cx";
 import { formatDate, formatRupees } from "@/lib/format";
 import { EWAY_BILL_THRESHOLD_PAISE, GST_STATES, stateLabel } from "@/lib/gst";
@@ -86,6 +87,8 @@ export function InvoiceForm({
   const [correcting, setCorrecting] = useState(false);
   const [confirmFinal, setConfirmFinal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const canCancel = useCan("record.cancel");
+  const canEditLrs = useCan("lr.edit");
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -197,7 +200,8 @@ export function InvoiceForm({
   const pos = live.placeOfSupply;
   const total = shown.totals.totalPaise;
   const invoiceNo = invoice?.invoiceNo ?? null;
-  const canCreateLr = status !== "cancelled" && (!!invoiceNo || (imported && !readOnly));
+  const canCreateLr =
+    canEditLrs && status !== "cancelled" && (!!invoiceNo || (imported && !readOnly));
 
   const actions = (
     <div className="flex flex-wrap gap-3">
@@ -576,7 +580,7 @@ export function InvoiceForm({
             <div>Copies: Original · Duplicate for transporter · Triplicate</div>
           </section>
 
-          {invoice && status !== "cancelled" && (
+          {invoice && status !== "cancelled" && canCancel && (
             <section className={`${section} text-sm`}>
               <h2 className="m-0 mb-2.5 text-[17px] font-bold">Cancel invoice</h2>
               <p className="mt-0 mb-3 text-muted">

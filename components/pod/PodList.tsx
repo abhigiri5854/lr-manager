@@ -9,6 +9,7 @@ import { formatDate, formatRupees } from "@/lib/format";
 import type { LrView, Page } from "@/lib/types";
 import { hasPodFilters, podListSearch, type PodListQuery } from "@/lib/validators/pod-list";
 import { PodFilters } from "./PodFilters";
+import { IfCan } from "@/components/ui/Permissions";
 
 const pendingColumns = (penaltyShown: boolean): Column<PodPendingItem>[] => [
   { key: "lrNo", header: "LR no", cell: (r) => r.lrNo, mono: true },
@@ -50,9 +51,11 @@ const transitColumns: Column<LrView>[] = [
     header: <span className="sr-only">Action</span>,
     align: "right",
     cell: (r) => (
-      <Button variant="outline" href={`/lr/${r.id}/pod`} className="relative z-10">
-        Mark delivered
-      </Button>
+      <IfCan action="pod.upload">
+        <Button variant="outline" href={`/lr/${r.id}/pod`} className="relative z-10">
+          Mark delivered
+        </Button>
+      </IfCan>
     ),
   },
 ];

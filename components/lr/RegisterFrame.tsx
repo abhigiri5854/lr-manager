@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RegisterFilters } from "./RegisterFilters";
 import { RegisterTable } from "./RegisterTable";
+import { IfCan } from "@/components/ui/Permissions";
 
 const FOOTNOTE =
   "Click any row to open the LR; Print gives the Consignor / Consignee / Driver / Office copies as one PDF.";
@@ -34,7 +35,9 @@ export function RegisterHeader({ exportButton }: { exportButton: ReactNode }) {
       actions={
         <>
           {exportButton}
-          <Button href="/lr/new">+ New LR</Button>
+          <IfCan action="lr.edit">
+            <Button href="/lr/new">+ New LR</Button>
+          </IfCan>
         </>
       }
     />

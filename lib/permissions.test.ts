@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { can, deniedMessage, PERMISSIONS, type Action } from "./permissions";
+import {
+  can,
+  deniedMessage,
+  PERMISSION_ROWS,
+  permissionCell,
+  PERMISSIONS,
+  ROLES as ALL_ROLES,
+  type Action,
+} from "./permissions";
 import type { Role } from "./types";
 
 // The table "What each role can do" in design/screens/Users.dc.html, row by row.
@@ -29,6 +37,29 @@ describe("PERMISSIONS", () => {
   it("has no action outside the table plus master.edit", () => {
     const known = new Set<Action>([...DESIGN_TABLE.map((r) => r[1]), "master.edit"]);
     for (const role of ROLES) for (const a of PERMISSIONS[role]) expect(known).toContain(a);
+  });
+
+  it("Users & roles table: the design's rows and cells, plus Parties, trucks & items", () => {
+    const rendered = PERMISSION_ROWS.map((row) => [
+      row.label,
+      ...ALL_ROLES.map((r) => permissionCell(r, row)),
+    ]);
+    expect(rendered).toEqual([
+      ["Create / edit LR", "✓", "—", "✓", "—"],
+      ["Tax invoices", "✓", "✓", "✓", "—"],
+      ["Freight bills & payments", "✓", "✓", "—", "—"],
+      ["Delete or cancel records", "✓", "—", "—", "—"],
+      ["Company profile & users", "✓", "—", "—", "—"],
+      ["Smart import", "✓", "✓", "✓", "—"],
+      ["Upload POD photo", "✓", "—", "✓", "✓ own trips"],
+      ["See freight amounts", "✓", "✓", "✓", "—"],
+      ["Parties, trucks & items", "✓", "✓", "✓", "—"],
+    ]);
+  });
+
+  it("puts every action somewhere in that table", () => {
+    const shown = new Set(PERMISSION_ROWS.flatMap((r) => [r.action, r.partial?.action]));
+    for (const role of ALL_ROLES) for (const a of PERMISSIONS[role]) expect(shown).toContain(a);
   });
 
   it("denies everything without a role", () => {

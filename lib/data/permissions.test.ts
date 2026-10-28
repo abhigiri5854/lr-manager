@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { can, type Action } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
-import { DEFAULT_SESSION, db, resetStore } from "./_store";
+import { setTestUser } from "@/lib/test-setup";
+import { db, resetStore, SAMPLE_IDS } from "./_store";
 
 // Tests run outside a Next.js request, where connection() would throw.
 vi.mock("next/server", () => ({ connection: async () => {} }));
@@ -20,7 +21,7 @@ import * as trucks from "./trucks";
 import * as uploads from "./uploads";
 
 const acmId = () => db.companies.find((c) => c.label === "ACM Logistics")!.id;
-const ownerUserId = DEFAULT_SESSION.userId;
+const ownerUserId = SAMPLE_IDS.ownerId;
 const X = "00000000-0000-4000-8000-00000000ffff"; // an id that doesn't exist
 
 /** The session user's role in ACM. */
@@ -38,9 +39,6 @@ function actAs(role: Role) {
 }
 
 beforeEach(() => resetStore());
-afterEach(() => {
-  DEFAULT_SESSION.userId = ownerUserId;
-});
 
 // Every write function in lib/data, the action it needs and a call with throwaway arguments.
 // The permission check runs first, so other failures (not found, validation) don't matter.
@@ -68,6 +66,8 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   cancelLr: ["record.cancel", () => lrs.cancelLr(c(), X, { reason: "x" })],
   changeMemberRole: ["company.manage", () => members.changeMemberRole(c(), X, 1, "owner")],
   removeMember: ["company.manage", () => members.removeMember(c(), X)],
+  inviteMember: ["company.manage", () => members.inviteMember(c(), {} as never)],
+  resetMemberPassword: ["company.manage", () => members.resetMemberPassword(c(), X)],
   createParty: ["master.edit", () => parties.createParty(c(), {} as never)],
   updateParty: ["master.edit", () => parties.updateParty(c(), X, 1, {})],
   cancelParty: ["record.cancel", () => parties.cancelParty(c(), X)],
@@ -101,7 +101,7 @@ describe("every lib/data write checks lib/permissions", () => {
       .flatMap((f) =>
         [
           ...readFileSync(join(dir, f), "utf8").matchAll(
-            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set)\w*)/g,
+            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset)\w*)/g,
           ),
         ].map((m) => m[1]),
       )
@@ -119,8 +119,15 @@ describe("every lib/data write checks lib/permissions", () => {
     });
   }
 
+  it("sends logged-out visitors to /login", async () => {
+    await setTestUser(null);
+    await expect(lrs.createLr(acmId(), {})).rejects.toThrow("NEXT_REDIRECT /login");
+  });
+
   it("refuses users who aren't members of the company", async () => {
-    DEFAULT_SESSION.userId = "00000000-0000-4000-8000-00000000cccc";
+    // The sample Owner leaves ACM but stays signed in through RS Logistics.
+    db.memberships.find((m) => m.companyId === acmId() && m.userId === ownerUserId)!.cancelledAt =
+      "2026-10-01T00:00:00.000Z";
     await expect(lrs.createLr(acmId(), {})).rejects.toThrow("You're not a member of this company.");
   });
 
@@ -137,7 +144,7 @@ describe("drivers: POD on their own trips only", () => {
   const lrId = (no: string) => db.lrs.find((l) => l.lrNo === no)!.id;
 
   it("records POD on their own trip, not on someone else's", async () => {
-    DEFAULT_SESSION.userId = driverUser();
+    await setTestUser(driverUser());
     const saved = await pod.createPod(acmId(), { lrId: lrId("19019"), deliveredOn: "2026-10-20" });
     expect(saved.lrId).toBe(lrId("19019"));
     await expect(
@@ -146,7 +153,7 @@ describe("drivers: POD on their own trips only", () => {
   });
 
   it("can upload a POD photo but nothing else", async () => {
-    DEFAULT_SESSION.userId = driverUser();
+    await setTestUser(driverUser());
     await expect(uploads.uploadPodFile(acmId(), png)).resolves.toMatchObject({ name: "a.png" });
     await expect(lrs.createLr(acmId(), {})).rejects.toThrow(ForbiddenError);
     await expect(pod.cancelPod(acmId(), X)).rejects.toThrow(ForbiddenError);
@@ -176,7 +183,7 @@ describe("a company keeps at least one Owner", () => {
     // I'm no longer Owner, so I can't manage users at all…
     await expect(members.removeMember(acmId(), staff.id)).rejects.toThrow(ForbiddenError);
     // …and the new Owner can't remove themselves: they're the last one.
-    DEFAULT_SESSION.userId = staff.userId;
+    await setTestUser(staff.userId);
     await expect(members.removeMember(acmId(), staff.id)).rejects.toThrow(
       members.LAST_OWNER_MESSAGE,
     );

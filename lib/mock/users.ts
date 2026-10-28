@@ -1,7 +1,7 @@
 import type { Membership, User } from "@/lib/types";
 import { IDS } from "./ids";
 
-// Sample data only (design/screens/Users.dc.html shows placeholders for names).
+// Sample data only (design/screens/Users.dc.html shows placeholders for names and mobiles).
 const t = "2026-04-01T00:00:00.000Z";
 
 export const mockUsers: User[] = [
@@ -10,7 +10,7 @@ export const mockUsers: User[] = [
     createdAt: t,
     updatedAt: t,
     name: "Owner",
-    mobile: null,
+    mobile: "9000000001",
     email: null,
     lastLoginAt: null,
   },
@@ -19,7 +19,7 @@ export const mockUsers: User[] = [
     createdAt: t,
     updatedAt: t,
     name: "Booking staff",
-    mobile: null,
+    mobile: "9000000002",
     email: null,
     lastLoginAt: null,
   },
@@ -32,7 +32,22 @@ export const mockUsers: User[] = [
     email: null,
     lastLoginAt: null,
   },
+  {
+    id: IDS.user.accountant,
+    createdAt: t,
+    updatedAt: t,
+    name: "Accountant",
+    mobile: "9000000003",
+    email: "accounts@example.com",
+    lastLoginAt: null,
+  },
 ];
+
+/**
+ * Mock logins until Supabase Auth: every sample user's password is this.
+ * lib/data stores only a salted hash of it.
+ */
+export const MOCK_PASSWORD = "demo1234";
 
 export const mockMemberships: Membership[] = [
   {
@@ -58,6 +73,15 @@ export const mockMemberships: Membership[] = [
     companyId: IDS.company.acm,
     userId: IDS.user.staff,
     role: "booking_staff",
+    createdAt: t,
+    updatedAt: t,
+    version: 1,
+  },
+  {
+    id: IDS.membership.accountantAcm,
+    companyId: IDS.company.acm,
+    userId: IDS.user.accountant,
+    role: "accountant",
     createdAt: t,
     updatedAt: t,
     version: 1,

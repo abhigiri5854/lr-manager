@@ -4,7 +4,9 @@ import { Suspense } from "react";
 import { LrForm } from "@/components/lr/LrForm";
 import { LrFormSkeleton } from "@/components/lr/LrFormSkeleton";
 import { getLrById } from "@/lib/data/lrs";
-import { getActiveCompanyId } from "@/lib/data/session";
+import { NoAccess } from "@/components/ui/NoAccess";
+import { getActiveCompanyId, getActiveRole } from "@/lib/data/session";
+import { can } from "@/lib/permissions";
 import { todayInIndia } from "@/lib/fy";
 import { lrToForm } from "@/lib/lr-form";
 import { loadLinkedInvoice, loadPicked } from "../../load-form";
@@ -19,6 +21,17 @@ async function EditLr({ params, searchParams }: Pick<Props, "params" | "searchPa
   const companyId = await getActiveCompanyId();
   const lr = await getLrById(companyId, id);
   if (!lr) notFound();
+  const role = await getActiveRole();
+  if (!can(role, "lr.edit")) {
+    return (
+      <NoAccess
+        title={`Edit LR ${lr.lrNo}`}
+        role={role}
+        action="lr.edit"
+        back={{ href: `/lr/${lr.id}`, label: `Back to LR ${lr.lrNo}` }}
+      />
+    );
+  }
 
   const initial = lrToForm(lr, { today: todayInIndia() });
   const [picked, linkedInvoice] = await Promise.all([

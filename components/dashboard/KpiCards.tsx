@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { formatRupees } from "@/lib/format";
 import type { Dashboard } from "@/lib/types";
+import { IfCan } from "@/components/ui/Permissions";
 
 type KpiProps = {
   label: ReactNode;
@@ -88,8 +89,11 @@ export function KpiCards({ data }: { data: Dashboard }) {
         sub={
           <>
             {freight.unbilledTbbLrs > 0 &&
-              `${plural(freight.unbilledTbbLrs, "LR", "LRs")} not billed · `}
-            <Link href="/bills/new">Make freight bill</Link>
+              `${plural(freight.unbilledTbbLrs, "LR", "LRs")} not billed`}
+            <IfCan action="bill.edit">
+              {freight.unbilledTbbLrs > 0 && " · "}
+              <Link href="/bills/new">Make freight bill</Link>
+            </IfCan>
           </>
         }
       />

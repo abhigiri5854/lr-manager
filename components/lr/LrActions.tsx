@@ -1,17 +1,20 @@
 import Link from "next/link";
+import type { Action } from "@/lib/permissions";
 import type { LrStatus, LrView } from "@/lib/types";
 import { LrRowMenu } from "./LrRowMenu";
+import { IfCan } from "@/components/ui/Permissions";
 
-type Primary = { label: string; href: (id: string) => string };
+/** `action` = what the role must be allowed (lib/permissions.ts) to see the button. */
+type Primary = { label: string; href: (id: string) => string; action: Action };
 
 /** The next step for an LR, by status. Paid and cancelled LRs have none. */
 const PRIMARY: Partial<Record<LrStatus, Primary>> = {
-  Draft: { label: "Finish", href: (id) => `/lr/${id}/edit` },
-  Booked: { label: "Mark delivered", href: (id) => `/lr/${id}/pod` },
-  "In transit": { label: "Mark delivered", href: (id) => `/lr/${id}/pod` },
-  Delivered: { label: "Upload POD", href: (id) => `/lr/${id}/pod` },
-  "POD received": { label: "Make bill", href: (id) => `/bills/new?lr=${id}` },
-  Billed: { label: "Record payment", href: (id) => `/bills?lr=${id}` },
+  Draft: { label: "Finish", href: (id) => `/lr/${id}/edit`, action: "lr.edit" },
+  Booked: { label: "Mark delivered", href: (id) => `/lr/${id}/pod`, action: "pod.upload" },
+  "In transit": { label: "Mark delivered", href: (id) => `/lr/${id}/pod`, action: "pod.upload" },
+  Delivered: { label: "Upload POD", href: (id) => `/lr/${id}/pod`, action: "pod.upload" },
+  "POD received": { label: "Make bill", href: (id) => `/bills/new?lr=${id}`, action: "bill.edit" },
+  Billed: { label: "Record payment", href: (id) => `/bills?lr=${id}`, action: "bill.edit" },
 };
 
 /** Once on a final bill an LR is locked, so it can't be cancelled from here. */
@@ -26,9 +29,9 @@ export const CANCELLABLE: LrStatus[] = [
 /** The next step for an LR (register row and detail header share it). */
 export function lrPrimaryAction(
   lr: Pick<LrView, "id" | "status">,
-): { label: string; href: string } | null {
+): { label: string; href: string; action: Action } | null {
   const p = PRIMARY[lr.status];
-  return p ? { label: p.label, href: p.href(lr.id) } : null;
+  return p ? { label: p.label, href: p.href(lr.id), action: p.action } : null;
 }
 
 /**
@@ -39,7 +42,13 @@ export function LrActions({ lr }: { lr: LrView }) {
   const primary = PRIMARY[lr.status];
   return (
     <div className="relative z-10 flex items-center justify-between gap-2">
-      {primary ? <Link href={primary.href(lr.id)}>{primary.label}</Link> : <span />}
+      {primary ? (
+        <IfCan action={primary.action} fallback={<span />}>
+          <Link href={primary.href(lr.id)}>{primary.label}</Link>
+        </IfCan>
+      ) : (
+        <span />
+      )}
       <LrRowMenu
         lrId={lr.id}
         lrNo={lr.lrNo}

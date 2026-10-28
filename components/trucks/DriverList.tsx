@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { inviteDriverAction } from "@/app/(app)/trucks/actions";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
+import { IfCan } from "@/components/ui/Permissions";
 import { formatDate } from "@/lib/format";
 import type { DriverRow, IsoDate } from "@/lib/types";
 import { DriverForm } from "./DriverForm";
@@ -70,7 +71,18 @@ export function DriverList({
       cell: (r) => (r.truckNumbers.length ? r.truckNumbers.join(", ") : "—"),
       mono: true,
     },
-    { key: "app", header: "Driver app", cell: (r) => <InviteCell driver={r} /> },
+    {
+      key: "app",
+      header: "Driver app",
+      cell: (r) => (
+        <IfCan
+          action="company.manage"
+          fallback={r.invitedAt ? `Invited ${formatDate(r.invitedAt)}` : "Not invited"}
+        >
+          <InviteCell driver={r} />
+        </IfCan>
+      ),
+    },
     {
       key: "edit",
       header: <span className="sr-only">Actions</span>,

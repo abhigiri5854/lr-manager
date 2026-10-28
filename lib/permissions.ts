@@ -83,3 +83,36 @@ export function deniedMessage(role: Role | null | undefined, action: Action): st
     ? `Your role (${ROLE_LABEL[role]}) can't ${ACTION_LABEL[action]}.`
     : "You're not a member of this company.";
 }
+
+/**
+ * Rows of the "What each role can do" table on Users & roles, generated from PERMISSIONS.
+ * `partial` shows a limited grant, e.g. drivers' "✓ own trips".
+ */
+export const PERMISSION_ROWS: Array<{
+  label: string;
+  action: Action;
+  partial?: { action: Action; label: string };
+}> = [
+  { label: "Create / edit LR", action: "lr.edit" },
+  { label: "Tax invoices", action: "invoice.edit" },
+  { label: "Freight bills & payments", action: "bill.edit" },
+  { label: "Delete or cancel records", action: "record.cancel" },
+  { label: "Company profile & users", action: "company.manage" },
+  { label: "Smart import", action: "import.run" },
+  {
+    label: "Upload POD photo",
+    action: "pod.upload",
+    partial: { action: "pod.upload_own", label: "✓ own trips" },
+  },
+  { label: "See freight amounts", action: "freight.view" },
+  { label: "Parties, trucks & items", action: "master.edit" },
+];
+
+/** What a cell of that table says: "✓", "✓ own trips" or "—". */
+export function permissionCell(role: Role, row: (typeof PERMISSION_ROWS)[number]): string {
+  if (can(role, row.action)) return "✓";
+  if (row.partial && can(role, row.partial.action)) return row.partial.label;
+  return "—";
+}
+
+export const ROLES: Role[] = ["owner", "accountant", "booking_staff", "driver"];

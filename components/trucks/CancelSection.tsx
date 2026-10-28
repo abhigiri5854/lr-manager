@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { useCan } from "@/components/ui/Permissions";
 import type { ActionFailure } from "@/lib/data/errors";
 
 /**
@@ -23,6 +24,8 @@ export function CancelSection({
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Cancelling is Owner-only (lib/permissions.ts "record.cancel").
+  const allowed = useCan("record.cancel");
 
   function confirm() {
     startTransition(async () => {
@@ -31,6 +34,8 @@ export function CancelSection({
       else setError(result.message);
     });
   }
+
+  if (!allowed) return null;
 
   return (
     <div className="mt-2 border-t border-border pt-4">
