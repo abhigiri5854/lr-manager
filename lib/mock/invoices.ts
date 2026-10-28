@@ -1,0 +1,93 @@
+import type { TaxInvoice } from "@/lib/types";
+import { IDS } from "./ids";
+
+// Sample data only: invoice SQ2604002116 (Invoice.dc.html / InvoicePDF.dc.html), read by AI from a photo.
+// It is the consignor's goods invoice: Ashirvad Pipes sells to 1789 India Trading.
+const line = {
+  hsn: "39251000",
+  uom: "EA",
+  discountPaise: 0,
+  gstRateBp: 1800,
+  igstPaise: 0,
+} as const;
+
+export const mockTaxInvoices: TaxInvoice[] = [
+  {
+    id: IDS.invoice.sq2604002116,
+    companyId: IDS.company.acm,
+    createdAt: "2026-10-27T09:00:00.000Z",
+    updatedAt: "2026-10-27T09:00:00.000Z",
+    version: 1,
+    invoiceNo: "SQ2604002116",
+    invoiceAt: "2026-10-10T06:27:00.000Z", // 10-10-2026 11:57 IST
+    status: "draft",
+    sellerPartyId: IDS.party.ashirvad,
+    billToId: IDS.party.india1789,
+    shipToId: null,
+    placeOfSupplyStateCode: "10",
+    customerRef: "1789-80520-",
+    customerRefDate: "2026-10-07",
+    soNo: "300717994",
+    soDate: null,
+    doNo: "801445107",
+    sapRef: null,
+    truckId: IDS.truck.br06gb7374,
+    driverMobile: "8873764100",
+    shipFrom: null,
+    incoterm: "Ex Works with Insurance",
+    lines: [
+      {
+        ...line,
+        id: IDS.invoiceLine.a,
+        lineNo: 1,
+        itemId: IDS.item.tank500x4,
+        itemCode: "70004162",
+        description: "500 LTR 4-layer white water tank",
+        qty: "10",
+        ratePaise: 403004,
+        taxablePaise: 4030040,
+        sgstPaise: 362704,
+        cgstPaise: 362704,
+      },
+      {
+        ...line,
+        id: IDS.invoiceLine.b,
+        lineNo: 2,
+        itemId: IDS.item.tank1000x3,
+        itemCode: "70004144",
+        description: "1000 LTR 3-layer white water tank",
+        qty: "5",
+        ratePaise: 715920,
+        taxablePaise: 3579600,
+        sgstPaise: 322164,
+        cgstPaise: 322164,
+      },
+      {
+        ...line,
+        id: IDS.invoiceLine.c,
+        lineNo: 3,
+        itemId: IDS.item.tank1000x4,
+        itemCode: "70004164",
+        description: "1000 LTR 4-layer white water tank",
+        qty: "10",
+        ratePaise: 806007,
+        taxablePaise: 8060070,
+        sgstPaise: 725406,
+        cgstPaise: 725406,
+      },
+    ],
+    totals: {
+      taxablePaise: 15669710,
+      sgstPaise: 1410274,
+      cgstPaise: 1410274,
+      igstPaise: 0,
+      roundOffPaise: 0,
+      totalPaise: 18490258,
+    },
+    irn: null,
+    ewayBillNo: null,
+    sourceFileUrl: null,
+    importBatchId: null,
+    snapshot: null,
+  },
+];

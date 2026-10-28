@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { listPodPending } from "@/lib/data/pod";
+import { getActiveCompanyId } from "@/lib/data/session";
 import { formatDate, formatPaise } from "@/lib/format";
 import type { PodPendingRow } from "@/lib/types";
 
@@ -17,7 +18,7 @@ const columns: Column<PodPendingRow>[] = [
 ];
 
 export default async function PodPendingPage() {
-  const rows = await listPodPending();
+  const rows = await listPodPending(await getActiveCompanyId());
 
   return (
     <>

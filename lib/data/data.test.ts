@@ -1,0 +1,178 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { db, resetStore } from "./_store";
+import {
+  createFreightBill,
+  createPayment,
+  finaliseFreightBill,
+  getFreightBillById,
+  listUnbilledLrs,
+} from "./bills";
+import { getCompany, listCompanies, updateCompany } from "./companies";
+import { ConflictError, ValidationError } from "./errors";
+import { getTaxInvoiceById, listLrsForInvoice, listTaxInvoices } from "./invoices";
+import { bookLr, cancelLr, createLr, getLrById, listLrs, updateLr } from "./lrs";
+import { createParty, findPartyByGstin, listParties, updateParty } from "./parties";
+import { createPod, listPodPending } from "./pod";
+import { findTruckByNumber, listTrucks } from "./trucks";
+
+// Sample ids are looked up by business key so the test doesn't import lib/mock.
+const acmId = () => db.companies.find((c) => c.label === "ACM Logistics")!.id;
+const rsId = () => db.companies.find((c) => c.label === "RS Logistics")!.id;
+const lrId = (no: string) => db.lrs.find((l) => l.lrNo === no)!.id;
+const partyId = (name: string) => db.parties.find((p) => p.name === name)!.id;
+
+beforeEach(() => resetStore());
+
+describe("company scoping", () => {
+  it("only returns the asked company's rows", async () => {
+    expect((await listLrs(acmId())).total).toBe(2);
+    expect((await listLrs(rsId())).total).toBe(0);
+    expect((await listParties(rsId())).total).toBe(0);
+    expect(await getLrById(rsId(), lrId("19019"))).toBeNull();
+  });
+
+  it("rejects references to another company's records", async () => {
+    await expect(
+      createLr(rsId(), { consignorId: partyId("Ashirvad Pipes Pvt Ltd") }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("lists both companies for the owner", async () => {
+    expect((await listCompanies()).map((c) => c.label)).toEqual(["ACM Logistics", "RS Logistics"]);
+  });
+});
+
+describe("sample LRs", () => {
+  it("derive status and display fields", async () => {
+    const lr19019 = (await getLrById(acmId(), lrId("19019")))!;
+    expect(lr19019.status).toBe("In transit");
+    expect(lr19019.truckNumber).toBe("BR01GN8331");
+    expect(lr19019.totalPackages).toBe(28);
+    expect(lr19019.totalValuePaise).toBe(17935600);
+    const lr19020 = (await getLrById(acmId(), lrId("19020")))!;
+    expect(lr19020.status).toBe("Draft");
+    expect(lr19020.totalPackages).toBe(25);
+  });
+
+  it("search and filters", async () => {
+    expect((await listLrs(acmId(), { search: "maa vaishno" })).rows.map((r) => r.lrNo)).toEqual([
+      "19019",
+    ]);
+    expect((await listLrs(acmId(), { search: "SQ2604002116" })).rows.map((r) => r.lrNo)).toEqual([
+      "19020",
+    ]);
+    expect((await listLrs(acmId(), { status: "Draft" })).total).toBe(1);
+  });
+
+  it("finds the LR that carries invoice SQ2604002116", async () => {
+    const inv = (await listTaxInvoices(acmId())).rows[0];
+    expect((await getTaxInvoiceById(acmId(), inv.id))!.totals.totalPaise).toBe(18490258);
+    expect((await listLrsForInvoice(acmId(), inv.id)).map((l) => l.lrNo)).toEqual(["19020"]);
+  });
+});
+
+describe("numbering", () => {
+  it("allocates LR numbers from the series on create", async () => {
+    expect((await getCompany(acmId()))!.nextLrNo).toBe(19021);
+    expect((await createLr(acmId(), {})).lrNo).toBe("19021");
+    expect((await createLr(acmId(), {})).lrNo).toBe("19022");
+    expect((await getCompany(acmId()))!.nextLrNo).toBe(19023);
+  });
+
+  it("refuses an LR until the company sets its numbering", async () => {
+    await expect(createLr(rsId(), {})).rejects.toThrow(/next LR number/);
+  });
+
+  it("won't move the LR series backwards", async () => {
+    const c = (await getCompany(acmId()))!;
+    await expect(updateCompany(acmId(), c.version, { nextLrNo: 100 })).rejects.toThrow(
+      ValidationError,
+    );
+  });
+});
+
+describe("updates", () => {
+  it("bump the version and fail on a stale version", async () => {
+    const id = partyId("1789 India Trading");
+    const saved = await updateParty(acmId(), id, 1, { place: "Motihari, Bihar" });
+    expect(saved.version).toBe(2);
+    await expect(updateParty(acmId(), id, 1, { place: "x" })).rejects.toThrow(ConflictError);
+  });
+
+  it("write the audit log with old → new", async () => {
+    await updateParty(acmId(), partyId("1789 India Trading"), 1, { phone: "9199835233" });
+    const entry = db.audit.at(-1)!;
+    expect(entry.action).toBe("update");
+    expect(entry.changes).toEqual([{ field: "phone", old: "9199835232", new: "9199835233" }]);
+  });
+
+  it("enforce unique GSTIN and truck numbers per company", async () => {
+    await expect(createParty(acmId(), { name: "Copy", gstin: "10AABCA7061K2ZZ" })).rejects.toThrow(
+      /already saved/,
+    );
+    expect(await findPartyByGstin(acmId(), "10aabca7061k2zz")).not.toBeNull();
+    expect((await findTruckByNumber(acmId(), "br 01 gn 8331"))!.driverMobile).toBe("7870015869");
+    expect((await listTrucks(acmId(), { search: "8331" })).total).toBe(1);
+  });
+
+  it("fills PAN and state from GSTIN for a new party", async () => {
+    const p = await createParty(rsId(), { name: "New Co", gstin: "20ABLFR4565P1ZN" });
+    expect(p.pan).toBe("ABLFR4565P");
+    expect(p.stateCode).toBe("20");
+  });
+});
+
+describe("LR → POD → bill → paid", () => {
+  it("walks the whole lifecycle", async () => {
+    const co = acmId();
+    const id = lrId("19019");
+
+    await createPod(co, { lrId: id, deliveredOn: "2026-10-16" });
+    expect((await getLrById(co, id))!.status).toBe("Delivered");
+    expect((await listPodPending(co)).map((r) => r.lrNo)).toEqual(["19019"]);
+
+    expect((await listUnbilledLrs(co)).map((l) => l.lrNo)).toEqual(["19019"]);
+    const draft = await createFreightBill(co, {
+      billDate: "2026-10-27",
+      partyId: partyId("Ashirvad Pipes Pvt Ltd"),
+      gstMode: "reverse_charge",
+      lines: [{ lrId: id, freightPaise: 2500000, advancePaise: 500000 }],
+    });
+    expect(draft.billNo).toBeNull();
+    expect(draft.totals.amountPaise).toBe(2000000);
+    expect((await getLrById(co, id))!.status).toBe("Delivered"); // draft bill doesn't bill the LR
+
+    const final = await finaliseFreightBill(co, draft.id, draft.version);
+    expect(final.billNo).toBe("ACM/FB/26-27/001");
+    expect((await getLrById(co, id))!.status).toBe("Billed");
+    const lr = (await getLrById(co, id))!;
+    await expect(updateLr(co, id, lr.version, { remarks: "x" })).rejects.toThrow(/locked/);
+    await expect(cancelLr(co, id)).rejects.toThrow(ValidationError);
+
+    await expect(
+      createPayment(co, {
+        partyId: partyId("Ashirvad Pipes Pvt Ltd"),
+        amountPaise: 3000000,
+        mode: "neft_upi",
+        receivedOn: "2026-11-05",
+        allocations: [{ freightBillId: final.id, amountPaise: 2500000 }],
+      }),
+    ).rejects.toThrow(/due on bill/);
+
+    await createPayment(co, {
+      partyId: partyId("Ashirvad Pipes Pvt Ltd"),
+      amountPaise: 1960000,
+      tdsPaise: 40000,
+      mode: "neft_upi",
+      receivedOn: "2026-11-05",
+      allocations: [{ freightBillId: final.id, amountPaise: 2000000 }],
+    });
+    expect((await getFreightBillById(co, final.id))!.duePaise).toBe(0);
+    expect((await getLrById(co, id))!.status).toBe("Paid");
+  });
+
+  it("won't book a draft that is missing required fields", async () => {
+    const lr = await createLr(acmId(), { fromPlace: "Painal" });
+    await expect(bookLr(acmId(), lr.id, lr.version)).rejects.toThrow(/LR date is required/);
+  });
+});

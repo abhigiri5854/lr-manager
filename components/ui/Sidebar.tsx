@@ -28,7 +28,7 @@ export async function Sidebar() {
       >
         {companies.map((company) => (
           <option key={company.id} value={company.id}>
-            {`${company.name} · ${company.city}`}
+            {`${company.label} · ${company.city}`}
           </option>
         ))}
       </select>
