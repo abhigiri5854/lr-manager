@@ -18,14 +18,15 @@ import { cx } from "@/lib/cx";
 import { formatPaise, formatRupees } from "@/lib/format";
 import { paymentModeLabel } from "@/lib/labels";
 import {
+  applyConsignorDefaults,
   bookingErrors,
-  describeDefaults,
   FORM_CHARGES,
   formToLrInput,
   gstApplies,
   lrChargeTotals,
   lrChecklist,
   tidyRupees,
+  type DefaultsFill,
   type FormErrors,
   type LrFormValues,
   type PartyOption,
@@ -54,20 +55,14 @@ export type LrFormProps = {
   nextLrNo?: string | null;
   /** New LR from ?from= */
   copiedFrom?: { lrNo: string } | null;
+  /** Consignor defaults the server already filled (New LR from a tax invoice). */
+  initialDefaults?: DefaultsFill | null;
   /** Goods invoices on this LR that came from a tax invoice. */
   linkedInvoice?: { id: string; invoiceNo: string } | null;
   /** Shown once after a redirect, e.g. "Draft saved". */
   notice?: string | null;
   /** Why the LR can't be edited (e.g. cancelled); the form is shown disabled. */
   readOnlyReason?: string | null;
-};
-
-type DefaultsFill = {
-  lrNo: string | null;
-  text: string;
-  consignorName: string;
-  gstPaidBy: GstPayer | null;
-  previous: Pick<LrFormValues, "fromPlace" | "chargedAs" | "paymentMode" | "gstPaidBy">;
 };
 
 const GST_PAYERS: { value: GstPayer; label: string }[] = [
@@ -87,6 +82,7 @@ export function LrForm({
   lr,
   nextLrNo,
   copiedFrom,
+  initialDefaults,
   linkedInvoice,
   notice: initialNotice,
   readOnlyReason,
@@ -100,7 +96,7 @@ export function LrForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [notice, setNotice] = useState(initialNotice ?? null);
-  const [defaults, setDefaults] = useState<DefaultsFill | null>(null);
+  const [defaults, setDefaults] = useState<DefaultsFill | null>(initialDefaults ?? null);
   const [pending, startTransition] = useTransition();
   const [focusError, setFocusError] = useState(0);
   const topRef = useRef<HTMLDivElement>(null);
@@ -141,13 +137,6 @@ export function LrForm({
     if (created && party) setNewPartyIds((ids) => [...ids, party.id]);
     set({ consignorId: party?.id ?? null });
     if (!party || !changed) return;
-    // Values before any fill, so Undo goes back to what the user had.
-    const previous = defaults?.previous ?? {
-      fromPlace: values.fromPlace,
-      chargedAs: values.chargedAs,
-      paymentMode: values.paymentMode,
-      gstPaidBy: values.gstPaidBy,
-    };
     const req = ++defaultsRequest.current;
     const d = await consignorDefaultsAction(party.id);
     if (req !== defaultsRequest.current) return; // another consignor was picked meanwhile
@@ -156,19 +145,10 @@ export function LrForm({
       setDefaults(null);
       return;
     }
-    setDefaults({
-      lrNo: d.lrNo,
-      text: describeDefaults(d),
-      consignorName: party.name,
-      gstPaidBy: d.gstPaidBy,
-      previous,
-    });
-    set({
-      fromPlace: d.fromPlace ?? previous.fromPlace,
-      chargedAs: d.chargedAs ?? previous.chargedAs,
-      paymentMode: d.paymentMode ?? previous.paymentMode,
-      gstPaidBy: d.gstPaidBy ?? previous.gstPaidBy,
-    });
+    // Undo goes back to what the user had before any fill.
+    const { patch, fill } = applyConsignorDefaults(values, d, party.name, defaults?.previous);
+    setDefaults(fill);
+    set(patch);
   }
 
   function undoDefaults() {

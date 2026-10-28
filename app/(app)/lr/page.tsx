@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import {
+  ExportButtonLoading,
+  RegisterHeader,
+  RegisterSkeleton,
+  RegisterTableCard,
+} from "@/components/lr/RegisterFrame";
 import { RegisterFilters } from "@/components/lr/RegisterFilters";
 import { RegisterTable } from "@/components/lr/RegisterTable";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
 import { listLrs } from "@/lib/data/lrs";
 import { listPartyOptions } from "@/lib/data/parties";
@@ -21,18 +25,6 @@ import {
 export const metadata: Metadata = { title: "LR register" };
 
 type SearchParams = PageProps<"/lr">["searchParams"];
-
-const FOOTNOTE =
-  "Click any row to open the LR; Print gives the Consignor / Consignee / Driver / Office copies as one PDF.";
-
-function TableCard({ children }: { children: React.ReactNode }) {
-  return (
-    <Card padding="table">
-      {children}
-      <p className="mx-3 mt-4 mb-0 text-[13px] text-muted">{FOOTNOTE}</p>
-    </Card>
-  );
-}
 
 /** Exports the rows matching the current filters (all pages). */
 async function ExportButton({ searchParams }: { searchParams: SearchParams }) {
@@ -86,7 +78,7 @@ async function Register({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       <RegisterFilters query={query} parties={parties} trucks={trucks} />
-      <TableCard>
+      <RegisterTableCard>
         <RegisterTable lrs={page.rows} nowMs={nowMs} empty={empty} />
         <div className="mx-3 mt-4">
           <Pagination
@@ -97,7 +89,7 @@ async function Register({ searchParams }: { searchParams: SearchParams }) {
             hrefFor={(p) => `/lr${lrRegisterSearch({ ...query, page: p })}`}
           />
         </div>
-      </TableCard>
+      </RegisterTableCard>
     </>
   );
 }
@@ -105,33 +97,14 @@ async function Register({ searchParams }: { searchParams: SearchParams }) {
 export default function LrRegisterPage({ searchParams }: PageProps<"/lr">) {
   return (
     <>
-      <PageHeader
-        title="LR register"
-        actions={
-          <>
-            <Suspense
-              fallback={
-                <Button variant="secondary" href="/lr/export" download disabled>
-                  Export Excel
-                </Button>
-              }
-            >
-              <ExportButton searchParams={searchParams} />
-            </Suspense>
-            <Button href="/lr/new">+ New LR</Button>
-          </>
+      <RegisterHeader
+        exportButton={
+          <Suspense fallback={<ExportButtonLoading />}>
+            <ExportButton searchParams={searchParams} />
+          </Suspense>
         }
       />
-      <Suspense
-        fallback={
-          <>
-            <RegisterFilters query={{}} parties={[]} trucks={[]} disabled />
-            <TableCard>
-              <RegisterTable lrs={[]} nowMs={0} empty="Loading…" />
-            </TableCard>
-          </>
-        }
-      >
+      <Suspense fallback={<RegisterSkeleton />}>
         <Register searchParams={searchParams} />
       </Suspense>
     </>

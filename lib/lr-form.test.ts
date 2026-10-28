@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { mockTaxInvoices } from "@/lib/mock/invoices";
 import { mockLrs } from "@/lib/mock/lrs";
 import {
+  applyConsignorDefaults,
   bookingErrors,
   describeDefaults,
   emptyLrForm,
   formToLrInput,
+  invoiceToForm,
   isoToIstInput,
   istInputToIso,
   lrChargeTotals,
@@ -147,5 +150,77 @@ describe("dates", () => {
 
   it("dates today in India", () => {
     expect(todayInIndia(new Date("2026-10-27T19:00:00.000Z"))).toBe("2026-10-28");
+  });
+});
+
+describe("New LR from a tax invoice", () => {
+  it("fills parties, goods, value and truck, linked to the invoice", () => {
+    const inv = mockTaxInvoices[0];
+    const v = invoiceToForm(inv, { today });
+    expect(v).toMatchObject({
+      lrDate: today,
+      consignorId: inv.sellerPartyId,
+      consigneeId: inv.billToId,
+      billedToSame: true,
+      truckId: inv.truckId,
+      driverMobile: "8873764100",
+    });
+    expect(v.items.map((r) => [r.description, r.packages])).toEqual([
+      ["500 LTR 4-layer white water tank", "10"],
+      ["1000 LTR 3-layer white water tank", "5"],
+      ["1000 LTR 4-layer white water tank", "10"],
+    ]);
+    const { input, errors } = formToLrInput(v);
+    expect(errors).toEqual({});
+    expect(input.lrInvoices).toEqual([
+      expect.objectContaining({
+        invoiceNo: "SQ2604002116",
+        invoiceDate: "2026-10-10",
+        valuePaise: 18490258,
+        ewayBillNo: null,
+        taxInvoiceId: inv.id,
+      }),
+    ]);
+  });
+});
+
+describe("consignor defaults", () => {
+  const d = {
+    lrNo: "19019",
+    fromPlace: "Painal",
+    chargedAs: "ftl" as const,
+    paymentMode: "tbb" as const,
+    gstPaidBy: "consignor" as const,
+  };
+
+  it("fills the four fields and remembers what Undo restores", () => {
+    const v = { ...emptyLrForm(today), fromPlace: "Bihta", paymentMode: "paid" as const };
+    const { patch, fill } = applyConsignorDefaults(v, d, "Ashirvad Pipes Pvt Ltd");
+    expect(patch).toEqual({
+      fromPlace: "Painal",
+      chargedAs: "ftl",
+      paymentMode: "tbb",
+      gstPaidBy: "consignor",
+    });
+    expect(fill.previous).toEqual({
+      fromPlace: "Bihta",
+      chargedAs: "",
+      paymentMode: "paid",
+      gstPaidBy: "",
+    });
+    expect(fill.text).toBe("From Painal · FTL · TBB · GST by consignor");
+  });
+
+  it("keeps the first Undo point when another consignor is picked", () => {
+    const v = emptyLrForm(today);
+    const first = applyConsignorDefaults(v, d, "A");
+    const second = applyConsignorDefaults(
+      { ...v, ...first.patch },
+      { ...d, fromPlace: null },
+      "B",
+      first.fill.previous,
+    );
+    expect(second.patch.fromPlace).toBe("");
+    expect(second.fill.previous.fromPlace).toBe("");
   });
 });

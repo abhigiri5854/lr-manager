@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { LrForm } from "@/components/lr/LrForm";
+import { LrFormSkeleton } from "@/components/lr/LrFormSkeleton";
 import { getLrById } from "@/lib/data/lrs";
 import { getActiveCompanyId } from "@/lib/data/session";
 import { todayInIndia } from "@/lib/fy";
@@ -9,7 +11,10 @@ import { loadLinkedInvoice, loadPicked } from "../../load-form";
 
 export const metadata: Metadata = { title: "Edit LR" };
 
-export default async function EditLrPage({ params, searchParams }: PageProps<"/lr/[id]/edit">) {
+type Props = PageProps<"/lr/[id]/edit">;
+
+/** Per request: reads the URL and the active company. */
+async function EditLr({ params, searchParams }: Pick<Props, "params" | "searchParams">) {
   const [{ id }, { saved }] = await Promise.all([params, searchParams]);
   const companyId = await getActiveCompanyId();
   const lr = await getLrById(companyId, id);
@@ -42,5 +47,13 @@ export default async function EditLrPage({ params, searchParams }: PageProps<"/l
           : null
       }
     />
+  );
+}
+
+export default function EditLrPage({ params, searchParams }: Props) {
+  return (
+    <Suspense fallback={<LrFormSkeleton mode="edit" />}>
+      <EditLr params={params} searchParams={searchParams} />
+    </Suspense>
   );
 }

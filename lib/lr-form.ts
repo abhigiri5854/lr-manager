@@ -1,8 +1,18 @@
 // Form state for New / Edit LR and how it maps to the data layer's LrInput.
 // Pure functions (no React), shared by the form and its tests.
 import { formatPaise, parseRupees } from "@/lib/format";
+import { todayInIndia } from "@/lib/fy";
 import { chargedAsLabel, paymentModeLabel } from "@/lib/labels";
-import type { ChargedAs, GstPayer, Lr, LrCharges, LrPaymentMode, Party, Risk } from "@/lib/types";
+import type {
+  ChargedAs,
+  GstPayer,
+  Lr,
+  LrCharges,
+  LrPaymentMode,
+  Party,
+  Risk,
+  TaxInvoice,
+} from "@/lib/types";
 import { lrBookingErrors, lrFields, type LrInput } from "@/lib/validators/lr";
 
 export type ChargeKey = keyof LrCharges;
@@ -222,6 +232,42 @@ export function lrToForm(lr: Lr, opts: { copy?: boolean; today: string }): LrFor
   };
 }
 
+/**
+ * New LR from a goods (tax) invoice (?invoice=): seller → consignor, bill-to → consignee,
+ * invoice lines → goods rows, invoice total → goods value, plus its truck and driver.
+ */
+export function invoiceToForm(inv: TaxInvoice, opts: { today: string }): LrFormValues {
+  const base = emptyLrForm(opts.today);
+  const items: LrItemRow[] = inv.lines.map((l) => {
+    const qty = Number(l.qty);
+    return {
+      ...emptyItemRow(),
+      itemId: l.itemId,
+      description: l.description,
+      // Whole quantities are package counts; anything else (e.g. kg) is left for the user.
+      packages: Number.isInteger(qty) ? String(qty) : "",
+    };
+  });
+  return {
+    ...base,
+    consignorId: inv.sellerPartyId,
+    consigneeId: inv.billToId,
+    truckId: inv.truckId,
+    driverMobile: inv.driverMobile ?? "",
+    invoices: [
+      {
+        ...emptyInvoiceRow(),
+        taxInvoiceId: inv.id,
+        invoiceNo: inv.invoiceNo,
+        invoiceDate: todayInIndia(new Date(inv.invoiceAt)),
+        value: moneyText(inv.totals.totalPaise),
+        ewayBillNo: inv.ewayBillNo ?? "",
+      },
+    ],
+    items: items.length ? items : base.items,
+  };
+}
+
 /** GST is only charged on the LR when the transporter pays it. */
 export function gstApplies(v: Pick<LrFormValues, "gstPaidBy">): boolean {
   return v.gstPaidBy === "transporter";
@@ -411,6 +457,58 @@ export function describeDefaults(d: {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+type DefaultFields = Pick<LrFormValues, "fromPlace" | "chargedAs" | "paymentMode" | "gstPaidBy">;
+
+/** A consignor's remembered values, from their last booked LR (lrNo) or the party's settings. */
+export type ConsignorDefaultValues = {
+  lrNo: string | null;
+  fromPlace: string | null;
+  chargedAs: ChargedAs | null;
+  paymentMode: LrPaymentMode | null;
+  gstPaidBy: GstPayer | null;
+};
+
+/** What the "Defaults filled from …" bar shows, and what Undo puts back. */
+export type DefaultsFill = {
+  lrNo: string | null;
+  text: string;
+  consignorName: string;
+  gstPaidBy: GstPayer | null;
+  previous: DefaultFields;
+};
+
+/**
+ * Fills From / charged as / payment mode / GST payer from a consignor's defaults.
+ * `previous` is what Undo restores (pass the earlier fill's when re-filling).
+ */
+export function applyConsignorDefaults(
+  v: LrFormValues,
+  d: ConsignorDefaultValues,
+  consignorName: string,
+  previous: DefaultFields = {
+    fromPlace: v.fromPlace,
+    chargedAs: v.chargedAs,
+    paymentMode: v.paymentMode,
+    gstPaidBy: v.gstPaidBy,
+  },
+): { patch: DefaultFields; fill: DefaultsFill } {
+  return {
+    patch: {
+      fromPlace: d.fromPlace ?? previous.fromPlace,
+      chargedAs: d.chargedAs ?? previous.chargedAs,
+      paymentMode: d.paymentMode ?? previous.paymentMode,
+      gstPaidBy: d.gstPaidBy ?? previous.gstPaidBy,
+    },
+    fill: {
+      lrNo: d.lrNo,
+      text: describeDefaults(d),
+      consignorName,
+      gstPaidBy: d.gstPaidBy,
+      previous,
+    },
+  };
 }
 
 /** The "Before you save" list on the right of the form. */
