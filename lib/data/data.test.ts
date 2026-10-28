@@ -17,6 +17,8 @@ import {
   bookLr,
   cancelLr,
   createLr,
+  findLrsWithInvoice,
+  getConsigneeToPlace,
   getConsignorDefaults,
   getLrById,
   listLrs,
@@ -288,5 +290,58 @@ describe("New / Edit LR form", () => {
       driverMobile: "8873764100",
       lastLrNo: "19020",
     });
+  });
+});
+
+describe("duplicate goods invoices", () => {
+  const sq = () => db.taxInvoices.find((i) => i.invoiceNo === "SQ2604002116")!.id;
+
+  it("finds the LR that carries a tax invoice, by link or by invoice no.", async () => {
+    expect(await findLrsWithInvoice(acmId(), { taxInvoiceId: sq() })).toEqual([
+      { id: lrId("19020"), lrNo: "19020" },
+    ]);
+    // Typed with spaces / lower case still matches.
+    expect(await findLrsWithInvoice(acmId(), { invoiceNo: " sq2604 002116" })).toEqual([
+      { id: lrId("19020"), lrNo: "19020" },
+    ]);
+    expect(await findLrsWithInvoice(acmId(), { invoiceNo: "182604002150" })).toEqual([
+      { id: lrId("19019"), lrNo: "19019" },
+    ]);
+  });
+
+  it("finds nothing for a new number, a blank number or another company", async () => {
+    expect(await findLrsWithInvoice(acmId(), { invoiceNo: "NEW-1" })).toEqual([]);
+    expect(await findLrsWithInvoice(acmId(), { invoiceNo: "  " })).toEqual([]);
+    expect(await findLrsWithInvoice(rsId(), { invoiceNo: "SQ2604002116" })).toEqual([]);
+  });
+
+  it("leaves out the LR being edited", async () => {
+    expect(await findLrsWithInvoice(acmId(), { invoiceNo: "SQ2604002116" }, lrId("19020"))).toEqual(
+      [],
+    );
+  });
+
+  it("ignores cancelled LRs", async () => {
+    await cancelLr(acmId(), lrId("19020"), { reason: "Booked twice" });
+    expect(await findLrsWithInvoice(acmId(), { taxInvoiceId: sq() })).toEqual([]);
+  });
+
+  it("lists every LR carrying the invoice, newest first", async () => {
+    const lr = await createLr(acmId(), {
+      lrInvoices: [{ invoiceNo: "SQ2604002116", taxInvoiceId: sq() }],
+    });
+    expect((await findLrsWithInvoice(acmId(), { taxInvoiceId: sq() })).map((l) => l.lrNo)).toEqual([
+      lr.lrNo,
+      "19020",
+    ]);
+  });
+});
+
+describe("consignee To place", () => {
+  it("uses their last booked LR, else the party's place", async () => {
+    expect(await getConsigneeToPlace(acmId(), partyId("Maa Vaishno Hardware"))).toBe(
+      "Gaighat (MUZ)",
+    );
+    expect(await getConsigneeToPlace(acmId(), partyId("1789 India Trading"))).toBe("Motihari");
   });
 });

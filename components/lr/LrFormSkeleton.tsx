@@ -19,7 +19,8 @@ export function LrFormSkeleton({ mode }: { mode: "new" | "edit" }) {
         title={
           mode === "new" ? (
             <>
-              New LR <span className="text-[13px] font-medium text-muted">auto-numbered</span>
+              New LR{" "}
+              <span className="text-[13px] font-medium text-muted">(next — confirmed on save)</span>
             </>
           ) : (
             "Edit LR"

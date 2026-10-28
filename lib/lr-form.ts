@@ -511,8 +511,32 @@ export function applyConsignorDefaults(
   };
 }
 
+/** Goods worth more than ₹50,000 need an e-way bill (GST rule 138). */
+export const EWAY_THRESHOLD_PAISE = 50_000_00;
+
+/** This goods invoice is over the e-way limit and has no e-way bill number. */
+export function needsEwayBill(r: LrInvoiceRow): boolean {
+  const value = parseRupees(r.value);
+  return typeof value === "number" && value > EWAY_THRESHOLD_PAISE && !r.ewayBillNo.trim();
+}
+
+/** Sum of the goods invoices' values (rows with a blank or bad value count as 0). */
+export function invoicesTotalPaise(rows: LrInvoiceRow[]): number {
+  return rows.reduce((sum, r) => {
+    const v = parseRupees(r.value);
+    return sum + (typeof v === "number" ? v : 0);
+  }, 0);
+}
+
+/** Other LRs already carrying an invoice row, by row key (filled as the user types). */
+export type InvoiceDuplicates = Record<string, { id: string; lrNo: string }[]>;
+
 /** The "Before you save" list on the right of the form. */
-export function lrChecklist(v: LrFormValues, consignor: PartyOption | null): ChecklistLine[] {
+export function lrChecklist(
+  v: LrFormValues,
+  consignor: PartyOption | null,
+  duplicates: InvoiceDuplicates = {},
+): ChecklistLine[] {
   const lines: ChecklistLine[] = [];
 
   if (!v.consignorId || !consignor) lines.push({ tone: "todo", text: "Consignor not picked" });
@@ -532,18 +556,28 @@ export function lrChecklist(v: LrFormValues, consignor: PartyOption | null): Che
   if (invoices.length === 0) {
     lines.push({ tone: "todo", text: "No goods invoice added" });
   } else {
-    const noEway = invoices.filter((r) => !r.ewayBillNo.trim());
+    const noEway = invoices.filter(needsEwayBill);
     if (noEway.length === 1 && invoices.length === 1)
       lines.push({ tone: "warn", text: "E-way bill number missing" });
     else if (noEway.length)
       lines.push({
         tone: "warn",
-        text: `E-way bill number missing on ${noEway.map((r) => r.invoiceNo || "an invoice").join(", ")}`,
+        text: `E-way bill number missing on ${noEway.map((r) => r.invoiceNo || "an invoice").join(", ")} (over ₹50,000)`,
       });
-    else lines.push({ tone: "ok", text: "E-way bill entered" });
+    else if (invoices.some((r) => r.ewayBillNo.trim()))
+      lines.push({ tone: "ok", text: "E-way bill entered" });
 
     if (invoices.some((r) => !r.value.trim()))
       lines.push({ tone: "warn", text: "Goods value missing" });
+
+    for (const r of invoices) {
+      const on = duplicates[r.key];
+      if (on?.length)
+        lines.push({
+          tone: "warn",
+          text: `Invoice ${r.invoiceNo.trim()} is already on LR ${on.map((x) => x.lrNo).join(", ")}`,
+        });
+    }
   }
 
   if (!v.items.some((r) => r.weight.trim() || r.size.trim()))

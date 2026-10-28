@@ -3,7 +3,15 @@
 // Server actions for the New / Edit LR form. Role checks come with auth (Phase 4).
 import { refresh } from "next/cache";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/data/errors";
-import { createLr, getConsignorDefaults, updateLr, type ConsignorDefaults } from "@/lib/data/lrs";
+import {
+  createLr,
+  findLrsWithInvoice,
+  getConsigneeToPlace,
+  getConsignorDefaults,
+  updateLr,
+  type ConsignorDefaults,
+  type LrRef,
+} from "@/lib/data/lrs";
 import { createParty, listParties } from "@/lib/data/parties";
 import { getActiveCompanyId } from "@/lib/data/session";
 import { createTruck, listTruckSuggestions } from "@/lib/data/trucks";
@@ -60,6 +68,21 @@ export async function consignorDefaultsAction(
 ): Promise<ConsignorDefaults | null> {
   const companyId = await getActiveCompanyId();
   return getConsignorDefaults(companyId, consignorId);
+}
+
+/** "To" to fill when a consignee is picked. */
+export async function consigneeToPlaceAction(consigneeId: string): Promise<string | null> {
+  const companyId = await getActiveCompanyId();
+  return getConsigneeToPlace(companyId, consigneeId);
+}
+
+/** Other LRs that already carry this invoice number (duplicate warning while typing). */
+export async function invoiceDuplicatesAction(
+  invoiceNo: string,
+  exceptLrId?: string,
+): Promise<LrRef[]> {
+  const companyId = await getActiveCompanyId();
+  return findLrsWithInvoice(companyId, { invoiceNo }, exceptLrId);
 }
 
 export async function createPartyAction(

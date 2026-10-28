@@ -251,6 +251,48 @@ export async function getConsignorDefaults(
   };
 }
 
+/** "sq 2604-002116 " → "SQ2604-002116": how invoice numbers are compared for duplicates. */
+export function normaliseInvoiceNo(value: string): string {
+  return value.replace(/\s+/g, "").toUpperCase();
+}
+
+export type LrRef = { id: string; lrNo: string };
+
+/**
+ * Non-cancelled LRs of this company that already carry a goods invoice — matched by the linked
+ * tax invoice or by invoice number. `exceptLrId` leaves out the LR being edited.
+ */
+export async function findLrsWithInvoice(
+  companyId: string,
+  match: { taxInvoiceId?: string | null; invoiceNo?: string | null },
+  exceptLrId?: string,
+): Promise<LrRef[]> {
+  const no = match.invoiceNo ? normaliseInvoiceNo(match.invoiceNo) : "";
+  if (!match.taxInvoiceId && !no) return [];
+  return scoped(db.lrs, companyId)
+    .filter((lr) => lr.id !== exceptLrId)
+    .filter((lr) =>
+      lr.lrInvoices.some(
+        (i) =>
+          (match.taxInvoiceId && i.taxInvoiceId === match.taxInvoiceId) ||
+          (no !== "" && normaliseInvoiceNo(i.invoiceNo) === no),
+      ),
+    )
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((lr) => ({ id: lr.id, lrNo: lr.lrNo }));
+}
+
+/** "To" for a picked consignee: their latest booked LR's destination, else the party's place. */
+export async function getConsigneeToPlace(
+  companyId: string,
+  consigneeId: string,
+): Promise<string | null> {
+  const last = scoped(db.lrs, companyId)
+    .filter((lr) => lr.consigneeId === consigneeId && lr.bookedAt && lr.toPlace)
+    .sort((a, b) => b.bookedAt!.localeCompare(a.bookedAt!))[0];
+  return last?.toPlace ?? findById(db.parties, companyId, consigneeId)?.place ?? null;
+}
+
 export type SaveLrOptions = {
   /** Also book the LR (Draft → Booked) in the same write. */
   book?: boolean;

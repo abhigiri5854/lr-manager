@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import {
+  consigneeToPlaceAction,
   consignorDefaultsAction,
+  invoiceDuplicatesAction,
   saveLrAction,
   type SaveLrResult,
 } from "@/app/(app)/lr/form-actions";
@@ -28,6 +30,8 @@ import {
   tidyRupees,
   type DefaultsFill,
   type FormErrors,
+  type InvoiceDuplicates,
+  type LrInvoiceRow,
   type LrFormValues,
   type PartyOption,
   type TruckOption,
@@ -59,6 +63,8 @@ export type LrFormProps = {
   initialDefaults?: DefaultsFill | null;
   /** Goods invoices on this LR that came from a tax invoice. */
   linkedInvoice?: { id: string; invoiceNo: string } | null;
+  /** Invoice nos. (by row key) the user already chose to keep despite being on another LR. */
+  keptInvoiceNos?: Record<string, string>;
   /** Shown once after a redirect, e.g. "Draft saved". */
   notice?: string | null;
   /** Why the LR can't be edited (e.g. cancelled); the form is shown disabled. */
@@ -75,6 +81,10 @@ const PAYMENT_MODES: LrPaymentMode[] = ["to_pay", "paid", "tbb"];
 /** The design writes TBB with dots on this screen. */
 const paymentModeText = (m: LrPaymentMode) => (m === "tbb" ? "T.B.B." : paymentModeLabel[m]);
 
+function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  return Object.fromEntries(Object.entries(record).filter(([k]) => k !== key));
+}
+
 /** New / Edit LR (NewLR.dc.html). */
 export function LrForm({
   initial,
@@ -83,6 +93,7 @@ export function LrForm({
   nextLrNo,
   copiedFrom,
   initialDefaults,
+  keptInvoiceNos,
   linkedInvoice,
   notice: initialNotice,
   readOnlyReason,
@@ -101,6 +112,11 @@ export function LrForm({
   const [focusError, setFocusError] = useState(0);
   const topRef = useRef<HTMLDivElement>(null);
   const defaultsRequest = useRef(0);
+  // Other LRs carrying an invoice no. typed here, by row key; and numbers the user chose to keep.
+  const [duplicates, setDuplicates] = useState<InvoiceDuplicates>({});
+  const keptDuplicates = useRef<Record<string, string>>(keptInvoiceNos ?? {});
+  // The "To" we filled from the consignee; replaced on the next consignee unless the user edited it.
+  const autoTo = useRef<string | null>(lr ? null : initial.toPlace || null);
 
   // After a failed save, move to the first field with an error.
   useEffect(() => {
@@ -126,8 +142,8 @@ export function LrForm({
 
   const totals = lrChargeTotals(values);
   const checklist = useMemo(
-    () => lrChecklist(values, picked.consignor),
-    [values, picked.consignor],
+    () => lrChecklist(values, picked.consignor, duplicates),
+    [values, picked.consignor, duplicates],
   );
   const booked = !!lr?.booked;
 
@@ -160,9 +176,42 @@ export function LrForm({
   function pickParty(role: "consignee" | "billedTo", party: PartyOption | null, created?: boolean) {
     setPicked((p) => ({ ...p, [role]: party }));
     if (created && party) setNewPartyIds((ids) => [...ids, party.id]);
-    if (role === "consignee") set({ consigneeId: party?.id ?? null });
+    if (role === "consignee") {
+      set({ consigneeId: party?.id ?? null });
+      if (party) void fillToFromConsignee(party.id);
+    }
     // An empty billed-to means "same as consignee".
     else set({ billedToId: party?.id ?? null, billedToSame: !party });
+  }
+
+  /** "To" from the consignee's last LR, else their place — unless the user typed their own. */
+  async function fillToFromConsignee(consigneeId: string) {
+    const typed = values.toPlace.trim();
+    if (typed && typed !== autoTo.current) return;
+    const place = await consigneeToPlaceAction(consigneeId);
+    if (!place) return;
+    setValues((v) => {
+      const now = v.toPlace.trim();
+      if (now && now !== autoTo.current) return v; // edited while we were asking
+      autoTo.current = place;
+      return { ...v, toPlace: place };
+    });
+  }
+
+  async function checkInvoiceNo(row: LrInvoiceRow) {
+    const no = row.invoiceNo.trim();
+    if (!no || keptDuplicates.current[row.key] === no) {
+      setDuplicates((d) => withoutKey(d, row.key));
+      return;
+    }
+    const lrs = await invoiceDuplicatesAction(no, lr?.id);
+    setDuplicates((d) => (lrs.length ? { ...d, [row.key]: lrs } : withoutKey(d, row.key)));
+  }
+
+  function keepDuplicate(rowKey: string) {
+    const row = values.invoices.find((r) => r.key === rowKey);
+    if (row) keptDuplicates.current[rowKey] = row.invoiceNo.trim();
+    setDuplicates((d) => withoutKey(d, rowKey));
   }
 
   function pickTruck(truck: TruckOption | null) {
@@ -231,8 +280,16 @@ export function LrForm({
     </>
   ) : (
     <>
-      New LR {nextLrNo && <span className="font-mono text-primary">{nextLrNo}</span>}{" "}
-      <span className="text-[13px] font-medium text-muted">auto-numbered</span>
+      New LR{" "}
+      {nextLrNo ? (
+        // Only a preview: the number is allocated on Save draft / Save & book.
+        <span className="text-muted">
+          <span className="font-mono">{nextLrNo}</span>{" "}
+          <span className="text-[13px] font-medium">(next — confirmed on save)</span>
+        </span>
+      ) : (
+        <span className="text-[13px] font-medium text-muted">numbered on save</span>
+      )}
     </>
   );
 
@@ -458,8 +515,18 @@ export function LrForm({
                 />
                 <LrInvoicesEditor
                   rows={values.invoices}
-                  onChange={(invoices) => set({ invoices })}
+                  onChange={(invoices) => {
+                    set({ invoices });
+                    // Forget warnings for removed rows.
+                    const keys = new Set(invoices.map((r) => r.key));
+                    setDuplicates((d) =>
+                      Object.fromEntries(Object.entries(d).filter(([k]) => keys.has(k))),
+                    );
+                  }}
                   errors={errors}
+                  duplicates={duplicates}
+                  onInvoiceNoBlur={checkInvoiceNo}
+                  onDismissDuplicate={keepDuplicate}
                 />
               </div>
             </Card>

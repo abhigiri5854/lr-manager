@@ -8,11 +8,13 @@ import {
   emptyLrForm,
   formToLrInput,
   invoiceToForm,
+  invoicesTotalPaise,
   isoToIstInput,
   istInputToIso,
   lrChargeTotals,
   lrChecklist,
   lrToForm,
+  needsEwayBill,
   type LrFormValues,
 } from "./lr-form";
 import { todayInIndia } from "./fy";
@@ -222,5 +224,40 @@ describe("consignor defaults", () => {
     );
     expect(second.patch.fromPlace).toBe("");
     expect(second.fill.previous.fromPlace).toBe("");
+  });
+});
+
+describe("goods invoices", () => {
+  const row = (value: string, ewayBillNo = "") => ({
+    ...emptyLrForm(today).invoices[0],
+    invoiceNo: "INV",
+    value,
+    ewayBillNo,
+  });
+
+  it("needs an e-way bill only above ₹50,000", () => {
+    expect(needsEwayBill(row("50,000"))).toBe(false);
+    expect(needsEwayBill(row("50,000.01"))).toBe(true);
+    expect(needsEwayBill(row("1,84,902.58", "801755453075"))).toBe(false);
+    expect(needsEwayBill(row(""))).toBe(false);
+  });
+
+  it("sums the values", () => {
+    expect(invoicesTotalPaise([row("1,000"), row("250.50"), row(""), row("bad")])).toBe(125050);
+  });
+
+  it("flags each row over the limit without an e-way bill, and duplicates", () => {
+    const v = emptyLrForm(today);
+    v.invoices = [
+      { ...row("60,000"), key: "a", invoiceNo: "A1" },
+      { ...row("40,000"), key: "b", invoiceNo: "B1" },
+      { ...row("70,000"), key: "c", invoiceNo: "C1" },
+    ];
+    const lines = lrChecklist(v, null, { b: [{ id: "x", lrNo: "19020" }] });
+    expect(lines).toContainEqual({
+      tone: "warn",
+      text: "E-way bill number missing on A1, C1 (over ₹50,000)",
+    });
+    expect(lines).toContainEqual({ tone: "warn", text: "Invoice B1 is already on LR 19020" });
   });
 });
