@@ -4,8 +4,10 @@ import { companySnapshot, partySnapshot } from "@/lib/snapshots";
 import type { Lr, LrCharges, LrStatus, LrView, Page } from "@/lib/types";
 import {
   lrBookingErrors,
+  lrCancelSchema,
   lrFields,
   lrPatchSchema,
+  type LrCancelInput,
   type LrInput,
   type LrPatch,
 } from "@/lib/validators/lr";
@@ -309,9 +311,15 @@ export async function dispatchLr(
   return toLrView(saved);
 }
 
-export async function cancelLr(companyId: string, id: string): Promise<LrView> {
+/** Soft-cancels an LR with a reason. Not allowed while it is on a freight bill. */
+export async function cancelLr(
+  companyId: string,
+  id: string,
+  input: LrCancelInput,
+): Promise<LrView> {
+  const { reason } = parseInput(lrCancelSchema, input);
   const bill = billForLr(companyId, id);
   if (bill)
     fail("", `LR is on freight bill ${bill.billNo ?? "(draft)"} — remove it from the bill first`);
-  return toLrView(cancelRecord("lrs", db.lrs, companyId, id, "LR"));
+  return toLrView(cancelRecord("lrs", db.lrs, companyId, id, "LR", { cancelReason: reason }));
 }

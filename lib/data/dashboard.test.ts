@@ -85,7 +85,7 @@ describe("dashboard", () => {
     await book("2026-10-18");
     const latest = await book("2026-10-22");
     const cancelled = await book("2026-10-25");
-    await cancelLr(co, cancelled.id);
+    await cancelLr(co, cancelled.id, { reason: "Booked twice" });
     await createLr(co, { ...toIndia, lrDate: "2026-10-26" }); // draft
 
     const d = await getDashboard(co);

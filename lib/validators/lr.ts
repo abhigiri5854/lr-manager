@@ -99,3 +99,13 @@ export function lrBookingErrors(lr: LrBookingInput): RuleError[] {
   }
   return errors;
 }
+
+/** Cancelling an LR needs a reason (kept on the LR and in the audit log). */
+export const lrCancelSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(3, "Say why the LR is being cancelled")
+    .max(200, "Keep the reason under 200 characters"),
+});
+export type LrCancelInput = z.input<typeof lrCancelSchema>;

@@ -11,6 +11,10 @@ export type Column<T> = {
   mono?: boolean;
   /** Let long text wrap, cut off after 2 lines (other cells never wrap). Kept wider on phones, where the table scrolls anyway. */
   wrap?: boolean;
+  /** With `wrap`: the cell cuts its own lines (e.g. two lines + a small note), so don't clamp it. */
+  selfClamped?: boolean;
+  /** Stays put on the left while the table scrolls sideways (first column only). */
+  sticky?: boolean;
 };
 
 type DataTableProps<T> = {
@@ -33,6 +37,8 @@ type DataTableProps<T> = {
 // th/td rules from the <style> blocks in Register.dc.html (default) and Invoice.dc.html (compact).
 const th = "border-b border-border py-2.5 text-[13px] font-semibold text-muted";
 const td = "border-b border-border-row text-sm";
+// Above the row overlay (z auto) and row controls (z-10) that scroll underneath it.
+const stickyCell = "sticky left-0 z-20 bg-surface";
 const pad = {
   default: { th: "px-3", td: "p-3" },
   compact: { th: "px-2.5", td: "p-2.5" },
@@ -64,6 +70,7 @@ export function DataTable<T>({
                 className={cx(
                   th,
                   p.th,
+                  c.sticky && stickyCell,
                   !c.wrap && "whitespace-nowrap",
                   c.align === "right" ? "text-right" : "text-left",
                 )}
@@ -83,29 +90,48 @@ export function DataTable<T>({
           ) : (
             rows.map((row) => {
               const href = rowHref?.(row);
+              // The row-wide click target hangs off the first non-sticky cell: a sticky
+              // cell is positioned, so an overlay inside it would only cover that cell.
+              const overlayAt = href ? columns.findIndex((c) => !c.sticky) : -1;
               return (
-                <tr key={rowKey(row)} className={cx(href && "relative hover:bg-surface-subtle")}>
+                <tr
+                  key={rowKey(row)}
+                  className={cx(href && "group relative hover:bg-surface-subtle")}
+                >
                   {columns.map((c, i) => {
                     const cell = c.cell(row);
-                    const content = c.wrap ? <div className="line-clamp-2">{cell}</div> : cell;
+                    const content =
+                      c.wrap && !c.selfClamped ? <div className="line-clamp-2">{cell}</div> : cell;
                     return (
                       <td
                         key={c.key}
                         className={cx(
                           td,
                           p.td,
+                          c.sticky && stickyCell,
+                          c.sticky && href && "group-hover:bg-surface-subtle",
                           c.wrap ? "min-w-40 sm:min-w-24" : "whitespace-nowrap",
                           c.align === "right" && "text-right",
                           c.mono && "font-mono",
                         )}
                       >
                         {href && i === 0 ? (
-                          // after: overlay stretches the link over the whole row.
+                          // after: covers this cell (sticky) or, with no sticky column, the row.
                           <Link href={href} className="after:absolute after:inset-0">
                             {content}
                           </Link>
                         ) : (
                           content
+                        )}
+                        {href && i === overlayAt && i !== 0 && (
+                          // Mouse-only duplicate of the first-column link, stretched over the row.
+                          <Link
+                            href={href}
+                            aria-hidden
+                            tabIndex={-1}
+                            prefetch={false}
+                            className="absolute inset-0"
+                          />
                         )}
                       </td>
                     );

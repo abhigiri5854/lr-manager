@@ -87,6 +87,20 @@ describe("LR register filters", () => {
     expect(await lrNos({ dateFrom: "2026-10-15" })).toEqual([]);
   });
 
+  it("cancels with a reason and hides the LR unless filtering for Cancelled", async () => {
+    await expect(cancelLr(acmId(), lrId("19020"), { reason: " " })).rejects.toThrow(
+      ValidationError,
+    );
+    const lr = await cancelLr(acmId(), lrId("19020"), { reason: "Duplicate entry" });
+    expect(lr.status).toBe("Cancelled");
+    expect(lr.cancelReason).toBe("Duplicate entry");
+    expect(await lrNos({})).toEqual(["19019"]);
+    expect(await lrNos({ status: "Cancelled" })).toEqual(["19020"]);
+    const audit = db.audit.findLast((a) => a.recordId === lrId("19020"))!;
+    expect(audit.action).toBe("cancel");
+    expect(audit.changes.some((c) => c.field === "cancelReason")).toBe(true);
+  });
+
   it("exports every matching row, not just one page", async () => {
     const all = await listLrsForExport(acmId(), {});
     expect(all.total).toBe(2);
@@ -172,7 +186,7 @@ describe("LR → POD → bill → paid", () => {
     expect((await getLrById(co, id))!.status).toBe("Billed");
     const lr = (await getLrById(co, id))!;
     await expect(updateLr(co, id, lr.version, { remarks: "x" })).rejects.toThrow(/locked/);
-    await expect(cancelLr(co, id)).rejects.toThrow(ValidationError);
+    await expect(cancelLr(co, id, { reason: "Booked twice" })).rejects.toThrow(ValidationError);
 
     await expect(
       createPayment(co, {

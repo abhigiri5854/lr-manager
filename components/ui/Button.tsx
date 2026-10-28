@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cx } from "@/lib/cx";
 
-export type ButtonVariant = "primary" | "secondary" | "outline" | "dark";
+export type ButtonVariant = "primary" | "secondary" | "outline" | "dark" | "danger";
 
 // From the design files: 44px tall, 8px radius, semibold.
 // Filled buttons use 18px side padding, bordered ones 16px.
@@ -16,6 +16,8 @@ const variants: Record<ButtonVariant, string> = {
   outline:
     "border border-primary bg-surface px-4 text-primary hover:bg-primary-soft hover:text-primary",
   dark: "border-0 bg-navy px-4.5 text-white hover:bg-navy-raised hover:text-white",
+  // Destructive confirm, e.g. "Cancel LR"
+  danger: "border-0 bg-danger px-4.5 text-white hover:opacity-90 hover:text-white",
 };
 
 type CommonProps = {

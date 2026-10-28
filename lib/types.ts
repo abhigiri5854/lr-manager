@@ -241,6 +241,8 @@ export type Lr = BaseRecord & {
   items: LrItem[];
   charges: LrCharges;
   remarks: string | null;
+  /** Why it was cancelled (set with cancelledAt). */
+  cancelReason?: string;
   // lifecycle stamps the LR owns
   /** Null = draft. */
   bookedAt: IsoDateTime | null;

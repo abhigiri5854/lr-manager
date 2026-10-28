@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { LrActions } from "@/components/lr/LrActions";
+import { LrParties } from "@/components/lr/LrParties";
 import { LrStatusChip } from "@/components/LrStatusChip";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -23,14 +25,16 @@ const columns: Column<LrView>[] = [
     key: "lrNo",
     header: "LR No",
     mono: true,
-    cell: (lr) => <Link href={`/lr/${lr.id}`}>{lr.lrNo}</Link>,
+    sticky: true,
+    cell: (lr) => lr.lrNo,
   },
   { key: "date", header: "Date", cell: (lr) => (lr.lrDate ? formatDate(lr.lrDate) : "—") },
   {
     key: "parties",
-    header: "Consignor → Consignee",
+    header: "Parties",
     wrap: true,
-    cell: (lr) => <TwoLine from={lr.consignorName} to={lr.consigneeName} />,
+    selfClamped: true,
+    cell: (lr) => <LrParties lr={lr} />,
   },
   {
     key: "route",
@@ -56,15 +60,7 @@ const columns: Column<LrView>[] = [
   {
     key: "actions",
     header: <span className="sr-only">Actions</span>,
-    cell: (lr) =>
-      lr.status === "Draft" ? (
-        <Link href={`/lr/${lr.id}/edit`}>Finish</Link>
-      ) : (
-        <>
-          <Link href={`/lr/${lr.id}`}>View</Link> ·{" "}
-          <Link href={`/lr/new?from=${lr.id}`}>Repeat</Link>
-        </>
-      ),
+    cell: (lr) => <LrActions lr={lr} />,
   },
 ];
 
@@ -91,6 +87,7 @@ export function RecentLrs({ lrs }: { lrs: LrView[] }) {
         columns={columns}
         rows={lrs}
         rowKey={(lr) => lr.id}
+        rowHref={(lr) => `/lr/${lr.id}`}
         density="compact"
         empty={
           <>

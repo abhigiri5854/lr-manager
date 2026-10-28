@@ -241,11 +241,19 @@ export function cancelRecord<T extends BaseRecord>(
   companyId: string,
   id: string,
   what: string,
+  /** Extra fields saved with the cancel, e.g. the reason. */
+  extra: Partial<T> = {},
 ): T {
   const current = getOrThrow(rows, companyId, id, what);
   if (current.cancelledAt) return clone(current);
   const at = now();
-  const next: T = { ...current, cancelledAt: at, updatedAt: at, version: current.version + 1 };
+  const next: T = {
+    ...current,
+    ...extra,
+    cancelledAt: at,
+    updatedAt: at,
+    version: current.version + 1,
+  };
   rows[rows.indexOf(current)] = next;
   writeAudit(companyId, table, id, "cancel", current, next);
   return clone(next);
