@@ -79,6 +79,11 @@
 }
 
 @layer base {
+  /* The designs use the browser default line height, not Tailwind's 1.5. */
+  html {
+    line-height: normal;
+  }
+
   body {
     background-color: var(--color-page);
     color: var(--color-text);

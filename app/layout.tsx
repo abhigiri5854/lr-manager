@@ -18,7 +18,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LR Manager",
+  title: { default: "LR Manager", template: "%s · LR Manager" },
   description: "Consignment notes, invoices, POD and freight bills",
 };
 
