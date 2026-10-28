@@ -72,5 +72,8 @@ Put these in `tailwind.config` / CSS variables once; never use raw hex in compon
 - One screen or one feature per task. Plan first, then build.
 - After a UI task: run `pnpm lint && pnpm typecheck`, then compare against the design file and list
   any differences before finishing.
+- After any UI task, use the Playwright MCP browser to open each changed page at 1440px and 390px
+  width, take screenshots, compare them with the matching `design/screens` file opened in the
+  browser, fix differences, and click through the main form actions once. Report what you checked.
 - Never add a new library without saying why.
 - Commit after each finished task with a clear message.

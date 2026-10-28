@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { LrStatusChip } from "@/components/LrStatusChip";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { formatDate, formatPaise } from "@/lib/format";
 import type { LrView, Page, TaxInvoice } from "@/lib/types";
+import { lrRegisterSearch } from "@/lib/validators/lr-register";
 
 function roleOf(lr: LrView, partyId: string): string {
   return [
@@ -84,7 +86,17 @@ export function PartyShipments({
         padding="table"
         title="Shipment history"
         action={
-          lrs.total > lrs.rows.length ? `Latest ${lrs.rows.length} of ${lrs.total}` : undefined
+          lrs.total > 0 ? (
+            <>
+              {lrs.total > lrs.rows.length && (
+                <span className="text-muted">
+                  Latest {lrs.rows.length} of {lrs.total}
+                  {" · "}
+                </span>
+              )}
+              <Link href={`/lr${lrRegisterSearch({ party: partyId })}`}>View all in register</Link>
+            </>
+          ) : undefined
         }
       >
         <DataTable
