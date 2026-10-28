@@ -1,50 +1,42 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Card } from "@/components/ui/Card";
-import { DataTable, type Column } from "@/components/ui/DataTable";
+import { PodList, PodListSkeleton } from "@/components/pod/PodList";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { listPodPending } from "@/lib/data/pod";
+import { getCompany } from "@/lib/data/companies";
+import { listInTransitForPod, listPodPendingPage } from "@/lib/data/pod";
 import { getActiveCompanyId } from "@/lib/data/session";
-import { formatDate, formatPaise } from "@/lib/format";
-import type { PodPendingRow } from "@/lib/types";
+import { parsePodListQuery } from "@/lib/validators/pod-list";
 
-export const metadata: Metadata = { title: "POD pending" };
+export const metadata: Metadata = { title: "POD & delivery" };
 
-const columns: Column<PodPendingRow>[] = [
-  { key: "lrNo", header: "LR no", cell: (r) => r.lrNo, mono: true },
-  { key: "deliveredOn", header: "Delivered on", cell: (r) => formatDate(r.deliveredOn) },
-  { key: "consignee", header: "Consignee", cell: (r) => r.consignee },
-  { key: "days", header: "Days since delivery", cell: (r) => r.daysSinceDelivery },
-  { key: "penalty", header: "Penalty so far", cell: (r) => `₹${formatPaise(r.penaltyPaise)}` },
-];
-
-function PodTable({ rows, empty }: { rows: PodPendingRow[]; empty: string }) {
+/** Per request: reads the URL and the active company. */
+async function PodListLoader({ searchParams }: Pick<PageProps<"/pod">, "searchParams">) {
+  const query = parsePodListQuery(await searchParams);
+  const companyId = await getActiveCompanyId();
+  const params = { search: query.q, page: query.page };
+  if (query.tab === "transit") {
+    const transit = await listInTransitForPod(companyId, params);
+    return <PodList query={query} transit={transit} showPenalty={false} />;
+  }
+  const [pending, company] = await Promise.all([
+    listPodPendingPage(companyId, { ...params, overdueOnly: query.overdue === "1" }),
+    getCompany(companyId),
+  ]);
+  // No penalty rule → no "Penalty so far" column.
   return (
-    <Card padding="table">
-      <DataTable
-        label="LRs waiting for POD"
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.lrId}
-        rowHref={(r) => `/lr/${r.lrId}/pod`}
-        empty={empty}
-      />
-    </Card>
+    <PodList query={query} pending={pending} showPenalty={Boolean(company?.podPenaltyPerDay)} />
   );
 }
 
-/** Per-request: reads the active company from the session. */
-async function PodPendingList() {
-  const rows = await listPodPending(await getActiveCompanyId());
-  return <PodTable rows={rows} empty="No LRs waiting for POD." />;
-}
-
-export default function PodPendingPage() {
+export default function PodPage({ searchParams }: PageProps<"/pod">) {
   return (
     <>
-      <PageHeader title="POD pending" />
-      <Suspense fallback={<PodTable rows={[]} empty="Loading…" />}>
-        <PodPendingList />
+      <PageHeader
+        title="POD & delivery"
+        subtitle="Delivered LRs waiting for the signed copy, and LRs still on the road."
+      />
+      <Suspense fallback={<PodListSkeleton />}>
+        <PodListLoader searchParams={searchParams} />
       </Suspense>
     </>
   );

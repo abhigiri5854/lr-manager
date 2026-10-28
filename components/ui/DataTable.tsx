@@ -28,6 +28,8 @@ type DataTableProps<T> = {
    * whole row is clickable. Other links/buttons in the row need `relative z-10`.
    */
   rowHref?: (row: T) => string;
+  /** "warning" tints the row amber (e.g. an overdue POD). */
+  rowTone?: (row: T) => "warning" | undefined;
   /** Shown in a single row when there is no data. */
   empty?: ReactNode;
   /** "compact": 10px cell padding (Invoice.dc.html) for tables that share the row with a sidebar. */
@@ -54,6 +56,7 @@ export function DataTable<T>({
   rows,
   rowKey,
   rowHref,
+  rowTone,
   empty = "Nothing here yet.",
   density = "default",
 }: DataTableProps<T>) {
@@ -96,7 +99,10 @@ export function DataTable<T>({
               return (
                 <tr
                   key={rowKey(row)}
-                  className={cx(href && "group relative hover:bg-surface-subtle")}
+                  className={cx(
+                    href && "group relative hover:bg-surface-subtle",
+                    rowTone?.(row) === "warning" && "bg-warning-soft hover:bg-warning-soft",
+                  )}
                 >
                   {columns.map((c, i) => {
                     const cell = c.cell(row);
