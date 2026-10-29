@@ -1,4 +1,5 @@
 // Document numbers come from number_series under a row lock: gapless, no duplicates.
+// The 20-at-once tests are in numbering-concurrent.slow.test.ts (pnpm test:db:slow).
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { as, connect, Fixtures, pgError, type Sql } from "./helpers";
 
@@ -6,8 +7,7 @@ let sql: Sql;
 let fx: Fixtures;
 
 beforeAll(() => {
-  // 20 connections so the 20 allocations really run at the same time.
-  sql = connect(20);
+  sql = connect();
   fx = new Fixtures(sql);
 });
 afterEach(() => fx.cleanup());
@@ -22,29 +22,6 @@ const take = (user: string, company: string, kind = "freight_bill", fy = "2026-2
   });
 
 describe("number_series", () => {
-  it("20 concurrent allocations get 1..20 exactly once", async () => {
-    const owner = await fx.user();
-    const company = await fx.company(owner);
-    const numbers = await Promise.all(Array.from({ length: 20 }, () => take(owner, company)));
-    expect([...numbers].sort((a, b) => a - b)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
-    const [row] = await sql`select next_no from number_series
-                             where company_id = ${company} and series = 'freight_bill' and fy = '2026-27'`;
-    expect(Number(row.next_no)).toBe(21);
-  });
-
-  it("20 concurrent first allocations in a new FY create one row, no duplicates", async () => {
-    const owner = await fx.user();
-    const company = await fx.company(owner);
-    const numbers = await Promise.all(
-      Array.from({ length: 20 }, () => take(owner, company, "tax_invoice", "2031-32")),
-    );
-    expect(new Set(numbers).size).toBe(20);
-    expect(Math.max(...numbers)).toBe(20); // restarts at 1 each FY (numbering_resets_yearly)
-    const rows = await sql`select 1 from number_series
-                            where company_id = ${company} and series = 'tax_invoice' and fy = '2031-32'`;
-    expect(rows).toHaveLength(1);
-  });
-
   it("a rolled-back save gives its number back (no gap)", async () => {
     const owner = await fx.user();
     const company = await fx.company(owner);

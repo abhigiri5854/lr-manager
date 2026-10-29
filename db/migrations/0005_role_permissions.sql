@@ -1,5 +1,5 @@
 -- Hand-written. role_permissions seeded from PERMISSIONS in lib/permissions.ts (the single source of
--- truth). db/tests/permissions.db.test.ts fails if the two ever differ; to change a grant, edit the
+-- truth). db/tests/permissions.test.ts fails if the two ever differ; to change a grant, edit the
 -- TS map and add a migration that updates this table.
 insert into public.role_permissions (role, action) values
   ('owner', 'lr.edit'),

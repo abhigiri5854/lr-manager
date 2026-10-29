@@ -69,6 +69,19 @@ Put these in `tailwind.config` / CSS variables once; never use raw hex in compon
 - Server Components by default; Client Components only for interactive forms.
 - Lists are paginated (50/page) and searchable server-side.
 
+## Tests — which to run when
+| Command | What | Needs | Run it |
+|---|---|---|---|
+| `pnpm test` | unit tests (`lib/**/*.test.ts`, mock data) | nothing | after every change, with lint + typecheck |
+| `pnpm test:db` | DB integration tests (`db/tests`) except `*.slow.test.ts` | dev DB in `.env.local` | after any change to `db/` (schema, migrations, seed) or to `lib/permissions.ts` / `lib/lr-status.ts`; before committing DB work |
+| `pnpm test:db:slow` | all DB tests, incl. 20 concurrent number allocations | dev DB | after changing number allocation (`app.*_number`, `number_series`), and before a release / merging a DB phase |
+
+- Rough times: `pnpm test` ~1.5 min; `pnpm test:db` ~10 min (each test sets up its own users and
+  company over the network); `pnpm test:db:slow` adds ~40 s.
+- DB tests run on the dev database only (they refuse `NODE_ENV=production`); each test makes its own
+  company and users and removes them afterwards. After editing a migration, run `pnpm db:reset` first.
+- New tests that open many connections or take minutes go in a `*.slow.test.ts` file.
+
 ## Working rules for Claude
 - One screen or one feature per task. Plan first, then build.
 - After a UI task: run `pnpm lint && pnpm typecheck`, then compare against the design file and list

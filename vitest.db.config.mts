@@ -1,5 +1,6 @@
-// Integration tests against the dev database (pnpm test:db). Each test makes its own company and
-// users and removes them afterwards. Kept out of `pnpm test` so unit tests need no database.
+// Integration tests against the dev database. Each test makes its own company and users and
+// removes them afterwards. Kept out of `pnpm test` so unit tests need no database.
+// pnpm test:db skips *.slow.test.ts; pnpm test:db:slow runs everything.
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
