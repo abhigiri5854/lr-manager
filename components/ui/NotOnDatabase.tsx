@@ -9,8 +9,8 @@ export function NotOnDatabase({ what }: { what: string }) {
   return (
     <Card title={`${what} — not yet on the database`}>
       <p className="m-0 text-sm text-muted">
-        Company profile, Users &amp; roles, Parties, Trucks &amp; drivers and Items now save to the
-        database. {NOT_ON_DATABASE_AREAS} move over in the next step; until then this screen is off
+        Company profile, Users &amp; roles, Parties, Trucks &amp; drivers, Items, LRs, POD and the
+        dashboard now save to the database. {NOT_ON_DATABASE_AREAS} move over in the next step; until then this screen is off
         so sample data and real data are never mixed.
       </p>
       <p className="mt-3 mb-0 text-sm text-muted">

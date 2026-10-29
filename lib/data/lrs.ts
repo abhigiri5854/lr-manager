@@ -5,7 +5,6 @@ import type {
   ChargedAs,
   GstPayer,
   Lr,
-  LrCharges,
   LrPaymentMode,
   LrStatus,
   LrView,
@@ -32,7 +31,6 @@ import {
   peekNumber,
   insertRecord,
   matchesSearch,
-  newId,
   now,
   paginate,
   parseInput,
@@ -41,9 +39,14 @@ import {
   today,
   updateRecord,
   type ListParams,
-  authorStamp,
 } from "./_store";
+import * as dbl from "./db/lrs";
+import { applyPatch, buildLr, normaliseNested, type SaveLrOptions } from "./lr-patch";
+import { NotOnDatabaseError } from "./errors";
 import { assertCan } from "./session";
+import { onDatabase } from "./source";
+
+export type { SaveLrOptions };
 
 export type LrListParams = ListParams & {
   partyId?: string;
@@ -54,19 +57,6 @@ export type LrListParams = ListParams & {
   dateTo?: string;
 };
 
-const EMPTY_CHARGES: LrCharges = {
-  freight: null,
-  packing: null,
-  cnCharge: null,
-  loading: null,
-  unloading: null,
-  detention: null,
-  other: null,
-  gst: null,
-  advance: null,
-};
-
-type ParsedLr = ReturnType<typeof lrFields.parse>;
 type ParsedPatch = ReturnType<typeof lrPatchSchema.parse>;
 
 /** Every id an LR points at must belong to this company. */
@@ -87,30 +77,6 @@ function assertLrRefs(companyId: string, v: ParsedPatch) {
   v.items?.forEach((item, i) =>
     assertRef(db.items, companyId, item.itemId, `items.${i}.itemId`, "Item"),
   );
-}
-
-/** Fill ids and nulls on nested rows. */
-function normaliseNested(v: Pick<ParsedLr, "items" | "lrInvoices">) {
-  return {
-    items: v.items?.map((i) => ({
-      id: i.id ?? newId(),
-      itemId: i.itemId ?? null,
-      description: i.description,
-      packages: i.packages,
-      actualWeight: i.actualWeight ?? null,
-      chargedWeight: i.chargedWeight ?? null,
-      size: i.size ?? null,
-    })),
-    lrInvoices: v.lrInvoices?.map((i) => ({
-      id: i.id ?? newId(),
-      invoiceNo: i.invoiceNo,
-      invoiceDate: i.invoiceDate ?? null,
-      valuePaise: i.valuePaise ?? null,
-      ewayBillNo: i.ewayBillNo ?? null,
-      ewayExpiresAt: i.ewayExpiresAt ?? null,
-      taxInvoiceId: i.taxInvoiceId ?? null,
-    })),
-  };
 }
 
 function snapshotFor(lr: Lr): Lr["snapshot"] {
@@ -167,6 +133,7 @@ function filterLrs(companyId: string, params: LrListParams): LrView[] {
 
 /** One page (max 50) of LRs matching the filters, with the total count. */
 export async function listLrs(companyId: string, params: LrListParams = {}): Promise<Page<LrView>> {
+  if (onDatabase()) return dbl.listLrs(companyId, params);
   return paginate(filterLrs(companyId, params), params);
 }
 
@@ -178,11 +145,13 @@ export async function listLrsForExport(
   companyId: string,
   params: Omit<LrListParams, "page" | "pageSize"> = {},
 ): Promise<{ rows: LrView[]; total: number }> {
+  if (onDatabase()) return dbl.listLrsForExport(companyId, params, LR_EXPORT_LIMIT);
   const rows = filterLrs(companyId, params);
   return { rows: rows.slice(0, LR_EXPORT_LIMIT), total: rows.length };
 }
 
 export async function getLrById(companyId: string, id: string): Promise<LrView | null> {
+  if (onDatabase()) return dbl.getLrById(companyId, id);
   const lr = findById(db.lrs, companyId, id);
   return lr ? toLrView(lr) : null;
 }
@@ -195,6 +164,7 @@ export async function peekNextLrNo(
   companyId: string,
   lrDate?: string | null,
 ): Promise<string | null> {
+  if (onDatabase()) return dbl.peekNextLrNo(companyId, financialYear(lrDate ?? today()));
   const company = db.companies.find((c) => c.id === companyId);
   if (!company) return null;
   const next = peekNumber(companyId, "lr", financialYear(lrDate ?? today()));
@@ -216,6 +186,7 @@ export async function getConsignorDefaults(
   companyId: string,
   consignorId: string,
 ): Promise<ConsignorDefaults | null> {
+  if (onDatabase()) return dbl.getConsignorDefaults(companyId, consignorId);
   const last = scoped(db.lrs, companyId)
     .filter((lr) => lr.consignorId === consignorId && lr.bookedAt)
     .sort((a, b) => b.bookedAt!.localeCompare(a.bookedAt!))[0];
@@ -267,6 +238,7 @@ export async function findLrsWithInvoice(
 ): Promise<LrRef[]> {
   const no = match.invoiceNo ? normaliseInvoiceNo(match.invoiceNo) : "";
   if (!match.taxInvoiceId && !no) return [];
+  if (onDatabase()) return dbl.findLrsWithInvoice(companyId, match.taxInvoiceId ?? null, no, exceptLrId);
   return scoped(db.lrs, companyId)
     .filter((lr) => lr.id !== exceptLrId)
     .filter((lr) =>
@@ -285,53 +257,11 @@ export async function getConsigneeToPlace(
   companyId: string,
   consigneeId: string,
 ): Promise<string | null> {
+  if (onDatabase()) return dbl.getConsigneeToPlace(companyId, consigneeId);
   const last = scoped(db.lrs, companyId)
     .filter((lr) => lr.consigneeId === consigneeId && lr.bookedAt && lr.toPlace)
     .sort((a, b) => b.bookedAt!.localeCompare(a.bookedAt!))[0];
   return last?.toPlace ?? findById(db.parties, companyId, consigneeId)?.place ?? null;
-}
-
-export type SaveLrOptions = {
-  /** Also book the LR (Draft → Booked) in the same write. */
-  book?: boolean;
-};
-
-/** The LR record for validated input, without a number or a booking (shared by create and import). */
-function buildLr(companyId: string, v: ParsedLr, t: string): Lr {
-  const nested = normaliseNested(v);
-  return {
-    id: newId(),
-    companyId,
-    createdAt: t,
-    updatedAt: t,
-    version: 1,
-    ...authorStamp(),
-    podReceivedAt: null,
-    billedAt: null,
-    paidAt: null,
-    lrNo: "",
-    lrDate: v.lrDate ?? null,
-    fromPlace: v.fromPlace ?? null,
-    toPlace: v.toPlace ?? null,
-    risk: v.risk ?? "owner",
-    consignorId: v.consignorId ?? null,
-    consigneeId: v.consigneeId ?? null,
-    billedToId: v.billedToId ?? null,
-    gstPaidBy: v.gstPaidBy ?? null,
-    paymentMode: v.paymentMode ?? null,
-    chargedAs: v.chargedAs ?? null,
-    ratePaise: v.ratePaise ?? null,
-    truckId: v.truckId ?? null,
-    driverMobile: v.driverMobile ?? null,
-    lrInvoices: nested.lrInvoices ?? [],
-    items: nested.items ?? [],
-    charges: { ...EMPTY_CHARGES, ...v.charges },
-    remarks: v.remarks ?? null,
-    bookedAt: null,
-    dispatchedAt: null,
-    deliveredAt: null,
-    snapshot: null,
-  };
 }
 
 /**
@@ -345,14 +275,16 @@ export async function createLr(
 ): Promise<LrView> {
   await assertCan(companyId, "lr.edit");
   const v = parseInput(lrFields, input);
-  assertLrRefs(companyId, v);
-  const company = db.companies.find((c) => c.id === companyId)!;
+  if (!onDatabase()) assertLrRefs(companyId, v);
   const t = now();
   const lr = buildLr(companyId, v, t);
   if (options.book) {
     assertRules(lrBookingErrors(lr));
     lr.bookedAt = t;
   }
+  // The number is taken in the same statement as the row; a failed save leaves no gap.
+  if (onDatabase()) return dbl.insertLr(lr);
+  const company = db.companies.find((c) => c.id === companyId)!;
   const no = allocateNumber(companyId, "lr", financialYear(v.lrDate ?? today()));
   lr.lrNo = `${company.lrPrefix}${no}`;
   if (options.book) lr.snapshot = snapshotFor(lr);
@@ -371,6 +303,7 @@ export async function createImportedLr(
   importBatchId: string,
 ): Promise<LrView> {
   await assertCan(companyId, "lr.edit");
+  if (onDatabase()) throw new NotOnDatabaseError();
   const v = parseInput(lrFields, input);
   assertLrRefs(companyId, v);
   const company = db.companies.find((c) => c.id === companyId)!;
@@ -396,47 +329,19 @@ export async function updateLr(
   options: SaveLrOptions = {},
 ): Promise<LrView> {
   await assertCan(companyId, "lr.edit");
-  assertNotOnFinalBill(companyId, id);
   const p = parseInput(lrPatchSchema, patch);
-  assertLrRefs(companyId, p);
   const nested = normaliseNested(p);
+  if (onDatabase()) return dbl.updateLr(companyId, id, expectedVersion, p, nested, options);
+  assertNotOnFinalBill(companyId, id);
+  assertLrRefs(companyId, p);
   const saved = updateRecord(
     "lrs",
     db.lrs,
     companyId,
     id,
     expectedVersion,
-    (current) => {
-      const next: Lr = {
-        ...current,
-        ...p,
-        items: nested.items ?? current.items,
-        lrInvoices: nested.lrInvoices ?? current.lrInvoices,
-        charges: { ...current.charges, ...p.charges },
-      };
-      if (options.book && !next.bookedAt) next.bookedAt = now();
-      if (next.bookedAt) {
-        assertRules(lrBookingErrors(next));
-        // A booked LR keeps its snapshot, except for a party that was swapped for another.
-        const fresh = snapshotFor(next)!;
-        next.snapshot = {
-          company: current.snapshot?.company ?? fresh.company,
-          consignor:
-            next.consignorId === current.consignorId
-              ? (current.snapshot?.consignor ?? fresh.consignor)
-              : fresh.consignor,
-          consignee:
-            next.consigneeId === current.consigneeId
-              ? (current.snapshot?.consignee ?? fresh.consignee)
-              : fresh.consignee,
-          billedTo:
-            next.billedToId === current.billedToId
-              ? (current.snapshot?.billedTo ?? fresh.billedTo)
-              : fresh.billedTo,
-        };
-      }
-      return next;
-    },
+    (current) =>
+      applyPatch(current, p, nested, options, (lr) => snapshotFor(lr)!, now()),
     "LR",
   );
   return toLrView(saved);
@@ -449,6 +354,7 @@ export async function bookLr(
   expectedVersion: number,
 ): Promise<LrView> {
   await assertCan(companyId, "lr.edit");
+  if (onDatabase()) return dbl.bookLr(companyId, id, expectedVersion);
   const saved = updateRecord(
     "lrs",
     db.lrs,
@@ -473,6 +379,7 @@ export async function dispatchLr(
   expectedVersion: number,
 ): Promise<LrView> {
   await assertCan(companyId, "lr.edit");
+  if (onDatabase()) return dbl.dispatchLr(companyId, id, expectedVersion);
   const saved = updateRecord(
     "lrs",
     db.lrs,
@@ -498,6 +405,7 @@ export async function cancelLr(
 ): Promise<LrView> {
   await assertCan(companyId, "record.cancel");
   const { reason } = parseInput(lrCancelSchema, input);
+  if (onDatabase()) return dbl.cancelLr(companyId, id, reason);
   const bill = billForLr(companyId, id);
   if (bill)
     fail("", `LR is on freight bill ${bill.billNo ?? "(draft)"} — remove it from the bill first`);

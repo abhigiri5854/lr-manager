@@ -34,11 +34,15 @@ export async function uploadPodFileAction(
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false, message: "No file chosen" };
   try {
-    const { url } = await uploadPodFile(companyId, {
-      name: file.name,
-      type: file.type,
-      bytes: new Uint8Array(await file.arrayBuffer()),
-    });
+    const { url } = await uploadPodFile(
+      companyId,
+      {
+        name: file.name,
+        type: file.type,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      },
+      String(formData.get("lrId") ?? ""),
+    );
     return { ok: true, url };
   } catch (e) {
     if (e instanceof ValidationError || e instanceof ForbiddenError)

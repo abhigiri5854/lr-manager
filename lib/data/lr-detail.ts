@@ -1,11 +1,13 @@
 import { describeAudit } from "@/lib/lr-activity";
 import { lrTimeline, type TimelineStep } from "@/lib/lr-status";
-import type { FreightBillView, LrView, Paise, Pod, PartySnapshot } from "@/lib/types";
+import type { FreightBill, LrView, Paise, Pod, PartySnapshot } from "@/lib/types";
 import { billForLr, statusInputOf, toLrView } from "./_derive";
 import { billingPartyFor } from "./billing-party";
 import { db, findById, scoped } from "./_store";
 import { getFreightBillById } from "./bills";
+import * as dbd from "./db/lr-detail";
 import { listPodPending } from "./pod";
+import { onDatabase } from "./source";
 
 export type DetailParty = {
   name: string;
@@ -42,7 +44,8 @@ export type LrDetail = {
   invoices: DetailInvoice[];
   driver: { mobile: string; name: string | null } | null;
   pod: Pod | null;
-  bill: FreightBillView | null;
+  /** The freight bill carrying the LR (number and date are all the screen shows). */
+  bill: Pick<FreightBill, "billNo" | "billDate"> | null;
   /** Date the bill was fully paid. */
   paidOn: string | null;
   timeline: TimelineStep[];
@@ -67,6 +70,7 @@ function detailParty(
 
 /** Everything the LR detail screen shows, or null if the LR isn't in this company. */
 export async function getLrDetail(companyId: string, id: string): Promise<LrDetail | null> {
+  if (onDatabase()) return dbd.getLrDetail(companyId, id);
   const raw = findById(db.lrs, companyId, id);
   if (!raw) return null;
   const lr = toLrView(raw);

@@ -24,13 +24,13 @@ export function check(tx: Tx, field: string, msg: string, when: Fragment): Check
   return tx`select ${field}::text as field, ${msg}::text as msg where ${when}`;
 }
 
-const checksSql = (tx: Tx, checks: Check[]) =>
+export const checksSql = (tx: Tx, checks: Check[]) =>
   checks.length
     ? checks.map((c) => tx`(${c})`).reduce((a, b) => tx`${a} union all ${b}`)
     : tx`select null::text as field, null::text as msg where false`;
 
 /** Throws the first failed check (in the order given) as a field error, like fail(). */
-function assertNoProblems(problems: { field: string; msg: string }[] | null) {
+export function assertNoProblems(problems: { field: string; msg: string }[] | null) {
   const p = problems?.[0];
   if (p) throw new ValidationError([{ path: p.field, message: p.msg }]);
 }

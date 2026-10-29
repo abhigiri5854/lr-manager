@@ -1,7 +1,16 @@
 import { UPLOAD_MAX_BYTES } from "@/lib/image-upload";
 import { IMPORT_MAX_BYTES, type ImportFormat } from "@/lib/import/file-types";
 import { fail, newId } from "./_store";
-import { objectPath, putObject, safeName, urlFromPath } from "./db/storage";
+import { ForbiddenError } from "./errors";
+import { withUserRead } from "./db/conn";
+import {
+  objectPath,
+  podObjectPath,
+  podUrlFromPath,
+  putObject,
+  safeName,
+  urlFromPath,
+} from "./db/storage";
 import { NotOnDatabaseError } from "./errors";
 import { assertCan } from "./session";
 import { onDatabase } from "./source";
@@ -18,22 +27,49 @@ const files = (globalStore.__lrManagerUploads ??= new Map<string, Stored>());
 export const MAX_UPLOAD_BYTES = UPLOAD_MAX_BYTES;
 const allowed = (type: string) => type.startsWith("image/") || type === "application/pdf";
 
-/** Stores one photo / PDF and returns the URL to keep on the record. */
+/**
+ * Stores one photo / PDF and returns the URL to keep on the record. On the database the file goes
+ * to the private `pod` bucket under the LR (so a driver's own-trip rule applies), hence `lrId`.
+ */
 export async function uploadPodFile(
   companyId: string,
   file: { name: string; type: string; bytes: Uint8Array },
+  lrId?: string,
 ): Promise<{ url: string; name: string }> {
   await assertCan(companyId, "pod.upload", "pod.upload_own");
-  if (onDatabase()) throw new NotOnDatabaseError();
   if (!allowed(file.type))
     fail("documentUrls", `${file.name}: only photos and PDFs can be uploaded`);
   if (file.bytes.byteLength === 0) fail("documentUrls", `${file.name}: the file is empty`);
   if (file.bytes.byteLength > MAX_UPLOAD_BYTES)
     fail("documentUrls", `${file.name}: larger than 3 MB`);
   const id = newId();
+  if (onDatabase()) {
+    if (!lrId || !isUuid(lrId)) fail("documentUrls", "Open the LR's POD screen to add a copy");
+    // Same rule as saving the POD: office roles on any LR, a driver on their own trip.
+    const mayRecord = await withUserRead(
+      async (tx) => (await tx`select 1 from app.lr_pod_info(${companyId}, ${lrId})`).length > 0,
+    );
+    if (!mayRecord) throw new ForbiddenError("You can only add POD copies to LRs you may record POD for.");
+    const name = safeName(file.name, "signed-copy");
+    const path = podObjectPath(companyId, lrId, id, name);
+    await putObject("pod", path, file);
+    return { url: podUrlFromPath(path), name };
+  }
   const name = file.name.slice(0, 100) || "signed-copy";
   files.set(id, { companyId, name, type: file.type, bytes: file.bytes });
   return { url: `/uploads/${id}?n=${encodeURIComponent(name)}`, name };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUuid = (s: string) => UUID.test(s);
+
+/** May the signed-in user open the POD copies of this LR? Office roles, or a driver on their trip. */
+export async function canReadPodFile(companyId: string, lrId: string): Promise<boolean> {
+  if (!isUuid(lrId)) return false;
+  return withUserRead(async (tx) => {
+    const [r] = await tx`select (app.is_office(${companyId}) or app.is_own_trip(${companyId}, ${lrId})) as ok`;
+    return r?.ok === true;
+  });
 }
 
 /** A stored file, only for the company that uploaded it. */

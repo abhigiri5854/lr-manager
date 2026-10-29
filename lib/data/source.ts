@@ -6,7 +6,7 @@ export function onDatabase(): boolean {
 
 /** Areas that still run on the mock store, shown on their screens while DATA_SOURCE=db. */
 export const NOT_ON_DATABASE_AREAS =
-  "LRs, POD, tax invoices, freight bills, Smart import, the dashboard, the driver app and PDFs";
+  "Tax invoices, freight bills, Smart import, the driver app and PDFs";
 
 /** Route handlers of areas still on the mock store answer this while DATA_SOURCE=db. */
 export function notOnDatabaseResponse(): Response {

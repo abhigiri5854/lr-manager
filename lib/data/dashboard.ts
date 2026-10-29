@@ -3,7 +3,9 @@ import type { AttentionItem, Dashboard, LrView, RepeatRoute } from "@/lib/types"
 import { lrBookingErrors } from "@/lib/validators/lr";
 import { billForLr, receivedForBill, toLrView } from "./_derive";
 import { db, now, scoped } from "./_store";
+import * as dbd from "./db/dashboard";
 import { listPodPending } from "./pod";
+import { onDatabase } from "./source";
 import { listExpiryAlerts } from "./trucks";
 
 type EwayAlert = Extract<AttentionItem, { kind: "eway_expired" | "eway_expiring" }>;
@@ -27,7 +29,7 @@ const BOOKING_LABELS: Record<string, string> = {
 
 const isOpen = (lr: LrView) => isGoodsMoving(lr.status);
 
-function draftMissing(lr: LrView): string[] {
+export function draftMissing(lr: LrView): string[] {
   const missing = lrBookingErrors(lr).map((e) => BOOKING_LABELS[e.path] ?? e.path);
   const needsEway = lr.lrInvoices.some(
     (i) => !i.ewayBillNo && (i.valuePaise === null || i.valuePaise > EWAY_THRESHOLD_PAISE),
@@ -70,6 +72,7 @@ function repeatRoutes(lrs: LrView[]): RepeatRoute[] {
 
 /** Everything the dashboard shows, for one company. */
 export async function getDashboard(companyId: string): Promise<Dashboard> {
+  if (onDatabase()) return dbd.getDashboard(companyId);
   const company = db.companies.find((c) => c.id === companyId);
   const nowMs = Date.parse(now());
   const lrs = scoped(db.lrs, companyId)

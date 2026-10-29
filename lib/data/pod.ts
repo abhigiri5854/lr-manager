@@ -26,15 +26,17 @@ import { assertCan, getCurrentUserId } from "./session";
 import { ConflictError, ForbiddenError } from "./errors";
 import { getLrById, listLrsForExport } from "./lrs";
 import { syncLrStampsForPod } from "./_derive";
+import * as dbp from "./db/pod";
+import { onDatabase } from "./source";
 
 const podPatchSchema = podFields.omit({ lrId: true }).partial();
 export type PodPatch = Partial<Omit<PodInput, "lrId">>;
 
 /** "2026-10-20" → stored on Lr.deliveredAt as that UTC date. */
-const deliveredAtFrom = (date: string) => `${date}T00:00:00.000Z`;
+export const deliveredAtFrom = (date: string) => `${date}T00:00:00.000Z`;
 
 /** Delivery can't be in the future; Short / Damaged need a note from the consignee. */
-function assertDeliveryRules(
+export function assertDeliveryRules(
   deliveredOn: string | undefined,
   condition: Pod["condition"],
   remarks: string | null,
@@ -105,6 +107,7 @@ export async function listPodPendingPage(
   companyId: string,
   params: ListParams & { overdueOnly?: boolean },
 ): Promise<Page<PodPendingItem>> {
+  if (onDatabase()) return dbp.listPodPendingPage(companyId, params);
   const rows = pendingRows(companyId)
     .filter((r) => !params.overdueOnly || r.overdue)
     .filter((r) => matchesSearch(params.search, r.lrNo, r.consignee));
@@ -116,6 +119,7 @@ export async function listInTransitForPod(
   companyId: string,
   params: ListParams,
 ): Promise<Page<LrView>> {
+  if (onDatabase()) return dbp.listInTransitForPod(companyId, params);
   const wanted = (v: LrView) => v.status === "Booked" || v.status === "In transit";
   const { rows } = await listLrsForExport(companyId, { search: params.search });
   return paginate(rows.filter(wanted), params);
@@ -132,6 +136,7 @@ export type PodScreen = {
 
 /** Everything the POD screen needs: the LR, its POD (if any) and the company's POD rules. */
 export async function getPodScreen(companyId: string, lrId: string): Promise<PodScreen | null> {
+  if (onDatabase()) return dbp.getPodScreen(companyId, lrId);
   const lr = await getLrById(companyId, lrId);
   const company = db.companies.find((c) => c.id === companyId);
   if (!lr || !company) return null;
@@ -145,6 +150,7 @@ export async function getPodScreen(companyId: string, lrId: string): Promise<Pod
 }
 
 export async function listPods(companyId: string, params: ListParams = {}): Promise<Page<Pod>> {
+  if (onDatabase()) return dbp.listPods(companyId, params);
   const lrNo = (id: string) => db.lrs.find((l) => l.id === id)?.lrNo;
   const rows = scoped(db.pods, companyId)
     .filter((p) => matchesSearch(params.search, lrNo(p.lrId), p.receivedBy, p.receiverPhone))
@@ -154,11 +160,13 @@ export async function listPods(companyId: string, params: ListParams = {}): Prom
 }
 
 export async function getPodById(companyId: string, id: string): Promise<Pod | null> {
+  if (onDatabase()) return dbp.getPodById(companyId, id);
   const p = findById(db.pods, companyId, id);
   return p ? clone(p) : null;
 }
 
 export async function getPodByLrId(companyId: string, lrId: string): Promise<Pod | null> {
+  if (onDatabase()) return dbp.getPodByLrId(companyId, lrId);
   const p = scoped(db.pods, companyId).find((x) => x.lrId === lrId);
   return p ? clone(p) : null;
 }
@@ -183,8 +191,9 @@ async function assertPodAccess(companyId: string, lr: Lr): Promise<void> {
 /** POD screen save: records delivery (marks the LR Delivered) and any signed copy received. */
 export async function createPod(companyId: string, input: PodInput): Promise<Pod> {
   // Role first; whether this LR is the driver's own trip is checked once it's loaded.
-  await assertCan(companyId, "pod.upload", "pod.upload_own");
+  const role = await assertCan(companyId, "pod.upload", "pod.upload_own");
   const v = parseInput(podFields, input);
+  if (onDatabase()) return dbp.createPod(companyId, v, role);
   const lr = findById(db.lrs, companyId, v.lrId);
   if (!lr || lr.cancelledAt) fail("lrId", "LR not found in this company");
   await assertPodAccess(companyId, lr);
@@ -227,6 +236,7 @@ export async function updatePod(
 ): Promise<Pod> {
   await assertCan(companyId, "pod.upload", "pod.upload_own");
   const p = parseInput(podPatchSchema, patch);
+  if (onDatabase()) return dbp.updatePod(companyId, id, expectedVersion, p);
   const { deliveredOn, ...fields } = p;
   // Check the POD first so a conflict can't leave the LR half-updated (one transaction in Postgres).
   const existing = getOrThrow(db.pods, companyId, id, "POD");
@@ -263,6 +273,7 @@ export async function updatePod(
 /** Cancelling a POD also clears the LR's delivery date (it was recorded by mistake). */
 export async function cancelPod(companyId: string, id: string): Promise<Pod> {
   await assertCan(companyId, "record.cancel");
+  if (onDatabase()) return dbp.cancelPod(companyId, id);
   const pod = cancelRecord("pods", db.pods, companyId, id, "POD");
   setLrDelivered(companyId, pod.lrId, null);
   syncLrStampsForPod(pod);

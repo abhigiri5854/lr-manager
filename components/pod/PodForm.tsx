@@ -198,6 +198,7 @@ export function PodForm({
         if (!url) {
           const one = new FormData();
           one.set("file", f.file);
+          one.set("lrId", lr.id);
           const up = await uploadPodFileAction(one);
           if (!up.ok) {
             setErrors((p) => ({ ...p, files: up.message }));

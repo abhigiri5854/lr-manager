@@ -17,12 +17,20 @@ export type BillingParty = {
 export function billingPartyFor(
   lr: Pick<Lr, "companyId" | "billedToId" | "consigneeId" | "snapshot">,
 ): BillingParty | null {
+  return billingPartyOf(lr, (id) => findById(db.parties, lr.companyId, id));
+}
+
+/** Same, with the live party records supplied by the caller (the database reads them itself). */
+export function billingPartyOf(
+  lr: Pick<Lr, "billedToId" | "consigneeId" | "snapshot">,
+  live: (id: string) => PartySnapshot | undefined,
+): BillingParty | null {
   const sameAsConsignee = lr.billedToId === null;
   const id = lr.billedToId ?? lr.consigneeId;
   if (!id) return null;
   const snap: PartySnapshot | null | undefined = sameAsConsignee
     ? lr.snapshot?.consignee
     : lr.snapshot?.billedTo;
-  const p = snap ?? findById(db.parties, lr.companyId, id);
+  const p = snap ?? live(id);
   return p ? { id, name: p.name, place: p.place, gstin: p.gstin, sameAsConsignee } : null;
 }

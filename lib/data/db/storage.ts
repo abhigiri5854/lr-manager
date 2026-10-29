@@ -8,6 +8,7 @@
 // secret key. Server only.
 
 export type CompanyBucket = "logos" | "signatures";
+export type Bucket = CompanyBucket | "pod";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -61,6 +62,34 @@ export function pathFromUrl(
   return objectPath(bucket, companyId, id, name);
 }
 
+/** POD copies: pod/{company}/{lr}/{id}-{name}. */
+export function podObjectPath(companyId: string, lrId: string, id: string, name: string) {
+  return `${companyId}/${lrId}/${id}-${name}`;
+}
+
+/** The app link for a stored POD path (company/lr/id-name). */
+export function podUrlFromPath(path: string): string {
+  const [, lrId, file] = path.split("/");
+  return `/uploads/${file.slice(0, 36)}?b=pod&l=${lrId}&n=${encodeURIComponent(file.slice(37))}`;
+}
+
+/** The stored path for a POD link of this LR; anything else (another LR, bucket, a mock link) throws. */
+export function podPathFromUrl(companyId: string, lrId: string, url: string): string {
+  const u = new URL(url, "http://x");
+  const id = u.pathname.replace(/^\/uploads\//, "");
+  const name = u.searchParams.get("n") ?? "";
+  if (
+    !UUID.test(id) ||
+    u.searchParams.get("b") !== "pod" ||
+    u.searchParams.get("l") !== lrId ||
+    safeName(name, "") !== name ||
+    !name
+  ) {
+    throw new Error("Upload the file again");
+  }
+  return podObjectPath(companyId, lrId, id, name);
+}
+
 function config() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
@@ -74,7 +103,7 @@ const encodePath = (path: string) => path.split("/").map(encodeURIComponent).joi
 
 /** Stores the bytes at bucket/path (never overwrites: every upload has a new id). */
 export async function putObject(
-  bucket: CompanyBucket,
+  bucket: Bucket,
   path: string,
   file: { type: string; bytes: Uint8Array },
 ): Promise<void> {
@@ -91,7 +120,7 @@ export async function putObject(
 
 /** A signed URL for reading the object for `seconds`. */
 export async function signedUrl(
-  bucket: CompanyBucket,
+  bucket: Bucket,
   path: string,
   seconds = 300,
 ): Promise<string> {

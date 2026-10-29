@@ -168,7 +168,7 @@ describe("lib/data on the database", () => {
   it("areas not on the database yet refuse instead of showing sample data", async () => {
     const t = await fx.team();
     signIn(t.owner, t.companyId);
-    const { listLrs } = await import("@/lib/data/lrs");
-    await expect(listLrs(t.companyId, {})).rejects.toBeInstanceOf(NotOnDatabaseError);
+    const { listTaxInvoices } = await import("@/lib/data/invoices");
+    await expect(listTaxInvoices(t.companyId, {})).rejects.toBeInstanceOf(NotOnDatabaseError);
   });
 });

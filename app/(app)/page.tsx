@@ -15,8 +15,6 @@ import { RecentLrs } from "@/components/dashboard/RecentLrs";
 import { getDashboard } from "@/lib/data/dashboard";
 import { getActiveCompanyId } from "@/lib/data/session";
 import { IfCan } from "@/components/ui/Permissions";
-import { NotOnDatabase } from "@/components/ui/NotOnDatabase";
-import { onDatabase } from "@/lib/data/source";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -43,14 +41,9 @@ export default function DashboardPage() {
   return (
     <>
       <DashboardHeader />
-      {/* Temporary (prompt 19a): the dashboard reads LRs, which are still on the mock store. */}
-      {onDatabase() ? (
-        <NotOnDatabase what="Dashboard" />
-      ) : (
-        <Suspense fallback={<DashboardSkeleton />}>
-          <DashboardData />
-        </Suspense>
-      )}
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardData />
+      </Suspense>
     </>
   );
 }

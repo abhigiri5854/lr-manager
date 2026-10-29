@@ -65,8 +65,8 @@ Put these in `tailwind.config` / CSS variables once; never use raw hex in compon
 - `app/` routes · `components/ui/` shared pieces (Sidebar, PageHeader, Card, Field, Chip, Table)
 - `lib/data/` = data access layer; screens only call `lib/data/*`. `DATA_SOURCE=db` (default) runs
   on Postgres through `lib/data/db/*` (one RLS transaction per call via `withUser`); `DATA_SOURCE=mock`
-  uses the in-memory `lib/mock/` data (unit tests always do). Areas not moved yet (LRs, POD,
-  invoices, bills, import, dashboard, PDFs) show "not yet on the database" in db mode.
+  uses the in-memory `lib/mock/` data (unit tests always do). Areas not moved yet (invoices, bills,
+  import, driver app, PDFs) show "not yet on the database" in db mode.
 - **Fast data access (every `lib/data/db/*` function and screen follows these; measured on remote Supabase):**
   - One RLS-context statement: `withUser` (writes) / `withUserRead` (reads, read-only tx, returns without
     waiting for the commit) send `begin; set_config(claims), set_config(role)` as ONE statement, un-awaited.
@@ -84,6 +84,7 @@ Put these in `tailwind.config` / CSS variables once; never use raw hex in compon
     lateral` / `array_agg` in one query; never query per row. Run independent queries with `Promise.all`.
   - Check with `LRM_SQL_LOG=1` (prints each statement) on a production build (`pnpm build && pnpm start`).
     Targets: save < 1 s, page < 0.8 s. Benchmark reflects `next start`, never `next dev`.
+  - Write code using the fast patterns; don't benchmark unless asked.
 - `lib/validators/` Zod schemas shared by forms and API (GSTIN, PAN, vehicle no., e-way bill).
 - Server Components by default; Client Components only for interactive forms.
 - Lists are paginated (50/page) and searchable server-side.

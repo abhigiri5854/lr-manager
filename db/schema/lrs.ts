@@ -77,6 +77,11 @@ export const lrs = pgTable(
     billedAt: date("billed_at", { mode: "string" }),
     paidAt: date("paid_at", { mode: "string" }),
     snapshot: jsonb("snapshot").$type<LrSnapshot>(),
+    /**
+     * Bumped when the goods / invoice lines are replaced, so an edit that changes only lines
+     * still changes the row (and so its version). Not part of the Lr record.
+     */
+    linesRev: integer("lines_rev").notNull().default(0),
     /** Kept by trigger: LR no., party names, truck, places, invoice / e-way nos. */
     searchText: text("search_text").notNull().default(""),
   },
