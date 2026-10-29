@@ -260,7 +260,12 @@ export function PodForm({
             >
               Preview PDF
             </Button>
-            <Button variant="dark" href={pod ? `/pdf/pod/${pod.id}` : "#"} download disabled={!pod}>
+            <Button
+              variant="dark"
+              href={pod ? `/pdf/pod/${pod.id}?download=1` : "#"}
+              download
+              disabled={!pod}
+            >
               Download PDF
             </Button>
           </>

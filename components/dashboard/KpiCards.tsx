@@ -13,7 +13,7 @@ type KpiProps = {
   warning?: boolean;
 };
 
-function Kpi({ label, value, sub, warning }: KpiProps) {
+export function Kpi({ label, value, sub, warning }: KpiProps) {
   return (
     <div
       className={cx(

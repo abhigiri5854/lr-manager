@@ -1,5 +1,17 @@
 import { billingPartyFor } from "./billing-party";
-import { financialYear } from "@/lib/fy";
+import { billPaymentStatus } from "@/lib/bill-status";
+import { financialYear, todayInIndia } from "@/lib/fy";
+import { cancelReasonSchema } from "@/lib/validators/invoice";
+import type { BillStatus } from "@/lib/validators/bill-list";
+import {
+  buildBillsOverview,
+  buildPartyDues,
+  buildPartyLedger,
+  type BillFacts,
+  type BillsOverview,
+  type PartyDues,
+  type PartyLedger,
+} from "./bill-reports";
 import { companySnapshot, partySnapshot } from "@/lib/snapshots";
 import type { FreightBill, FreightBillView, LrView, Page, Payment } from "@/lib/types";
 import {
@@ -51,7 +63,11 @@ import { onDatabase } from "./source";
 
 export type FreightBillListParams = ListParams & {
   partyId?: string;
-  status?: FreightBill["status"];
+  /** Draft / Final (nothing received) / Part-paid / Paid / Cancelled. Cancelled bills only show when asked for. */
+  status?: BillStatus;
+  /** Bill date range, inclusive. */
+  from?: string;
+  to?: string;
 };
 
 export type PaymentListParams = ListParams & { partyId?: string };
@@ -101,10 +117,12 @@ export async function listFreightBills(
   params: FreightBillListParams = {},
 ): Promise<Page<FreightBillView>> {
   if (onDatabase()) return dbb.listFreightBills(companyId, params);
-  const rows = scoped(db.freightBills, companyId)
+  const rows = scoped(db.freightBills, companyId, params.status === "cancelled")
     .filter((b) => !params.partyId || b.partyId === params.partyId)
-    .filter((b) => !params.status || b.status === params.status)
+    .filter((b) => !params.from || b.billDate >= params.from)
+    .filter((b) => !params.to || b.billDate <= params.to)
     .map(toBillView)
+    .filter((b) => !params.status || billPaymentStatus(b) === params.status)
     .filter((b) => matchesSearch(params.search, b.billNo, b.partyName, ...b.lrNos))
     .sort((a, b) => b.billDate.localeCompare(a.billDate) || b.createdAt.localeCompare(a.createdAt));
   return paginate(rows, params);
@@ -230,11 +248,23 @@ export async function finaliseFreightBill(
 }
 
 /** A cancelled final bill keeps its number (shown as cancelled) so the series has no gaps. */
-export async function cancelFreightBill(companyId: string, id: string): Promise<FreightBillView> {
+export async function cancelFreightBill(
+  companyId: string,
+  id: string,
+  reason?: string,
+): Promise<FreightBillView> {
   await assertCan(companyId, "record.cancel");
-  if (onDatabase()) return dbb.cancelFreightBill(companyId, id);
+  const cancelReason = reason === undefined ? undefined : parseInput(cancelReasonSchema, reason);
+  if (onDatabase()) return dbb.cancelFreightBill(companyId, id, cancelReason);
   if (receivedForBill(companyId, id) > 0) fail("", BILL_HAS_PAYMENTS);
-  const saved = cancelRecord("freight_bills", db.freightBills, companyId, id, "Freight bill");
+  const saved = cancelRecord(
+    "freight_bills",
+    db.freightBills,
+    companyId,
+    id,
+    "Freight bill",
+    cancelReason === undefined ? {} : { cancelReason },
+  );
   syncLrStampsForBill(companyId, saved);
   return toBillView(saved);
 }
@@ -341,10 +371,121 @@ export async function updatePayment(
   return saved;
 }
 
-export async function cancelPayment(companyId: string, id: string): Promise<Payment> {
+export async function cancelPayment(
+  companyId: string,
+  id: string,
+  reason?: string,
+): Promise<Payment> {
   await assertCan(companyId, "record.cancel");
-  if (onDatabase()) return dbb.cancelPayment(companyId, id);
-  const saved = cancelRecord("payments", db.payments, companyId, id, "Payment");
+  const cancelReason = reason === undefined ? undefined : parseInput(cancelReasonSchema, reason);
+  if (onDatabase()) return dbb.cancelPayment(companyId, id, cancelReason);
+  const saved = cancelRecord(
+    "payments",
+    db.payments,
+    companyId,
+    id,
+    "Payment",
+    cancelReason === undefined ? {} : { cancelReason },
+  );
   syncLrStampsForPayment(companyId, saved);
   return saved;
+}
+
+// ---------- Bills & payments screen: KPIs, dues by party, ledger ----------
+/** The plain facts the report builders (bill-reports.ts) work from, for the whole company. */
+async function loadBillFacts(companyId: string, partyId?: string): Promise<BillFacts> {
+  if (onDatabase()) return dbb.loadBillFacts(companyId, partyId);
+  const bills = scoped(db.freightBills, companyId)
+    .filter((b) => b.status === "final" && (!partyId || b.partyId === partyId))
+    .map((b) => ({
+      id: b.id,
+      partyId: b.partyId,
+      billNo: b.billNo,
+      billDate: b.billDate,
+      amountPaise: b.totals.amountPaise,
+      receivedPaise: receivedForBill(companyId, b.id),
+    }));
+  const payments = scoped(db.payments, companyId)
+    .filter((p) => !partyId || p.partyId === partyId)
+    .map((p) => ({
+      id: p.id,
+      partyId: p.partyId,
+      receivedOn: p.receivedOn,
+      amountPaise: p.amountPaise,
+      tdsPaise: p.tdsPaise,
+      allocatedPaise: p.allocations.reduce((s, a) => s + a.amountPaise, 0),
+      mode: p.mode,
+      reference: p.reference,
+    }));
+  const counts = new Map<string, number>();
+  for (const lr of scoped(db.lrs, companyId)) {
+    if (!lr.bookedAt || lr.paymentMode !== "tbb" || billForLr(companyId, lr.id)) continue;
+    const party = billingPartyFor(lr);
+    if (party) counts.set(party.id, (counts.get(party.id) ?? 0) + 1);
+  }
+  return {
+    bills,
+    payments,
+    unbilledTbbByParty: [...counts].map(([partyId, count]) => ({ partyId, count })),
+    parties: scoped(db.parties, companyId).map((p) => ({ id: p.id, name: p.name, place: p.place })),
+  };
+}
+
+export async function getBillsOverview(companyId: string): Promise<BillsOverview> {
+  return buildBillsOverview(await loadBillFacts(companyId), todayInIndia());
+}
+
+/** Payments & dues by party (the table on /bills). */
+export async function listPartyDues(companyId: string): Promise<PartyDues[]> {
+  return buildPartyDues(await loadBillFacts(companyId));
+}
+
+/** One party's bills, receipts and TDS with a running balance. */
+export async function getPartyLedger(companyId: string, partyId: string): Promise<PartyLedger> {
+  return buildPartyLedger(await loadBillFacts(companyId, partyId), partyId);
+}
+
+/** Everything /bills shows besides the bill list, from one set of facts. */
+export async function getBillsSummary(companyId: string) {
+  const facts = await loadBillFacts(companyId);
+  return {
+    overview: buildBillsOverview(facts, todayInIndia()),
+    dues: buildPartyDues(facts),
+  };
+}
+
+export type OpenBill = {
+  id: string;
+  billNo: string | null;
+  billDate: string;
+  amountPaise: number;
+  duePaise: number;
+};
+
+/**
+ * A party's final, live bills with something still due, oldest first (payment allocation).
+ * `exceptPaymentId`: count that payment's own allocations as still due, so editing it can
+ * re-allocate them.
+ */
+export async function listOpenBills(
+  companyId: string,
+  partyId: string,
+  exceptPaymentId?: string,
+): Promise<OpenBill[]> {
+  const [facts, own] = await Promise.all([
+    loadBillFacts(companyId, partyId),
+    exceptPaymentId ? getPaymentById(companyId, exceptPaymentId) : Promise.resolve(null),
+  ]);
+  const ownByBill = new Map((own?.allocations ?? []).map((a) => [a.freightBillId, a.amountPaise]));
+  return facts.bills
+    .filter((b) => b.partyId === partyId)
+    .map((b) => ({
+      id: b.id,
+      billNo: b.billNo,
+      billDate: b.billDate,
+      amountPaise: b.amountPaise,
+      duePaise: Math.max(0, b.amountPaise - b.receivedPaise + (ownByBill.get(b.id) ?? 0)),
+    }))
+    .filter((b) => b.duePaise > 0)
+    .sort((a, b) => a.billDate.localeCompare(b.billDate) || (a.billNo ?? "").localeCompare(b.billNo ?? ""));
 }

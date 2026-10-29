@@ -158,3 +158,16 @@ export async function signedUrl(
   const { signedURL } = (await res.json()) as { signedURL: string };
   return `${base}${signedURL.startsWith("/") ? "" : "/"}${signedURL}`;
 }
+
+/** The bytes of a stored object (logos, signatures, POD photos for PDFs), or null if it is gone. */
+export async function getObject(
+  bucket: Bucket,
+  path: string,
+): Promise<{ type: string; bytes: Uint8Array } | null> {
+  const res = await fetch(await signedUrl(bucket, path, 60));
+  if (!res.ok) return null;
+  return {
+    type: (res.headers.get("content-type") ?? "application/octet-stream").split(";")[0],
+    bytes: new Uint8Array(await res.arrayBuffer()),
+  };
+}

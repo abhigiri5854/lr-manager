@@ -1,7 +1,10 @@
-// Placeholder until the LR PDF (LRPDF.dc.html, rendered with Playwright) is built in Phase 5.
-export async function GET() {
-  return new Response("The LR PDF is not built yet.", {
-    status: 501,
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
+import { lrPdf } from "@/lib/pdf/documents";
+import { pdfResponse } from "@/lib/pdf/response";
+
+// Chromium start-up plus the render can take a few seconds on a cold serverless function.
+export const maxDuration = 60;
+
+export async function GET(req: Request, ctx: RouteContext<"/pdf/lr/[id]">) {
+  const { id } = await ctx.params;
+  return pdfResponse(req, id, lrPdf);
 }

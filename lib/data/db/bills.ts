@@ -16,6 +16,7 @@ import {
   type LrForBill,
   type ParsedPayment,
 } from "../bill-calc";
+import type { BillFacts } from "../bill-reports";
 import type { FreightBillListParams, PaymentListParams } from "../bills";
 import { ConflictError, NotFoundError } from "../errors";
 import { contains, paging, withUser, withUserRead, type Tx } from "./conn";
@@ -68,9 +69,36 @@ function toBillView(r: Row): FreightBillView {
   };
 }
 
+/** Received against bill alias `b` (live payments only) — same sum as `received_paise` above. */
+const receivedSql = (tx: Tx) => tx`(select coalesce(sum(al.amount_paise), 0)
+     from payment_allocations al
+     join payments p on p.company_id = al.company_id and p.id = al.payment_id
+    where al.company_id = b.company_id and al.freight_bill_id = b.id and p.cancelled_at is null)`;
+
+/** lib/bill-status.ts as SQL. Cancelled bills appear only when that status is asked for. */
+function statusWhere(tx: Tx, status: FreightBillListParams["status"]) {
+  switch (status) {
+    case "cancelled":
+      return tx`and b.cancelled_at is not null`;
+    case "draft":
+      return tx`and b.cancelled_at is null and b.status = 'draft'`;
+    case "final":
+      return tx`and b.cancelled_at is null and b.status = 'final' and ${receivedSql(tx)} <= 0`;
+    case "part":
+      return tx`and b.cancelled_at is null and b.status = 'final'
+        and ${receivedSql(tx)} > 0 and ${receivedSql(tx)} < b.amount_paise`;
+    case "paid":
+      return tx`and b.cancelled_at is null and b.status = 'final'
+        and ${receivedSql(tx)} > 0 and ${receivedSql(tx)} >= b.amount_paise`;
+    default:
+      return tx`and b.cancelled_at is null`;
+  }
+}
+
 function billWhere(tx: Tx, companyId: string, p: FreightBillListParams) {
   const q = contains(p.search);
-  return tx`b.company_id = ${companyId} and b.cancelled_at is null
+  return tx`b.company_id = ${companyId}
+    ${statusWhere(tx, p.status)}
     ${
       p.partyId === undefined
         ? tx``
@@ -78,8 +106,66 @@ function billWhere(tx: Tx, companyId: string, p: FreightBillListParams) {
           ? tx`and b.party_id = ${p.partyId}`
           : tx`and false`
     }
-    ${p.status ? tx`and b.status = ${p.status}` : tx``}
+    ${p.from ? tx`and b.bill_date >= ${p.from}` : tx``}
+    ${p.to ? tx`and b.bill_date <= ${p.to}` : tx``}
     ${q ? tx`and b.search_text like ${q}` : tx``}`;
+}
+
+/** The plain facts behind the KPIs, dues by party and ledger (see ../bill-reports.ts). */
+export async function loadBillFacts(companyId: string, partyId?: string): Promise<BillFacts> {
+  if (partyId !== undefined && !isUuid(partyId)) {
+    return { bills: [], payments: [], unbilledTbbByParty: [], parties: [] };
+  }
+  return withUserRead(async (tx) => {
+    const forParty = (col: string) => (partyId ? tx`and ${tx(col)} = ${partyId}` : tx``);
+    const [bills, payments, unbilled, parties] = await Promise.all([
+      tx`select b.id, b.party_id, b.bill_no, b.bill_date, b.amount_paise,
+                ${receivedSql(tx)}::bigint as received
+           from freight_bills b
+          where b.company_id = ${companyId} and b.status = 'final' and b.cancelled_at is null
+            ${forParty("b.party_id")}`,
+      tx`select p.id, p.party_id, p.received_on, p.amount_paise, p.tds_paise, p.mode, p.reference,
+                (select coalesce(sum(al.amount_paise), 0)::bigint from payment_allocations al
+                  where al.company_id = p.company_id and al.payment_id = p.id) as allocated
+           from payments p
+          where p.company_id = ${companyId} and p.cancelled_at is null
+            ${forParty("p.party_id")}`,
+      tx`select coalesce(l.billed_to_id, l.consignee_id) as party_id, count(*)::int as n
+           from lrs l
+          where l.company_id = ${companyId} and l.cancelled_at is null
+            and l.booked_at is not null and l.payment_mode = 'tbb'
+            and not exists (select 1 from freight_bill_lines fl
+                             where fl.company_id = l.company_id and fl.lr_id = l.id
+                               and fl.bill_cancelled_at is null)
+            ${partyId ? tx`and coalesce(l.billed_to_id, l.consignee_id) = ${partyId}` : tx``}
+          group by 1`,
+      tx`select id, name, place from parties where company_id = ${companyId}`,
+    ]);
+    return {
+      bills: (bills as Row[]).map((r) => ({
+        id: r.id,
+        partyId: r.party_id,
+        billNo: r.bill_no,
+        billDate: r.bill_date,
+        amountPaise: Number(r.amount_paise),
+        receivedPaise: Number(r.received),
+      })),
+      payments: (payments as Row[]).map((r) => ({
+        id: r.id,
+        partyId: r.party_id,
+        receivedOn: r.received_on,
+        amountPaise: Number(r.amount_paise),
+        tdsPaise: Number(r.tds_paise),
+        allocatedPaise: Number(r.allocated),
+        mode: r.mode,
+        reference: r.reference,
+      })),
+      unbilledTbbByParty: (unbilled as Row[])
+        .filter((r) => r.party_id)
+        .map((r) => ({ partyId: r.party_id as string, count: Number(r.n) })),
+      parties: (parties as Row[]).map((r) => ({ id: r.id, name: r.name, place: r.place })),
+    };
+  });
 }
 
 export async function listFreightBills(
@@ -368,7 +454,11 @@ export async function finaliseFreightBill(
   });
 }
 
-export async function cancelFreightBill(companyId: string, id: string): Promise<FreightBillView> {
+export async function cancelFreightBill(
+  companyId: string,
+  id: string,
+  reason?: string,
+): Promise<FreightBillView> {
   return withUser(async (tx) => {
     if (!isUuid(id)) throw new NotFoundError("Freight bill");
     // Sent together: what was received, then the cancel (rolled back if anything was).
@@ -383,7 +473,7 @@ export async function cancelFreightBill(companyId: string, id: string): Promise<
       companyId,
       id,
       "Freight bill",
-      undefined,
+      reason,
       billViewCols(tx),
     );
     const [r, c] = await Promise.allSettled([received, cancelled]);
@@ -568,7 +658,11 @@ export async function updatePayment(
   });
 }
 
-export async function cancelPayment(companyId: string, id: string): Promise<Payment> {
+export async function cancelPayment(
+  companyId: string,
+  id: string,
+  reason?: string,
+): Promise<Payment> {
   return withUser(async (tx) => {
     if (!isUuid(id)) throw new NotFoundError("Payment");
     const { before, after, changed } = await cancelRow(
@@ -577,7 +671,7 @@ export async function cancelPayment(companyId: string, id: string): Promise<Paym
       companyId,
       id,
       "Payment",
-      undefined,
+      reason,
       (a) => tx`, ${allocationsJson(tx, a)} as allocations`,
     );
     if (changed) audit(tx, companyId, "payments", id, "cancel", toPayment(before), toPayment(after));

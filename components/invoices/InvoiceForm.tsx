@@ -325,9 +325,14 @@ export function InvoiceForm({
         </Button>
       )}
       {invoice && (
-        <Button variant="secondary" href={`/pdf/invoice/${invoice.id}`} newTab>
-          Preview PDF
-        </Button>
+        <>
+          <Button variant="secondary" href={`/pdf/invoice/${invoice.id}`} newTab>
+            Preview PDF
+          </Button>
+          <Button variant="secondary" href={`/pdf/invoice/${invoice.id}?download=1`} download>
+            Download PDF
+          </Button>
+        </>
       )}
       {status === "draft" && (
         <Button variant="dark" onClick={() => setConfirmFinal(true)} disabled={pending}>

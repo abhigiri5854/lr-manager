@@ -334,7 +334,7 @@ export function LrDetailView({ detail, nowMs }: { detail: LrDetail; nowMs: numbe
             <Button variant="secondary" href={`/pdf/lr/${lr.id}`} newTab disabled={!pdfReady}>
               Preview PDF
             </Button>
-            <Button variant="secondary" href={`/pdf/lr/${lr.id}`} download disabled={!pdfReady}>
+            <Button variant="secondary" href={`/pdf/lr/${lr.id}?download=1`} download disabled={!pdfReady}>
               Download PDF
             </Button>
             {primary && (

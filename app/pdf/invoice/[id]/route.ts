@@ -1,13 +1,10 @@
-import { getTaxInvoiceById } from "@/lib/data/invoices";
-import { getActiveCompanyId } from "@/lib/data/session";
+import { invoicePdf } from "@/lib/pdf/documents";
+import { pdfResponse } from "@/lib/pdf/response";
 
-// Placeholder until the invoice PDF (InvoicePDF.dc.html, rendered with Playwright) is built.
-export async function GET(_req: Request, ctx: RouteContext<"/pdf/invoice/[id]">) {
+// Chromium start-up plus the render can take a few seconds on a cold serverless function.
+export const maxDuration = 60;
+
+export async function GET(req: Request, ctx: RouteContext<"/pdf/invoice/[id]">) {
   const { id } = await ctx.params;
-  const inv = await getTaxInvoiceById(await getActiveCompanyId(), id);
-  if (!inv) return new Response("Invoice not found", { status: 404 });
-  return new Response(`The PDF for tax invoice ${inv.invoiceNo ?? "(draft)"} is not built yet.`, {
-    status: 501,
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
+  return pdfResponse(req, id, invoicePdf);
 }
