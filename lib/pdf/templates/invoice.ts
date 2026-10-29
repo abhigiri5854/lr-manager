@@ -5,6 +5,7 @@ import { amountInWords, formatDate, formatPaise } from "@/lib/format";
 import { formatGstRate, stateLabel } from "@/lib/gst";
 import type { PartySnapshot, TaxInvoiceLine } from "@/lib/types";
 import type { InvoicePdfData } from "../load";
+import { qrSvg } from "../qr-svg";
 import {
   bold,
   brLines,
@@ -42,6 +43,14 @@ function partyBlock(p: PartySnapshot, extra?: string): string {
 }
 
 const qtyText = (q: string) => String(Number(q));
+
+/** IRN and the e-invoice QR, when the invoice was imported with them. Nothing is printed without a payload. */
+function eInvoiceRow(inv: InvoicePdfData["invoice"]): string {
+  const qr = inv.qrPayload ? qrSvg(inv.qrPayload, 104) : "";
+  if (!inv.irn && !qr) return "";
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding:6px 16px;border-bottom:1px solid var(--rule);break-inside:avoid">
+<div style="overflow-wrap:anywhere">${inv.irn ? `IRN: ${esc(inv.irn)}` : ""}${qr ? `<br><span style="color:var(--muted)">E-invoice QR</span>` : ""}</div>${qr}</div>`;
+}
 
 function linesTable(d: InvoicePdfData): string {
   const { lines, totals } = d.invoice;
@@ -115,7 +124,7 @@ ${seller.logoSrc ? `<img src="${seller.logoSrc}" alt="" style="height:52px;max-w
     " · ",
   )}</div></div>
 <div class="bar"><div class="title" style="color:var(--text)">TAX INVOICE</div><div><b>${copyLabel}</b></div></div>
-${inv.irn ? `<div style="padding:6px 16px;border-bottom:1px solid var(--rule);overflow-wrap:anywhere">IRN: ${esc(inv.irn)}</div>` : ""}
+${eInvoiceRow(inv)}
 ${columns([
   section(
     "INVOICE",

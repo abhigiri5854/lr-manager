@@ -211,6 +211,7 @@ function invoiceColumns(tx: Tx, inv: TaxInvoice): Row {
     ship_from: inv.shipFrom,
     incoterm: inv.incoterm,
     irn: inv.irn,
+    qr_payload: inv.qrPayload ?? null,
     eway_bill_no: inv.ewayBillNo,
     source_file_path: sourcePath(inv.companyId, inv.sourceFileUrl),
     import_batch_id: inv.importBatchId,
@@ -264,12 +265,19 @@ const duplicateNoProblem = (inv: TaxInvoice) => (rows: Row[]) => {
 export async function insertTaxInvoice(companyId: string, v: ParsedInput): Promise<TaxInvoice> {
   const sellerPartyId = v.sellerPartyId ?? null;
   return withUser(async (tx) => {
-    const [[company], parties, problems] = await Promise.all([
+    const [[company], parties, problems, [batch]] = await Promise.all([
       tx`select * from companies where id = ${companyId}`,
       tx`select * from parties where company_id = ${companyId}
            and id in ${uuidsIn(tx, [sellerPartyId, v.billToId, v.shipToId])}`,
       runChecks(tx, refChecks(tx, companyId, v)),
+      // The file this invoice was imported from: its e-invoice IRN and QR text travel with it.
+      v.importBatchId
+        ? tx`select result from import_batches
+              where company_id = ${companyId} and id = ${v.importBatchId}`
+        : Promise.resolve([] as Row[]),
     ]);
+    const read = (batch?.result as { invoice?: { irn?: string | null; qrPayload?: string | null } } | undefined)
+      ?.invoice;
     assertNoProblems(problems);
     // Own invoices get their number on Finalise only.
     const invoiceNo = sellerPartyId ? (v.invoiceNo ?? null) : null;
@@ -307,7 +315,8 @@ export async function insertTaxInvoice(companyId: string, v: ParsedInput): Promi
       incoterm: v.incoterm ?? null,
       lines: withDbQty(priced.lines),
       totals: priced.totals,
-      irn: v.irn ?? null,
+      irn: v.irn ?? read?.irn ?? null,
+      qrPayload: read?.qrPayload ?? null,
       ewayBillNo: v.ewayBillNo ?? null,
       sourceFileUrl: v.sourceFileUrl ?? null,
       importBatchId: v.importBatchId ?? null,

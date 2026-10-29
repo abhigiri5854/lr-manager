@@ -5,7 +5,14 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   // PDFs: Chromium is launched at run time, so these stay out of the bundle...
-  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  serverExternalPackages: [
+    "@sparticuz/chromium",
+    "puppeteer-core",
+    // Smart import reader: native or worker-based, loaded from node_modules at run time.
+    "pdfjs-dist",
+    "@napi-rs/canvas",
+    "sharp",
+  ],
   // ...and the fonts read from disk (lib/pdf/fonts.ts) and the Chromium binaries go with the routes.
   outputFileTracingIncludes: {
     "/pdf/**": ["./lib/pdf/fonts/*.woff2", "./node_modules/@sparticuz/chromium/bin/**"],

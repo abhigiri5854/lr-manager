@@ -15,7 +15,12 @@ import { fieldLabel, isFieldKey } from "@/lib/import/fields";
 import { invoicePrefill, type InvoicePrefill, type PendingRecords } from "@/lib/import/invoice-prefill";
 import { detectedLabel, formatLabel, goesToLabel, type ChipTone } from "@/lib/import/labels";
 import { getReader } from "@/lib/import/reader";
-import type { DocumentReadResult, ExcelReadResult, ReadInvoice } from "@/lib/import/types";
+import {
+  READ_SOURCE_LABEL,
+  type DocumentReadResult,
+  type ExcelReadResult,
+  type ReadInvoice,
+} from "@/lib/import/types";
 import type { ImportBatch, ImportMapping, ImportRowAction, Page, TaxInvoice } from "@/lib/types";
 import { gstinError, normaliseGstin } from "@/lib/validators/common";
 import type { LrInput, LrPatch } from "@/lib/validators/lr";
@@ -153,8 +158,11 @@ export async function createImportBatch(
   const file = { name: stored.name, type: "", bytes: input.bytes };
   try {
     if (input.source === "excel") {
-      const result = await getReader().readExcel(file);
-      const saved = await findCoveringMapping(companyId, result);
+      const mappings = await store().mappings(companyId);
+      const result = await getReader().readExcel(file, {
+        savedMappings: mappings.map((m) => m.columns),
+      });
+      const saved = coveringMapping(mappings, result);
       const suggested = Object.fromEntries(result.columns.map((c) => [c.header, c.suggestedField]));
       return store().saveBatch(created, {
         ...created,
@@ -180,11 +188,7 @@ export async function createImportBatch(
 }
 
 /** A saved mapping that names every column of the sheet is applied automatically. */
-async function findCoveringMapping(
-  companyId: string,
-  result: ExcelReadResult,
-): Promise<ImportMapping | null> {
-  const all = await store().mappings(companyId);
+function coveringMapping(all: ImportMapping[], result: ExcelReadResult): ImportMapping | null {
   return all.find((m) => result.columns.every((c) => c.header in m.columns)) ?? null;
 }
 
@@ -873,6 +877,8 @@ export type InvoiceImportView = {
     fileUrl: string | null;
     format: ImportBatch["format"];
     sizeBytes: number;
+    /** Labels of the readers that supplied the fields, e.g. ["QR", "PDF text"]. Empty for the mock reader. */
+    readBy: string[];
   };
   prefill: InvoicePrefill;
   /** An invoice with this number from this seller already exists. */
@@ -914,6 +920,7 @@ export async function getInvoiceImport(
         fileUrl: b.fileUrl,
         format: b.format,
         sizeBytes: b.sizeBytes,
+        readBy: (doc.readBy ?? []).map((r) => READ_SOURCE_LABEL[r]),
       },
       prefill,
       existing: existing

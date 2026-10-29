@@ -52,6 +52,8 @@ export const taxInvoices = pgTable(
     shipFrom: text("ship_from"),
     incoterm: text("incoterm"),
     irn: text("irn"),
+    /** Signed e-invoice QR text (JWT) read from the imported file; printed as a QR on the PDF. */
+    qrPayload: text("qr_payload"),
     ewayBillNo: text("eway_bill_no"),
     sourceFilePath: text("source_file_path"),
     importBatchId: uuid("import_batch_id"),

@@ -16,8 +16,14 @@ export type ExcelColumn = {
 };
 
 export type ExcelRow = {
-  /** Row number in the sheet (what the user sees in Excel). */
+  /**
+   * Row number in the sheet (what the user sees in Excel). Unique within the file: rows from a
+   * second sheet continue after the first sheet's, see `sheet`.
+   */
   rowNo: number;
+  /** Only on rows from a sheet other than the first one read: its name and the row number in it. */
+  sheet?: string;
+  sheetRow?: number;
   /** Raw cell text by header. */
   cells: Record<string, string>;
 };
@@ -73,6 +79,10 @@ export type ReadInvoice = {
   shipFrom: string | null;
   incoterm: string | null;
   ewayBillNo: string | null;
+  /** From the e-invoice QR when the file has one. */
+  irn?: string | null;
+  /** The signed QR text (JWT) as printed, so the tax invoice PDF can print the same QR. */
+  qrPayload?: string | null;
   lines: ReadInvoiceLine[];
 };
 
@@ -86,6 +96,15 @@ export type ReadLr = {
   packages: number;
   description: string;
   ewayBillNo: string | null;
+};
+
+/** How a document was read, cheapest first. The mock reader leaves it out. */
+export type ReadSource = "qr" | "pdf_text" | "gemini";
+
+export const READ_SOURCE_LABEL: Record<ReadSource, string> = {
+  qr: "QR",
+  pdf_text: "PDF text",
+  gemini: "Gemini",
 };
 
 export type DocumentType = "tax_invoice" | "lr" | "pod" | "eway_bill" | "unknown";
@@ -103,6 +122,8 @@ export type DocumentReadResult = {
    * "customerRefDate", "billTo", "truck", "lines.1.hsn". Shown orange for the user to check.
    */
   lowConfidence: string[];
+  /** Which readers supplied the fields, in the order they ran. */
+  readBy?: ReadSource[];
 };
 
 export type ImportReadResult = ExcelReadResult | DocumentReadResult;
@@ -110,7 +131,17 @@ export type ImportReadResult = ExcelReadResult | DocumentReadResult;
 // ---------- the reader interface ----------
 export type ReaderFile = { name: string; type: string; bytes: Uint8Array };
 
+/** What the company already knows, handed to the sheet reader so it can place columns without AI. */
+export type ExcelHints = {
+  /** The company's saved mappings (header → field), best match for this sheet first. */
+  savedMappings?: Record<string, string>[];
+  /** Asked once, with header names and sample rows only, for columns nothing else could place. */
+  suggestColumns?: (
+    q: import("./column-suggest").ColumnQuestion,
+  ) => Promise<{ header: string; field: string }[] | null>;
+};
+
 export interface ImportReader {
-  readExcel(file: ReaderFile): Promise<ExcelReadResult>;
+  readExcel(file: ReaderFile, hints?: ExcelHints): Promise<ExcelReadResult>;
   readDocument(file: ReaderFile): Promise<DocumentReadResult>;
 }

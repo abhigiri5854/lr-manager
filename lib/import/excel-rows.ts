@@ -11,6 +11,7 @@ import {
   normaliseMobile,
   normaliseVehicleNo,
 } from "@/lib/validators/common";
+import { serialTextToIso } from "./excel-date";
 import { SKIP_FIELD } from "./fields";
 import type { ExcelReadResult } from "./types";
 
@@ -86,6 +87,8 @@ const text = (s: string | undefined): string | null => {
 export function parseSheetDate(raw: string | undefined): string | null | undefined {
   const s = text(raw);
   if (!s) return null;
+  const serial = serialTextToIso(s);
+  if (serial) return serial;
   let y: number, m: number, d: number;
   const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   const dmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})$/);
@@ -281,7 +284,7 @@ export function reviewExcelRows(
     const consignee = partyOf(consigneeCell.name, consigneeCell.gstin);
     rows.push({
       rowNo: row.rowNo,
-      source: `Excel row ${row.rowNo}`,
+      source: row.sheet ? `${row.sheet} row ${row.sheetRow}` : `Excel row ${row.rowNo}`,
       record: `${typeof lrNo === "string" ? lrNo : (lrRaw ?? "—")} · ${consignor?.name || "—"} → ${consignee?.name || "—"}`,
       status,
       checks,

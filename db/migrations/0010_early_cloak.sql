@@ -1,0 +1,1 @@
+ALTER TABLE "tax_invoices" ADD COLUMN "qr_payload" text;

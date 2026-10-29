@@ -18,7 +18,7 @@ describe("pdf shared helpers", () => {
     expect(html).toContain('<div class="wm wm-mark">DRAFT</div>');
     expect(html).toContain("font-family:'Noto Sans Devanagari'");
     expect(html).toContain("data:font/woff2;base64,");
-    expect(html).not.toContain("wm-logo");
+    expect(html).not.toContain('class="wm wm-logo"');
   });
 
   it("builds landscape pages with a logo watermark and no mark", () => {
@@ -30,7 +30,7 @@ describe("pdf shared helpers", () => {
     });
     expect(html).toContain("@page{size:A4 landscape;");
     expect(html).toContain('class="wm wm-logo" src="data:image/png;base64,AAAA"');
-    expect(html).not.toContain("wm-mark");
+       expect(html).not.toContain('class="wm wm-mark"');
   });
 
   it("makes safe file names", () => {

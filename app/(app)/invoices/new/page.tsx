@@ -41,6 +41,7 @@ async function NewInvoice({ searchParams }: Pick<PageProps<"/invoices/new">, "se
           batchId: imp.batch.id,
           fileName: imp.batch.fileName,
           fileUrl: imp.batch.fileUrl,
+          readBy: imp.batch.readBy,
           flags: imp.prefill.flags,
           pending: imp.prefill.pending,
           existing: imp.existing,

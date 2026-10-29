@@ -64,6 +64,8 @@ export type ImportInfo = {
   batchId: string;
   fileName: string;
   fileUrl: string | null;
+  /** Which readers filled the form: "QR", "PDF text", "Gemini". */
+  readBy: string[];
   /** Form field path -> why it is orange. */
   flags: Record<string, ImportFlag>;
   /** Parties and a truck that are new on this invoice; created when the user saves. */
@@ -391,7 +393,7 @@ export function InvoiceForm({
       {(invoice?.importBatchId || importInfo) && (
         <Alert
           tone="info"
-          title={`Read by AI from ${
+          title={`Read${importInfo?.readBy.length ? ` by: ${importInfo.readBy.join(" / ")}` : ""} from ${
             importInfo?.fileName ??
             (invoice?.sourceFileUrl ? uploadName(invoice.sourceFileUrl) : "the uploaded invoice")
           }`}

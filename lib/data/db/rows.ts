@@ -293,6 +293,7 @@ export function toTaxInvoice(r: Row): TaxInvoice {
       totalPaise: r.total_paise,
     },
     irn: r.irn,
+    qrPayload: r.qr_payload ?? null,
     ewayBillNo: r.eway_bill_no,
     sourceFileUrl: importUrlFromPath(r.source_file_path),
     importBatchId: r.import_batch_id,

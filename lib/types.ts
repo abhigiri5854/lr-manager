@@ -362,6 +362,8 @@ export type TaxInvoice = BaseRecord & {
   lines: TaxInvoiceLine[];
   totals: TaxInvoiceTotals;
   irn: string | null;
+  /** Signed e-invoice QR text read from the imported file, printed as a QR on the PDF. */
+  qrPayload?: string | null;
   ewayBillNo: string | null;
   sourceFileUrl: string | null;
   importBatchId: Uuid | null;
