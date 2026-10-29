@@ -20,8 +20,13 @@ export type BaseRecord = {
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
   cancelledAt?: IsoDateTime;
+  /** Why it was cancelled (set with cancelledAt). */
+  cancelReason?: string;
   /** Bumped on every update; update() takes expectedVersion and throws ConflictError on mismatch. */
   version: number;
+  /** Who created / last changed it (null = sample data or system). */
+  createdBy: Uuid | null;
+  updatedBy: Uuid | null;
 };
 
 export type Page<T> = { rows: T[]; total: number; page: number; pageSize: number };
@@ -146,8 +151,6 @@ export type Party = BaseRecord & {
    * phone are synced from the Company profile; not editable or cancellable from Parties.
    */
   isSelf: boolean;
-  /** Why it was cancelled (set with cancelledAt). */
-  cancelReason?: string;
 };
 
 export type Truck = BaseRecord & {
@@ -259,8 +262,6 @@ export type Lr = BaseRecord & {
   items: LrItem[];
   charges: LrCharges;
   remarks: string | null;
-  /** Why it was cancelled (set with cancelledAt). */
-  cancelReason?: string;
   // lifecycle stamps the LR owns
   /** Null = draft. */
   bookedAt: IsoDateTime | null;
@@ -269,17 +270,27 @@ export type Lr = BaseRecord & {
   deliveredAt: IsoDateTime | null;
   /** Set when booked. */
   snapshot: LrSnapshot | null;
+  // Cached from linked records in the same transaction as the POD / bill / payment change
+  // (lib/data/_derive.ts syncLrStamps*; DB triggers). Never set by screens.
+  /** receivedAt of the live POD. */
+  readonly podReceivedAt: IsoDateTime | null;
+  /** billDate of the live, finalised freight bill carrying this LR. */
+  readonly billedAt: IsoDate | null;
+  /** Date that bill was fully settled (latest payment's receivedOn). */
+  readonly paidAt: IsoDate | null;
 };
 
-/** What lib/lr-status.ts needs; lib/data/lrs fills POD/bill/paid from linked records. */
+/** What lib/lr-status.ts needs: the seven stamps, all stored on the LR. */
 export type LrStatusInput = Pick<
   Lr,
-  "cancelledAt" | "bookedAt" | "dispatchedAt" | "deliveredAt"
-> & {
-  podReceivedAt: IsoDateTime | null;
-  billedAt: IsoDateTime | null;
-  paidAt: IsoDateTime | null;
-};
+  | "cancelledAt"
+  | "bookedAt"
+  | "dispatchedAt"
+  | "deliveredAt"
+  | "podReceivedAt"
+  | "billedAt"
+  | "paidAt"
+>;
 
 /** Row returned by lrs.list / getById: the record plus derived status and display names. */
 export type LrView = Lr & {
@@ -357,8 +368,6 @@ export type TaxInvoice = BaseRecord & {
     billTo: PartySnapshot;
     shipTo: PartySnapshot | null;
   } | null;
-  /** Why it was cancelled (set with cancelledAt). The number stays used. */
-  cancelReason?: string;
 };
 
 /** Status shown on screens: cancelled wins over draft / final. */

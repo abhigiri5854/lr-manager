@@ -53,6 +53,7 @@ import {
   updateRecord,
   withBatchContext,
   withTransaction,
+  authorStamp,
 } from "./_store";
 import { ForbiddenError, ValidationError } from "./errors";
 import { createTaxInvoice, updateTaxInvoice } from "./invoices";
@@ -193,6 +194,7 @@ export async function createImportBatch(
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     source: input.source,
     fileName: stored.name,
     fileUrl: stored.url,
@@ -648,6 +650,7 @@ export async function saveImportMapping(
         createdAt: now(),
         updatedAt: now(),
         version: 1,
+        ...authorStamp(),
         name: n,
         columns,
       });

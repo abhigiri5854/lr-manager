@@ -17,7 +17,7 @@ export const mockTaxInvoices: TaxInvoice[] = [
     companyId: IDS.company.acm,
     createdAt: "2026-10-27T09:00:00.000Z",
     updatedAt: "2026-10-27T09:00:00.000Z",
-    version: 1,
+    version: 1,    createdBy: null,    updatedBy: null,
     invoiceNo: "SQ2604002116",
     invoiceAt: "2026-10-10T06:27:00.000Z", // 10-10-2026 11:57 IST
     status: "draft",

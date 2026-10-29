@@ -41,6 +41,7 @@ import {
   updateRecord,
   writeAudit,
   type ListParams,
+  authorStamp,
 } from "./_store";
 import { assertCan } from "./session";
 
@@ -223,6 +224,7 @@ export async function createTaxInvoice(
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     ...header,
     invoiceNo,
     invoiceAt: v.invoiceAt,

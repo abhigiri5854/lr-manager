@@ -14,6 +14,7 @@ import {
   scoped,
   updateRecord,
   type ListParams,
+  authorStamp,
 } from "./_store";
 import { assertCan } from "./session";
 
@@ -62,6 +63,7 @@ export async function createItem(companyId: string, input: ItemInput): Promise<I
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     code,
     name: v.name,
     hsn: v.hsn ?? null,

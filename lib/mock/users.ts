@@ -57,7 +57,7 @@ export const mockMemberships: Membership[] = [
     role: "owner",
     createdAt: t,
     updatedAt: t,
-    version: 1,
+    version: 1,    createdBy: null,    updatedBy: null,
   },
   {
     id: IDS.membership.ownerRs,
@@ -66,7 +66,7 @@ export const mockMemberships: Membership[] = [
     role: "owner",
     createdAt: t,
     updatedAt: t,
-    version: 1,
+    version: 1,    createdBy: null,    updatedBy: null,
   },
   {
     id: IDS.membership.staffAcm,
@@ -75,7 +75,7 @@ export const mockMemberships: Membership[] = [
     role: "booking_staff",
     createdAt: t,
     updatedAt: t,
-    version: 1,
+    version: 1,    createdBy: null,    updatedBy: null,
   },
   {
     id: IDS.membership.accountantAcm,
@@ -84,7 +84,7 @@ export const mockMemberships: Membership[] = [
     role: "accountant",
     createdAt: t,
     updatedAt: t,
-    version: 1,
+    version: 1,    createdBy: null,    updatedBy: null,
   },
   {
     id: IDS.membership.driverAcm,
@@ -93,6 +93,6 @@ export const mockMemberships: Membership[] = [
     role: "driver",
     createdAt: t,
     updatedAt: t,
-    version: 1,
+    version: 1,    createdBy: null,    updatedBy: null,
   },
 ];

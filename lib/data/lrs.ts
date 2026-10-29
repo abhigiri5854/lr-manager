@@ -41,6 +41,7 @@ import {
   today,
   updateRecord,
   type ListParams,
+  authorStamp,
 } from "./_store";
 import { assertCan } from "./session";
 
@@ -304,6 +305,10 @@ function buildLr(companyId: string, v: ParsedLr, t: string): Lr {
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
+    podReceivedAt: null,
+    billedAt: null,
+    paidAt: null,
     lrNo: "",
     lrDate: v.lrDate ?? null,
     fromPlace: v.fromPlace ?? null,

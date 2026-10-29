@@ -25,6 +25,7 @@ import {
   updateRecord,
   writeAudit,
   type ListParams,
+  authorStamp,
 } from "./_store";
 import { assertCan } from "./session";
 
@@ -78,6 +79,7 @@ export async function createParty(companyId: string, input: PartyInput): Promise
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     name: v.name,
     place: v.place ?? null,
     gstin: v.gstin ?? null,
@@ -273,6 +275,7 @@ export function syncSelfParty(companyId: string): Party {
       createdAt: t,
       updatedAt: t,
       version: 1,
+      ...authorStamp(),
       ...fields,
       logoUrl: null,
       defaultFrom: null,

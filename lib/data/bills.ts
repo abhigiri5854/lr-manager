@@ -20,7 +20,13 @@ import {
   type FreightBillPatch,
   type PaymentInput,
 } from "@/lib/validators/bill";
-import { billForLr, receivedForBill, toLrView } from "./_derive";
+import {
+  billForLr,
+  receivedForBill,
+  syncLrStampsForBill,
+  syncLrStampsForPayment,
+  toLrView,
+} from "./_derive";
 import {
   allocateNumber,
   assertRef,
@@ -39,6 +45,7 @@ import {
   scoped,
   updateRecord,
   type ListParams,
+  authorStamp,
 } from "./_store";
 import { assertCan } from "./session";
 
@@ -172,6 +179,7 @@ export async function createFreightBill(
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     status: "draft",
     billNo: null,
     billDate: v.billDate,
@@ -181,7 +189,9 @@ export async function createFreightBill(
     ...priced(companyId, v.partyId, v.gstMode, gstRateBp, v.lines),
     snapshot: null,
   };
-  return toBillView(insertRecord("freight_bills", db.freightBills, bill));
+  const saved = insertRecord("freight_bills", db.freightBills, bill);
+  syncLrStampsForBill(companyId, saved);
+  return toBillView(saved);
 }
 
 export async function updateFreightBill(
@@ -194,6 +204,8 @@ export async function updateFreightBill(
   const p = parseInput(freightBillPatchSchema, patch);
   assertRef(db.parties, companyId, p.partyId, "partyId", "Party");
   if (p.lines) assertBillableLrs(companyId, p.lines, id);
+  const before = findById(db.freightBills, companyId, id);
+  const beforeLines = before ? clone(before.lines) : [];
   const saved = updateRecord(
     "freight_bills",
     db.freightBills,
@@ -211,6 +223,7 @@ export async function updateFreightBill(
     },
     "Freight bill",
   );
+  syncLrStampsForBill(companyId, { lines: beforeLines }, saved);
   return toBillView(saved);
 }
 
@@ -241,6 +254,7 @@ export async function finaliseFreightBill(
     },
     "Freight bill",
   );
+  syncLrStampsForBill(companyId, saved);
   return toBillView(saved);
 }
 
@@ -250,7 +264,9 @@ export async function cancelFreightBill(companyId: string, id: string): Promise<
   if (receivedForBill(companyId, id) > 0) {
     fail("", "Payments are recorded against this bill — cancel or re-allocate them first");
   }
-  return toBillView(cancelRecord("freight_bills", db.freightBills, companyId, id, "Freight bill"));
+  const saved = cancelRecord("freight_bills", db.freightBills, companyId, id, "Freight bill");
+  syncLrStampsForBill(companyId, saved);
+  return toBillView(saved);
 }
 
 // ---------- payments ----------
@@ -308,6 +324,7 @@ export async function createPayment(companyId: string, input: PaymentInput): Pro
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     partyId: v.partyId,
     allocations,
     amountPaise: v.amountPaise,
@@ -316,7 +333,9 @@ export async function createPayment(companyId: string, input: PaymentInput): Pro
     receivedOn: v.receivedOn,
     reference: v.reference ?? null,
   };
-  return insertRecord("payments", db.payments, payment);
+  const saved = insertRecord("payments", db.payments, payment);
+  syncLrStampsForPayment(companyId, saved);
+  return saved;
 }
 
 /** Replaces the whole payment (amounts and allocations are checked together). */
@@ -329,7 +348,9 @@ export async function updatePayment(
   await assertCan(companyId, "bill.edit");
   const v = parseInput(paymentFields, input);
   const allocations = checkPayment(companyId, v, id);
-  return updateRecord(
+  const before = findById(db.payments, companyId, id);
+  const beforeAllocations = before ? clone(before.allocations) : [];
+  const saved = updateRecord(
     "payments",
     db.payments,
     companyId,
@@ -347,9 +368,13 @@ export async function updatePayment(
     }),
     "Payment",
   );
+  syncLrStampsForPayment(companyId, { allocations: beforeAllocations }, saved);
+  return saved;
 }
 
 export async function cancelPayment(companyId: string, id: string): Promise<Payment> {
   await assertCan(companyId, "record.cancel");
-  return cancelRecord("payments", db.payments, companyId, id, "Payment");
+  const saved = cancelRecord("payments", db.payments, companyId, id, "Payment");
+  syncLrStampsForPayment(companyId, saved);
+  return saved;
 }

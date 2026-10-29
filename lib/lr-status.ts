@@ -15,6 +15,33 @@ export function deriveLrStatus(lr: LrStatusInput): LrStatus {
   return "Booked";
 }
 
+/** What the three cached LR stamps are worked out from. */
+export type LrLinkedRecords = {
+  /** The LR's live (not cancelled) POD. */
+  pod: { receivedAt: string | null } | null;
+  /** The live, finalised freight bill carrying the LR (drafts don't count). */
+  finalBill: { billDate: string; amountPaise: number } | null;
+  /** Allocations to that bill from live payments. */
+  allocations: { amountPaise: number; receivedOn: string }[];
+};
+
+/**
+ * podReceivedAt / billedAt / paidAt as stored on the LR. Paid = the bill's allocations cover
+ * its amount; the date is the latest payment's.
+ */
+export function lrStampsFrom(
+  linked: LrLinkedRecords,
+): Pick<LrStatusInput, "podReceivedAt" | "billedAt" | "paidAt"> {
+  const bill = linked.finalBill;
+  const received = linked.allocations.reduce((s, a) => s + a.amountPaise, 0);
+  const paid = bill !== null && received >= bill.amountPaise;
+  return {
+    podReceivedAt: linked.pod?.receivedAt ?? null,
+    billedAt: bill?.billDate ?? null,
+    paidAt: paid ? (linked.allocations.map((a) => a.receivedOn).sort().at(-1) ?? null) : null,
+  };
+}
+
 /** Goods are still moving (or about to): the e-way bill must stay valid. */
 export function isGoodsMoving(status: LrStatus): boolean {
   return status === "Draft" || status === "Booked" || status === "In transit";

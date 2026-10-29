@@ -18,6 +18,7 @@ import {
   parseInput,
   scoped,
   updateRecord,
+  authorStamp,
 } from "./_store";
 import { ForbiddenError } from "./errors";
 import { assertCan, getCurrentUserId, getRole } from "./session";
@@ -169,6 +170,7 @@ export async function inviteMember(
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
   });
   return { membership, tempPassword: password };
 }

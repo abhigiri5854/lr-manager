@@ -20,10 +20,12 @@ import {
   today,
   updateRecord,
   type ListParams,
+  authorStamp,
 } from "./_store";
 import { assertCan, getCurrentUserId } from "./session";
 import { ConflictError, ForbiddenError } from "./errors";
 import { getLrById, listLrsForExport } from "./lrs";
+import { syncLrStampsForPod } from "./_derive";
 
 const podPatchSchema = podFields.omit({ lrId: true }).partial();
 export type PodPatch = Partial<Omit<PodInput, "lrId">>;
@@ -202,6 +204,7 @@ export async function createPod(companyId: string, input: PodInput): Promise<Pod
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     lrId: v.lrId,
     receivedBy: v.receivedBy ?? null,
     receiverPhone: v.receiverPhone ?? null,
@@ -211,7 +214,9 @@ export async function createPod(companyId: string, input: PodInput): Promise<Pod
     documentUrls,
     receivedAt: v.receivedAt ?? (documentUrls.length ? t : null),
   };
-  return insertRecord("pods", db.pods, pod);
+  const saved = insertRecord("pods", db.pods, pod);
+  syncLrStampsForPod(saved);
+  return saved;
 }
 
 export async function updatePod(
@@ -238,7 +243,7 @@ export async function updatePod(
     fields.remarks !== undefined ? fields.remarks : existing.remarks,
   );
   if (deliveredOn) setLrDelivered(companyId, existing.lrId, deliveredAtFrom(deliveredOn));
-  return updateRecord(
+  const saved = updateRecord(
     "pods",
     db.pods,
     companyId,
@@ -251,6 +256,8 @@ export async function updatePod(
     },
     "POD",
   );
+  syncLrStampsForPod(saved);
+  return saved;
 }
 
 /** Cancelling a POD also clears the LR's delivery date (it was recorded by mistake). */
@@ -258,5 +265,6 @@ export async function cancelPod(companyId: string, id: string): Promise<Pod> {
   await assertCan(companyId, "record.cancel");
   const pod = cancelRecord("pods", db.pods, companyId, id, "POD");
   setLrDelivered(companyId, pod.lrId, null);
+  syncLrStampsForPod(pod);
   return pod;
 }

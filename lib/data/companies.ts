@@ -19,6 +19,7 @@ import {
   raiseNumber,
   today,
   writeAudit,
+  authorStamp,
 } from "./_store";
 import { ConflictError, NotFoundError } from "./errors";
 import { syncSelfParty } from "./parties";
@@ -177,6 +178,7 @@ export async function createCompany(input: CompanyCreateInput): Promise<Company>
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
   };
   db.memberships.push(membership);
   writeAudit(company.id, "memberships", membership.id, "create", null, membership);

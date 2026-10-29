@@ -90,6 +90,8 @@ function seed(): Store {
       createdAt: c.createdAt,
       updatedAt: c.createdAt,
       version: 1,
+      createdBy: null,
+      updatedBy: null,
       ...selfPartyFields(c),
       logoUrl: null,
       defaultFrom: null,
@@ -105,7 +107,7 @@ function seed(): Store {
 
 // Kept on globalThis so dev-server hot reloads don't wipe edits. Bump STORE_VERSION when the
 // record shapes change so a running dev server reseeds instead of serving old-shaped rows.
-const STORE_VERSION = 6; // 6: Smart import batches and saved mappings
+const STORE_VERSION = 7; // 7: createdBy/updatedBy, cached LR stamps
 const g = globalThis as typeof globalThis & {
   __lrManagerStore?: Store;
   __lrManagerStoreV?: number;
@@ -136,6 +138,17 @@ export function setAuditActor(userId: string): void {
 // the signed-in user is (getSessionUserId() keeps calling setAuditActor on every read).
 let systemBatchId: string | null = null;
 let batchContextId: string | null = null;
+
+/** Who a new / changed record is stamped with (null = system). In Postgres: auth.uid() by trigger. */
+function currentAuthor(): string | null {
+  return systemBatchId ? null : auditActor;
+}
+
+/** createdBy / updatedBy for a new record. */
+export function authorStamp(): { createdBy: string | null; updatedBy: string | null } {
+  const by = currentAuthor();
+  return { createdBy: by, updatedBy: by };
+}
 
 /** Runs `fn` with audit rows written as "system" + this batch id (bulk imports). */
 export async function runAsSystem<T>(batchId: string, fn: () => Promise<T>): Promise<T> {
@@ -278,7 +291,7 @@ export function paginate<T>(rows: T[], params: ListParams): Page<T> {
 }
 
 // ---------- writes (each writes audit_log) ----------
-const SKIP_AUDIT = new Set(["updatedAt", "version"]);
+const SKIP_AUDIT = new Set(["updatedAt", "version", "updatedBy"]);
 
 export function writeAudit(
   companyId: string,
@@ -332,6 +345,8 @@ export function updateRecord<T extends BaseRecord>(
     createdAt: current.createdAt,
     updatedAt: now(),
     version: current.version + 1,
+    createdBy: current.createdBy,
+    updatedBy: currentAuthor(),
   };
   rows[rows.indexOf(current)] = next;
   writeAudit(companyId, table, id, "update", current, next);
@@ -356,6 +371,7 @@ export function cancelRecord<T extends BaseRecord>(
     cancelledAt: at,
     updatedAt: at,
     version: current.version + 1,
+    updatedBy: currentAuthor(),
   };
   rows[rows.indexOf(current)] = next;
   writeAudit(companyId, table, id, "cancel", current, next);

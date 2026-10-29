@@ -7,6 +7,8 @@ const base = {
   createdAt: "2026-10-10T00:00:00.000Z",
   updatedAt: "2026-10-10T00:00:00.000Z",
   version: 1,
+  createdBy: null,
+  updatedBy: null,
   hsn: "39251000",
   uom: "EA",
   gstRateBp: 1800,

@@ -1,7 +1,7 @@
 import { describeAudit } from "@/lib/lr-activity";
 import { lrTimeline, type TimelineStep } from "@/lib/lr-status";
 import type { FreightBillView, LrView, Paise, Pod, PartySnapshot } from "@/lib/types";
-import { billForLr, billPaidOn, toLrView } from "./_derive";
+import { billForLr, statusInputOf, toLrView } from "./_derive";
 import { billingPartyFor } from "./billing-party";
 import { db, findById, scoped } from "./_store";
 import { getFreightBillById } from "./bills";
@@ -75,8 +75,7 @@ export async function getLrDetail(companyId: string, id: string): Promise<LrDeta
   const pod = scoped(db.pods, companyId).find((p) => p.lrId === id) ?? null;
   const bill = billForLr(companyId, id);
   const billView = bill ? await getFreightBillById(companyId, bill.id) : null;
-  const finalBill = bill?.status === "final" ? bill : undefined;
-  const paidOn = finalBill ? billPaidOn(companyId, finalBill) : null;
+  const paidOn = raw.paidAt;
 
   const driverRow = raw.driverMobile
     ? scoped(db.drivers, companyId).find((d) => d.mobile === raw.driverMobile)
@@ -135,15 +134,7 @@ export async function getLrDetail(companyId: string, id: string): Promise<LrDeta
     pod,
     bill: billView,
     paidOn,
-    timeline: lrTimeline({
-      cancelledAt: raw.cancelledAt,
-      bookedAt: raw.bookedAt,
-      dispatchedAt: raw.dispatchedAt,
-      deliveredAt: raw.deliveredAt,
-      podReceivedAt: pod?.receivedAt ?? null,
-      billedAt: finalBill?.billDate ?? null,
-      paidAt: paidOn,
-    }),
+    timeline: lrTimeline(statusInputOf(raw)),
     podDays,
     podPenaltyPerDayPaise: company?.podPenaltyPerDay ?? null,
     podOverdue,

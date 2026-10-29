@@ -40,6 +40,7 @@ import {
   today,
   updateRecord,
   type ListParams,
+  authorStamp,
 } from "./_store";
 import { assertCan } from "./session";
 
@@ -134,6 +135,7 @@ export async function createTruck(companyId: string, input: TruckInput): Promise
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     number: v.number,
     driverId: v.driverId ?? null,
     rcExpiry: v.rcExpiry ?? null,
@@ -209,6 +211,7 @@ export async function createDriver(companyId: string, input: DriverInput): Promi
     createdAt: t,
     updatedAt: t,
     version: 1,
+    ...authorStamp(),
     mobile: v.mobile,
     name: v.name ?? null,
     licenceNo: v.licenceNo ?? null,
