@@ -84,6 +84,8 @@ export const freightBills = pgTable(
     igstPaise: paise("igst_paise").notNull().default(0),
     advancePaise: paise("advance_paise").notNull().default(0),
     amountPaise: paise("amount_paise").notNull().default(0),
+    /** Bumped when the lines are replaced, so a lines-only edit still bumps the version. */
+    linesRev: integer("lines_rev").notNull().default(0),
     /** Kept by trigger: bill no., party name, LR nos. */
     searchText: text("search_text").notNull().default(""),
   },
@@ -149,6 +151,8 @@ export const payments = pgTable(
     mode: receiptMode("mode").notNull(),
     receivedOn: date("received_on", { mode: "string" }).notNull(),
     reference: text("reference"),
+    /** Bumped when the allocations are replaced, so an allocations-only edit bumps the version. */
+    linesRev: integer("lines_rev").notNull().default(0),
   },
   (t) => [
     ...businessConstraints("payments", t),

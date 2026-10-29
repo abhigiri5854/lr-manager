@@ -35,15 +35,13 @@ export class ForbiddenError extends Error {
 }
 
 /**
- * DATA_SOURCE=db and this area still runs on the mock store (moves in prompt 19b). Thrown by
- * any read of the mock store, so nothing shows mock data next to database data.
+ * The in-memory sample store was touched outside unit tests — a bug: every lib/data function
+ * must go to lib/data/db/* when running on the database. Never shows sample data instead.
  */
-export class NotOnDatabaseError extends Error {
+export class MockStoreError extends Error {
   constructor() {
-    super(
-      "Not yet on the database — this part moves over in the next step. Set DATA_SOURCE=mock in .env.local to use it on sample data.",
-    );
-    this.name = "NotOnDatabaseError";
+    super("Internal error: sample data is only for unit tests.");
+    this.name = "MockStoreError";
   }
 }
 
@@ -58,7 +56,7 @@ export function toActionFailure(e: unknown): ActionFailure {
   if (e instanceof ValidationError)
     return { ok: false, kind: "validation", issues: e.issues, message: e.message };
   if (e instanceof ConflictError) return { ok: false, kind: "conflict", message: e.message };
-  if (e instanceof NotFoundError || e instanceof ForbiddenError || e instanceof NotOnDatabaseError)
+  if (e instanceof NotFoundError || e instanceof ForbiddenError)
     return { ok: false, kind: "error", message: e.message };
   throw e;
 }

@@ -1,22 +1,31 @@
 // Table rows (snake_case) → the lib/types records screens already use, and the audit writer.
 // The reverse direction for the seed lives in db/rows.ts.
+import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   AuditEntry,
   Company,
   Driver,
+  FreightBill,
+  FreightBillLine,
+  ImportBatch,
+  ImportMapping,
   Item,
   Lr,
   LrView,
   Membership,
   Party,
+  Payment,
+  PaymentAllocation,
   Pod,
+  TaxInvoice,
+  TaxInvoiceLine,
   Truck,
   User,
 } from "@/lib/types";
 import { deriveLrStatus } from "@/lib/lr-status";
 import { auditChanges, type TableName } from "../_store";
 import { withCommit, type Tx } from "./conn";
-import { podUrlFromPath, urlFromPath } from "./storage";
+import { importUrlFromPath, podUrlFromPath, urlFromPath } from "./storage";
 
 // postgres.js rows are untyped records; each mapper below names every column it reads.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -252,6 +261,119 @@ export function toPod(r: Row): Pod {
   });
 }
 
+export function toTaxInvoice(r: Row): TaxInvoice {
+  return clean({
+    ...base(r),
+    invoiceNo: r.invoice_no,
+    invoiceAt: r.invoice_at,
+    status: r.status,
+    sellerPartyId: r.seller_party_id,
+    billToId: r.bill_to_id,
+    shipToId: r.ship_to_id,
+    placeOfSupplyStateCode: r.place_of_supply_state_code,
+    customerRef: r.customer_ref,
+    customerRefDate: r.customer_ref_date,
+    soNo: r.so_no,
+    soDate: r.so_date,
+    doNo: r.do_no,
+    sapRef: r.sap_ref,
+    transporterName: r.transporter_name,
+    truckId: r.truck_id,
+    driverMobile: r.driver_mobile,
+    shipFrom: r.ship_from,
+    incoterm: r.incoterm,
+    lines: r.lines as TaxInvoiceLine[],
+    totals: {
+      taxablePaise: r.taxable_paise,
+      sgstPaise: r.sgst_paise,
+      cgstPaise: r.cgst_paise,
+      igstPaise: r.igst_paise,
+      roundOffPaise: r.round_off_paise,
+      totalPaise: r.total_paise,
+    },
+    irn: r.irn,
+    ewayBillNo: r.eway_bill_no,
+    sourceFileUrl: importUrlFromPath(r.source_file_path),
+    importBatchId: r.import_batch_id,
+    snapshot: r.snapshot,
+  });
+}
+
+export function toFreightBill(r: Row): FreightBill {
+  return clean({
+    ...base(r),
+    status: r.status,
+    billNo: r.bill_no,
+    billDate: r.bill_date,
+    partyId: r.party_id,
+    gstMode: r.gst_mode,
+    gstRateBp: r.gst_rate_bp,
+    lines: r.lines as FreightBillLine[],
+    totals: {
+      chargesPaise: r.charges_paise,
+      sgstPaise: r.sgst_paise,
+      cgstPaise: r.cgst_paise,
+      igstPaise: r.igst_paise,
+      advancePaise: r.advance_paise,
+      amountPaise: r.amount_paise,
+    },
+    snapshot: r.snapshot,
+  });
+}
+
+export function toPayment(r: Row): Payment {
+  return clean({
+    ...base(r),
+    partyId: r.party_id,
+    allocations: r.allocations as PaymentAllocation[],
+    amountPaise: r.amount_paise,
+    tdsPaise: r.tds_paise,
+    mode: r.mode,
+    receivedOn: r.received_on,
+    reference: r.reference,
+  });
+}
+
+export function toImportBatch(r: Row): ImportBatch {
+  return clean({
+    ...base(r),
+    createdBy: r.created_by,
+    source: r.source,
+    fileName: r.file_name,
+    fileUrl: importUrlFromPath(r.file_path),
+    format: r.format,
+    kind: r.kind,
+    mimeType: r.mime_type,
+    sizeBytes: r.size_bytes,
+    detectedAs: r.detected_as,
+    status: r.status,
+    error: r.error,
+    result: r.result,
+    mapping: r.mapping,
+    confirmedColumns: r.confirmed_columns,
+    mappingName: r.mapping_name,
+    rowActions: r.row_actions,
+    counts: { valid: r.count_valid, warning: r.count_warning, error: r.count_error },
+    createdRecords: r.created_records,
+    importedAt: r.imported_at,
+  });
+}
+
+export function toImportMapping(r: Row): ImportMapping {
+  return clean({ ...base(r), name: r.name, columns: r.columns });
+}
+
+/**
+ * Smart import: audit rows written inside withAuditBatch carry the file's batch id, and are
+ * written as "system" when `system` is set (Excel bulk import by the user who uploaded the file).
+ */
+type AuditContext = { batchId: string; system: boolean };
+const auditContext = new AsyncLocalStorage<AuditContext>();
+
+export function withAuditBatch<T>(ctx: AuditContext, fn: () => Promise<T>): Promise<T> {
+  return auditContext.run(ctx, fn);
+}
+
 /**
  * One audit_log row as the signed-in user, in the caller's transaction. It is sent with the
  * commit (withCommit), so it costs no round trip of its own; if it fails, nothing is saved.
@@ -266,10 +388,13 @@ export function audit(
   after: object,
 ): void {
   const changes = auditChanges(before, after);
+  const ctx = auditContext.getStore();
+  const system = ctx?.system === true;
   withCommit(
     tx,
-    tx`insert into audit_log (company_id, actor, user_id, table_name, record_id, action, changes)
-       values (${companyId}, 'user', auth.uid(), ${table}, ${recordId}, ${action},
+    tx`insert into audit_log (company_id, actor, user_id, batch_id, table_name, record_id, action, changes)
+       values (${companyId}, ${system ? "system" : "user"}, ${system ? tx`null` : tx`auth.uid()`},
+               ${ctx?.batchId ?? null}, ${table}, ${recordId}, ${action},
                ${tx.json(changes as never)})`,
   );
 }

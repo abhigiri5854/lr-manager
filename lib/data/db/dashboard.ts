@@ -43,7 +43,7 @@ export async function getDashboard(companyId: string): Promise<Dashboard> {
               and l.delivered_at is not null and l.pod_received_at is null
             order by l.delivered_at, l.id`,
         tx`select count(*) filter (where b.status = 'final' and b.cancelled_at is null) as final_bills,
-                  coalesce(sum(greatest(bal.due_paise, 0)), 0) as to_collect
+                  coalesce(sum(greatest(bal.due_paise, 0)), 0)::bigint as to_collect
              from freight_bills b join freight_bill_balances bal on bal.freight_bill_id = b.id
             where b.company_id = ${companyId}`,
         tx`${LR_SELECT(tx)} where l.company_id = ${companyId} and l.cancelled_at is null

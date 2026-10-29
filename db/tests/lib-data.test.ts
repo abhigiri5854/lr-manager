@@ -28,8 +28,7 @@ const items = await import("@/lib/data/items");
 const trucks = await import("@/lib/data/trucks");
 const companies = await import("@/lib/data/companies");
 const members = await import("@/lib/data/members");
-const { ConflictError, ForbiddenError, NotOnDatabaseError, ValidationError } =
-  await import("@/lib/data/errors");
+const { ConflictError, ForbiddenError, ValidationError } = await import("@/lib/data/errors");
 
 let sql: Sql;
 let fx: Fixtures;
@@ -165,10 +164,19 @@ describe("lib/data on the database", () => {
     ]);
   });
 
-  it("areas not on the database yet refuse instead of showing sample data", async () => {
+  it("the sample-data store is off outside unit tests", async () => {
     const t = await fx.team();
     signIn(t.owner, t.companyId);
-    const { listTaxInvoices } = await import("@/lib/data/invoices");
-    await expect(listTaxInvoices(t.companyId, {})).rejects.toBeInstanceOf(NotOnDatabaseError);
+    const before = process.env.DATA_SOURCE;
+    process.env.DATA_SOURCE = "mock"; // honoured only together with the unit-test setup
+    const vitest = process.env.VITEST;
+    delete process.env.VITEST;
+    try {
+      const { listTaxInvoices } = await import("@/lib/data/invoices");
+      expect((await listTaxInvoices(t.companyId, {})).total).toBe(0);
+    } finally {
+      process.env.DATA_SOURCE = before;
+      process.env.VITEST = vitest;
+    }
   });
 });

@@ -62,7 +62,7 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   createItem: ["master.edit", () => items.createItem(c(), {} as never)],
   updateItem: ["master.edit", () => items.updateItem(c(), X, 1, {})],
   createLr: ["lr.edit", () => lrs.createLr(c(), {})],
-  createImportedLr: ["lr.edit", () => lrs.createImportedLr(c(), {}, "19100", X)],
+  createImportedLr: ["lr.edit", () => lrs.createImportedLr(c(), {}, "19100", X, "")],
   createImportBatch: [
     "import.run",
     () => imports.createImportBatch(c(), { source: "document", fileName: "a.png", bytes: png8 }),

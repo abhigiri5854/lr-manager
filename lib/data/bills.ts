@@ -1,21 +1,11 @@
 import { billingPartyFor } from "./billing-party";
-import { formatPaise } from "@/lib/format";
 import { financialYear } from "@/lib/fy";
 import { companySnapshot, partySnapshot } from "@/lib/snapshots";
-import { computeFreightGst } from "@/lib/tax";
-import type {
-  FreightBill,
-  FreightBillLine,
-  FreightBillView,
-  LrView,
-  Page,
-  Payment,
-} from "@/lib/types";
+import type { FreightBill, FreightBillView, LrView, Page, Payment } from "@/lib/types";
 import {
   freightBillFields,
   freightBillPatchSchema,
   paymentFields,
-  paymentRuleErrors,
   type FreightBillInput,
   type FreightBillPatch,
   type PaymentInput,
@@ -30,7 +20,6 @@ import {
 import {
   allocateNumber,
   assertRef,
-  assertRules,
   cancelRecord,
   clone,
   db,
@@ -47,7 +36,18 @@ import {
   type ListParams,
   authorStamp,
 } from "./_store";
+import {
+  assertBillableLrs,
+  BILL_FINAL,
+  BILL_HAS_PAYMENTS,
+  checkAllocations,
+  formatBillNo,
+  priceBill,
+  type ParsedBillLine,
+} from "./bill-calc";
+import * as dbb from "./db/bills";
 import { assertCan } from "./session";
+import { onDatabase } from "./source";
 
 export type FreightBillListParams = ListParams & {
   partyId?: string;
@@ -55,8 +55,6 @@ export type FreightBillListParams = ListParams & {
 };
 
 export type PaymentListParams = ListParams & { partyId?: string };
-
-type ParsedLine = ReturnType<typeof freightBillFields.parse>["lines"][number];
 
 function toBillView(b: FreightBill): FreightBillView {
   const received = receivedForBill(b.companyId, b.id);
@@ -69,65 +67,32 @@ function toBillView(b: FreightBill): FreightBillView {
   };
 }
 
-/** LRs must be booked, live, and not on another bill. */
-function assertBillableLrs(companyId: string, lines: ParsedLine[], billId?: string) {
-  const seen = new Set<string>();
-  lines.forEach((l, i) => {
-    const path = `lines.${i}.lrId`;
-    const lr = findById(db.lrs, companyId, l.lrId);
-    if (!lr || lr.cancelledAt) fail(path, "LR not found in this company");
-    if (!lr.bookedAt) fail(path, `LR ${lr.lrNo} is a draft — book it before billing`);
-    if (seen.has(l.lrId)) fail(path, `LR ${lr.lrNo} is ticked twice`);
-    seen.add(l.lrId);
-    const other = billForLr(companyId, l.lrId);
-    if (other && other.id !== billId) {
-      fail(path, `LR ${lr.lrNo} is already on bill ${other.billNo ?? "(draft)"}`);
-    }
-  });
+/** Mock: what the billable-LR checks need about one LR. */
+function mockLrForBill(companyId: string) {
+  return (lrId: string) => {
+    const lr = findById(db.lrs, companyId, lrId);
+    if (!lr) return undefined;
+    const other = billForLr(companyId, lrId);
+    return {
+      lrNo: lr.lrNo,
+      live: !lr.cancelledAt,
+      booked: !!lr.bookedAt,
+      otherBill: other ? { id: other.id, billNo: other.billNo } : null,
+    };
+  };
 }
 
-/** Line totals, bill totals and GST (SGST+CGST within the state, IGST across). */
 function priced(
   companyId: string,
   partyId: string,
   gstMode: FreightBill["gstMode"],
   gstRateBp: number,
-  lines: ParsedLine[],
+  lines: ParsedBillLine[],
 ) {
-  const out: FreightBillLine[] = lines.map((l) => {
-    const detention = l.detentionPaise ?? 0;
-    const other = l.otherPaise ?? 0;
-    const advance = l.advancePaise ?? 0;
-    return {
-      id: l.id ?? newId(),
-      lrId: l.lrId,
-      freightPaise: l.freightPaise,
-      detentionPaise: detention,
-      otherPaise: other,
-      advancePaise: advance,
-      totalPaise: l.freightPaise + detention + other,
-    };
-  });
-  const charges = out.reduce((s, l) => s + l.totalPaise, 0);
-  const advance = out.reduce((s, l) => s + l.advancePaise, 0);
   const company = db.companies.find((c) => c.id === companyId)!;
   const party = db.parties.find((p) => p.id === partyId);
   const partyState = party?.stateCode ?? party?.gstin?.slice(0, 2) ?? null;
-  const gst = computeFreightGst(
-    charges,
-    gstMode,
-    gstRateBp,
-    partyState === company.gstin.slice(0, 2),
-  );
-  return {
-    lines: out,
-    totals: {
-      chargesPaise: charges,
-      ...gst,
-      advancePaise: advance,
-      amountPaise: charges + gst.sgstPaise + gst.cgstPaise + gst.igstPaise - advance,
-    },
-  };
+  return priceBill(company.gstin, partyState, gstMode, gstRateBp, lines);
 }
 
 // ---------- freight bills ----------
@@ -135,6 +100,7 @@ export async function listFreightBills(
   companyId: string,
   params: FreightBillListParams = {},
 ): Promise<Page<FreightBillView>> {
+  if (onDatabase()) return dbb.listFreightBills(companyId, params);
   const rows = scoped(db.freightBills, companyId)
     .filter((b) => !params.partyId || b.partyId === params.partyId)
     .filter((b) => !params.status || b.status === params.status)
@@ -148,12 +114,14 @@ export async function getFreightBillById(
   companyId: string,
   id: string,
 ): Promise<FreightBillView | null> {
+  if (onDatabase()) return dbb.getFreightBillById(companyId, id);
   const b = findById(db.freightBills, companyId, id);
   return b ? toBillView(b) : null;
 }
 
 /** Booked LRs not on any bill yet (New freight bill: pick a party → its unbilled LRs). */
 export async function listUnbilledLrs(companyId: string, partyId?: string): Promise<LrView[]> {
+  if (onDatabase()) return dbb.listUnbilledLrs(companyId, partyId);
   return scoped(db.lrs, companyId)
     .filter((lr) => lr.bookedAt && !billForLr(companyId, lr.id))
     .filter((lr) => !partyId || billingPartyFor(lr)?.id === partyId)
@@ -167,8 +135,9 @@ export async function createFreightBill(
 ): Promise<FreightBillView> {
   await assertCan(companyId, "bill.edit");
   const v = parseInput(freightBillFields, input);
+  if (onDatabase()) return dbb.insertFreightBill(companyId, v);
   assertRef(db.parties, companyId, v.partyId, "partyId", "Party");
-  assertBillableLrs(companyId, v.lines);
+  assertBillableLrs(v.lines, mockLrForBill(companyId));
   const company = db.companies.find((c) => c.id === companyId);
   const gstRateBp =
     v.gstRateBp ?? (v.gstMode === "forward_charge" ? (company?.freightGstRateBp ?? 0) : 0);
@@ -202,8 +171,9 @@ export async function updateFreightBill(
 ): Promise<FreightBillView> {
   await assertCan(companyId, "bill.edit");
   const p = parseInput(freightBillPatchSchema, patch);
+  if (onDatabase()) return dbb.updateFreightBill(companyId, id, expectedVersion, p);
   assertRef(db.parties, companyId, p.partyId, "partyId", "Party");
-  if (p.lines) assertBillableLrs(companyId, p.lines, id);
+  if (p.lines) assertBillableLrs(p.lines, mockLrForBill(companyId), id);
   const before = findById(db.freightBills, companyId, id);
   const beforeLines = before ? clone(before.lines) : [];
   const saved = updateRecord(
@@ -213,8 +183,7 @@ export async function updateFreightBill(
     id,
     expectedVersion,
     (current) => {
-      if (current.status === "final")
-        fail("", "Finalised bills can't be edited — cancel and re-issue");
+      if (current.status === "final") fail("", BILL_FINAL);
       const next = { ...current, ...p, lines: current.lines };
       return {
         ...next,
@@ -234,6 +203,7 @@ export async function finaliseFreightBill(
   expectedVersion: number,
 ): Promise<FreightBillView> {
   await assertCan(companyId, "bill.edit");
+  if (onDatabase()) return dbb.finaliseFreightBill(companyId, id, expectedVersion);
   const saved = updateRecord(
     "freight_bills",
     db.freightBills,
@@ -248,7 +218,7 @@ export async function finaliseFreightBill(
       return {
         ...current,
         status: "final" as const,
-        billNo: `${company.freightBillPrefix}${String(no).padStart(3, "0")}`,
+        billNo: formatBillNo(company.freightBillPrefix, no),
         snapshot: { company: companySnapshot(company), party: partySnapshot(party) },
       };
     },
@@ -261,9 +231,8 @@ export async function finaliseFreightBill(
 /** A cancelled final bill keeps its number (shown as cancelled) so the series has no gaps. */
 export async function cancelFreightBill(companyId: string, id: string): Promise<FreightBillView> {
   await assertCan(companyId, "record.cancel");
-  if (receivedForBill(companyId, id) > 0) {
-    fail("", "Payments are recorded against this bill — cancel or re-allocate them first");
-  }
+  if (onDatabase()) return dbb.cancelFreightBill(companyId, id);
+  if (receivedForBill(companyId, id) > 0) fail("", BILL_HAS_PAYMENTS);
   const saved = cancelRecord("freight_bills", db.freightBills, companyId, id, "Freight bill");
   syncLrStampsForBill(companyId, saved);
   return toBillView(saved);
@@ -273,31 +242,27 @@ export async function cancelFreightBill(companyId: string, id: string): Promise<
 type ParsedPayment = ReturnType<typeof paymentFields.parse>;
 
 function checkPayment(companyId: string, v: ParsedPayment, paymentId?: string) {
-  const allocations = v.allocations ?? [];
   assertRef(db.parties, companyId, v.partyId, "partyId", "Party");
-  assertRules(
-    paymentRuleErrors({ amountPaise: v.amountPaise, tdsPaise: v.tdsPaise ?? 0, allocations }),
-  );
-  allocations.forEach((a, i) => {
-    const path = `allocations.${i}.amountPaise`;
-    const bill = findById(db.freightBills, companyId, a.freightBillId);
-    if (!bill || bill.cancelledAt || bill.status !== "final") {
-      fail(`allocations.${i}.freightBillId`, "Bill not found or not final");
-    }
-    if (bill.partyId !== v.partyId)
-      fail(`allocations.${i}.freightBillId`, `Bill ${bill.billNo} is for another party`);
-    const due = bill.totals.amountPaise - receivedForBill(companyId, bill.id, paymentId);
-    if (a.amountPaise > due) {
-      fail(path, `More than the ₹${formatPaise(due)} due on bill ${bill.billNo}`);
-    }
+  return checkAllocations(v, (billId) => {
+    const bill = findById(db.freightBills, companyId, billId);
+    return bill
+      ? {
+          billNo: bill.billNo,
+          live: !bill.cancelledAt,
+          final: bill.status === "final",
+          partyId: bill.partyId,
+          amountPaise: bill.totals.amountPaise,
+          receivedPaise: receivedForBill(companyId, bill.id, paymentId),
+        }
+      : undefined;
   });
-  return allocations;
 }
 
 export async function listPayments(
   companyId: string,
   params: PaymentListParams = {},
 ): Promise<Page<Payment>> {
+  if (onDatabase()) return dbb.listPayments(companyId, params);
   const name = (id: string) => db.parties.find((p) => p.id === id)?.name;
   const rows = scoped(db.payments, companyId)
     .filter((p) => !params.partyId || p.partyId === params.partyId)
@@ -308,6 +273,7 @@ export async function listPayments(
 }
 
 export async function getPaymentById(companyId: string, id: string): Promise<Payment | null> {
+  if (onDatabase()) return dbb.getPaymentById(companyId, id);
   const p = findById(db.payments, companyId, id);
   return p ? clone(p) : null;
 }
@@ -316,6 +282,7 @@ export async function getPaymentById(companyId: string, id: string): Promise<Pay
 export async function createPayment(companyId: string, input: PaymentInput): Promise<Payment> {
   await assertCan(companyId, "bill.edit");
   const v = parseInput(paymentFields, input);
+  if (onDatabase()) return dbb.insertPayment(companyId, v);
   const allocations = checkPayment(companyId, v);
   const t = now();
   const payment: Payment = {
@@ -347,6 +314,7 @@ export async function updatePayment(
 ): Promise<Payment> {
   await assertCan(companyId, "bill.edit");
   const v = parseInput(paymentFields, input);
+  if (onDatabase()) return dbb.updatePayment(companyId, id, expectedVersion, v);
   const allocations = checkPayment(companyId, v, id);
   const before = findById(db.payments, companyId, id);
   const beforeAllocations = before ? clone(before.allocations) : [];
@@ -374,6 +342,7 @@ export async function updatePayment(
 
 export async function cancelPayment(companyId: string, id: string): Promise<Payment> {
   await assertCan(companyId, "record.cancel");
+  if (onDatabase()) return dbb.cancelPayment(companyId, id);
   const saved = cancelRecord("payments", db.payments, companyId, id, "Payment");
   syncLrStampsForPayment(companyId, saved);
   return saved;

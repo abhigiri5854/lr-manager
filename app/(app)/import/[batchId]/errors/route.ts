@@ -1,11 +1,9 @@
-import { notOnDatabaseResponse, onDatabase } from "@/lib/data/source";
 import { errorReportRows } from "@/lib/data/import";
 import { getActiveCompanyId } from "@/lib/data/session";
 import { importErrorReportWorkbook } from "@/lib/export/import-errors-xlsx";
 
 /** GET /import/<batch>/errors → .xlsx of the rows that couldn't be imported. */
 export async function GET(_req: Request, ctx: RouteContext<"/import/[batchId]/errors">) {
-  if (onDatabase()) return notOnDatabaseResponse();
   const { batchId } = await ctx.params;
   const report = await errorReportRows(await getActiveCompanyId(), batchId);
   if (!report) return new Response("Not found", { status: 404 });

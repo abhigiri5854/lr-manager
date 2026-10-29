@@ -4,7 +4,6 @@ import { InvoiceAlreadyOnLr } from "@/components/lr/InvoiceAlreadyOnLr";
 import { LrForm } from "@/components/lr/LrForm";
 import { LrFormSkeleton } from "@/components/lr/LrFormSkeleton";
 import { getTaxInvoiceById } from "@/lib/data/invoices";
-import { onDatabase } from "@/lib/data/source";
 import {
   findLrsWithInvoice,
   getConsigneeToPlace,
@@ -49,8 +48,7 @@ async function NewLr({ searchParams }: { searchParams: SearchParams }) {
   const today = todayInIndia();
   const [source, found] = await Promise.all([
     one(params.from) ? getLrById(companyId, one(params.from)!) : null,
-    // Tax invoices aren't on the database yet: "New LR from invoice" opens a blank LR there.
-    one(params.invoice) && !onDatabase() ? getTaxInvoiceById(companyId, one(params.invoice)!) : null,
+    one(params.invoice) ? getTaxInvoiceById(companyId, one(params.invoice)!) : null,
   ]);
   // Only a numbered, live invoice can go on an LR (own drafts get their number on Finalise).
   const invoice =

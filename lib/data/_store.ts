@@ -25,7 +25,7 @@ import type {
 } from "@/lib/types";
 import { selfPartyFields } from "@/lib/self-party";
 import type { RuleError } from "@/lib/validators/common";
-import { ConflictError, NotFoundError, NotOnDatabaseError, ValidationError } from "./errors";
+import { ConflictError, MockStoreError, NotFoundError, ValidationError } from "./errors";
 import { onDatabase } from "./source";
 
 type Store = {
@@ -117,11 +117,11 @@ if (g.__lrManagerStoreV !== STORE_VERSION) {
   g.__lrManagerStore = seed();
   g.__lrManagerStoreV = STORE_VERSION;
 }
-// With DATA_SOURCE=db, any read of the mock store means an area that hasn't moved to the
-// database yet: it fails with NotOnDatabaseError instead of mixing sample and real data.
+// Outside unit tests any read of the mock store is a bug: it fails instead of mixing sample and
+// real data.
 export const db: Store = new Proxy(g.__lrManagerStore!, {
   get(target, key, receiver) {
-    if (onDatabase()) throw new NotOnDatabaseError();
+    if (onDatabase()) throw new MockStoreError();
     return Reflect.get(target, key, receiver);
   },
 });

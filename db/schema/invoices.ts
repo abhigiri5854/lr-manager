@@ -62,6 +62,8 @@ export const taxInvoices = pgTable(
     igstPaise: paise("igst_paise").notNull().default(0),
     roundOffPaise: paise("round_off_paise").notNull().default(0),
     totalPaise: paise("total_paise").notNull().default(0),
+    /** Bumped when the lines are replaced, so a lines-only edit still bumps the version. */
+    linesRev: integer("lines_rev").notNull().default(0),
     /** Kept by trigger: no., bill-to name + GSTIN, linked LR nos. */
     searchText: text("search_text").notNull().default(""),
   },

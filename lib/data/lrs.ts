@@ -42,7 +42,6 @@ import {
 } from "./_store";
 import * as dbl from "./db/lrs";
 import { applyPatch, buildLr, normaliseNested, type SaveLrOptions } from "./lr-patch";
-import { NotOnDatabaseError } from "./errors";
 import { assertCan } from "./session";
 import { onDatabase } from "./source";
 
@@ -301,14 +300,20 @@ export async function createImportedLr(
   input: LrInput,
   lrDigits: string,
   importBatchId: string,
+  /** The company's LR prefix (the caller has it already). */
+  lrPrefix: string,
 ): Promise<LrView> {
   await assertCan(companyId, "lr.edit");
-  if (onDatabase()) throw new NotOnDatabaseError();
   const v = parseInput(lrFields, input);
-  assertLrRefs(companyId, v);
-  const company = db.companies.find((c) => c.id === companyId)!;
   const n = Number(lrDigits);
-  const lrNo = `${company.lrPrefix}${n}`;
+  if (onDatabase()) {
+    const lr = buildLr(companyId, v, now());
+    lr.lrNo = `${lrPrefix}${n}`;
+    lr.importBatchId = importBatchId;
+    return dbl.insertImportedLr(lr, n, financialYear(today()));
+  }
+  assertLrRefs(companyId, v);
+  const lrNo = `${lrPrefix}${n}`;
   if (db.lrs.some((l) => l.companyId === companyId && l.lrNo === lrNo)) {
     fail("lrNo", `LR ${lrNo} already exists`);
   }

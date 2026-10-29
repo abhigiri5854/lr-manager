@@ -5,63 +5,41 @@
 // Excel booking sheet → "Import valid rows" runs in one transaction, audited as "system" with
 // the batch id. Invoice files → the user reviews them in the Tax invoice form; saving there
 // goes through saveImportedInvoice (one transaction too).
+//
+// Storage and lookups go through ImportStore (./import-store.ts): the database, or the sample
+// data in unit tests.
 import { formatDate } from "@/lib/format";
-import {
-  importableRows,
-  reviewExcelRows,
-  type Lookups,
-  type ReviewRow,
-} from "@/lib/import/excel-rows";
+import { importableRows, reviewExcelRows, type ReviewRow } from "@/lib/import/excel-rows";
 import { checkImportBytes, kindOf, type ImportSource } from "@/lib/import/file-types";
 import { fieldLabel, isFieldKey } from "@/lib/import/fields";
-import {
-  invoicePrefill,
-  type InvoicePrefill,
-  type PendingRecords,
-  type PrefillLookups,
-} from "@/lib/import/invoice-prefill";
+import { invoicePrefill, type InvoicePrefill, type PendingRecords } from "@/lib/import/invoice-prefill";
 import { detectedLabel, formatLabel, goesToLabel, type ChipTone } from "@/lib/import/labels";
 import { getReader } from "@/lib/import/reader";
 import type { DocumentReadResult, ExcelReadResult, ReadInvoice } from "@/lib/import/types";
-import type { PartyOption, TruckOption } from "@/lib/lr-form";
-import type {
-  ImportBatch,
-  ImportMapping,
-  ImportRowAction,
-  Page,
-  Party,
-  TaxInvoice,
-} from "@/lib/types";
-import { gstinError, normaliseGstin, normaliseVehicleNo } from "@/lib/validators/common";
+import type { ImportBatch, ImportMapping, ImportRowAction, Page, TaxInvoice } from "@/lib/types";
+import { gstinError, normaliseGstin } from "@/lib/validators/common";
 import type { LrInput, LrPatch } from "@/lib/validators/lr";
 import type { TaxInvoiceInput } from "@/lib/validators/invoice";
 import { z } from "zod";
+import { fail, newId, now, parseInput } from "./_store";
+import { dbImportStore } from "./db/imports";
+import { ForbiddenError, NotFoundError, ValidationError } from "./errors";
 import {
-  cancelRecord,
-  clone,
-  db,
-  fail,
-  findById,
-  getOrThrow,
-  insertRecord,
-  newId,
-  now,
-  paginate,
-  parseInput,
-  runAsSystem,
-  scoped,
-  updateRecord,
-  withBatchContext,
-  withTransaction,
-  authorStamp,
-} from "./_store";
-import { ForbiddenError, ValidationError } from "./errors";
+  mockImportStore,
+  resolveLookups,
+  type ExistingInvoice,
+  type ImportLookups,
+  type ImportStore,
+} from "./import-store";
 import { createTaxInvoice, updateTaxInvoice } from "./invoices";
-import { createImportedLr, updateLr } from "./lrs";
+import { createImportedLr, getLrById, updateLr } from "./lrs";
 import { createParty } from "./parties";
 import { assertCan, getCurrentUserId } from "./session";
+import { onDatabase } from "./source";
 import { createTruck } from "./trucks";
 import { uploadImportFile } from "./uploads";
+
+const store = (): ImportStore => (onDatabase() ? dbImportStore : mockImportStore);
 
 // ---------- permissions ----------
 /** Everything on Smart import needs the import permission. */
@@ -70,10 +48,16 @@ async function assertImporter(companyId: string): Promise<void> {
 }
 
 // ---------- looking things up ----------
-const company = (companyId: string) => db.companies.find((c) => c.id === companyId)!;
+async function getBatch(companyId: string, id: string): Promise<ImportBatch> {
+  const b = await store().getBatch(companyId, id);
+  if (!b) throw new NotFoundError("Import file");
+  return b;
+}
 
-function getBatch(companyId: string, id: string): ImportBatch {
-  return getOrThrow(db.importBatches, companyId, id, "Import file");
+/** A live (not cancelled) batch, or null. */
+async function liveBatch(companyId: string, id: string): Promise<ImportBatch | null> {
+  const b = await store().getBatch(companyId, id);
+  return b && !b.cancelledAt ? b : null;
 }
 
 function excelResult(b: ImportBatch): ExcelReadResult | null {
@@ -83,51 +67,10 @@ function documentResult(b: ImportBatch): DocumentReadResult | null {
   return b.result?.kind === "document" ? b.result : null;
 }
 
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-
-function lookupsFor(companyId: string): Lookups {
-  const prefix = company(companyId).lrPrefix;
-  return {
-    lrPrefix: prefix,
-    lrByNo(lrNo) {
-      const lr = db.lrs.find((l) => l.companyId === companyId && l.lrNo === `${prefix}${lrNo}`);
-      if (!lr) return null;
-      // Same status rule as lib/lr-status.ts, from what the LR carries.
-      const billed = db.freightBills.some(
-        (b) => b.companyId === companyId && !b.cancelledAt && b.lines.some((l) => l.lrId === lr.id),
-      );
-      const status = lr.cancelledAt ? "Cancelled" : billed ? "Billed" : "in the register";
-      return { id: lr.id, status, updatable: !lr.cancelledAt && !billed };
-    },
-    partyByGstin: (gstin) => {
-      const p = scoped(db.parties, companyId).find((x) => x.gstin === gstin);
-      return p ? { id: p.id, name: p.name } : null;
-    },
-    partyByName: (name) => {
-      const p = scoped(db.parties, companyId).find((x) => !x.isSelf && sameName(x.name, name));
-      return p ? { id: p.id, name: p.name } : null;
-    },
-    truckByNumber: (number) => {
-      const t = scoped(db.trucks, companyId).find((x) => x.number === number);
-      return t ? { id: t.id } : null;
-    },
-    taxInvoice: (invoiceNo, sellerGstin) => {
-      if (!sellerGstin) return null;
-      const inv = scoped(db.taxInvoices, companyId).find(
-        (i) =>
-          i.invoiceNo === invoiceNo &&
-          i.sellerPartyId !== null &&
-          db.parties.find((p) => p.id === i.sellerPartyId)?.gstin === sellerGstin,
-      );
-      return inv ? { id: inv.id } : null;
-    },
-  };
-}
-
-function reviewOf(companyId: string, b: ImportBatch) {
+function reviewOf(l: ImportLookups, b: ImportBatch) {
   const result = excelResult(b);
   if (!result) return { rows: [] as ReviewRow[], counts: { valid: 0, warning: 0, error: 0 } };
-  return reviewExcelRows(result, b.mapping, b.rowActions, lookupsFor(companyId));
+  return reviewExcelRows(result, b.mapping, b.rowActions, l);
 }
 
 /** Columns still marked "Confirm" that the user hasn't answered. */
@@ -140,30 +83,20 @@ function columnsToConfirm(b: ImportBatch): string[] {
 }
 
 /** The tax invoice with this number from this seller (any status). */
-function findExistingInvoice(companyId: string, inv: ReadInvoice): TaxInvoice | null {
-  const found = scoped(db.taxInvoices, companyId, true).find(
-    (i) =>
-      i.invoiceNo === inv.invoiceNo &&
-      i.sellerPartyId !== null &&
-      (inv.seller.gstin
-        ? db.parties.find((p) => p.id === i.sellerPartyId)?.gstin === inv.seller.gstin
-        : false),
-  );
-  return found ? clone(found) : null;
-}
+const findExistingInvoice = (l: ImportLookups, inv: ReadInvoice): ExistingInvoice | null =>
+  l.existingInvoice(inv.invoiceNo, inv.seller.gstin ?? null);
+
+const isLocked = (e: ExistingInvoice | null) => !!e && (e.status === "final" || e.cancelled);
 
 // ---------- creating a batch ----------
-function patchBatch(companyId: string, id: string, apply: (b: ImportBatch) => ImportBatch) {
-  const current = getBatch(companyId, id);
-  return updateRecord(
-    "import_batches",
-    db.importBatches,
-    companyId,
-    id,
-    current.version,
-    apply,
-    "Import file",
-  );
+async function patchBatch(
+  companyId: string,
+  id: string,
+  apply: (b: ImportBatch) => ImportBatch,
+): Promise<ImportBatch> {
+  const current = await getBatch(companyId, id);
+  if (current.cancelledAt) fail("", "This import file is cancelled and can't be changed");
+  return store().saveBatch(current, apply(current));
 }
 
 /**
@@ -188,13 +121,13 @@ export async function createImportBatch(
   });
 
   const t = now();
-  const created = insertRecord("import_batches", db.importBatches, {
+  const created = await store().insertBatch({
     id: newId(),
     companyId,
     createdAt: t,
     updatedAt: t,
     version: 1,
-    ...authorStamp(),
+    updatedBy: userId,
     source: input.source,
     fileName: stored.name,
     fileUrl: stored.url,
@@ -221,42 +154,38 @@ export async function createImportBatch(
   try {
     if (input.source === "excel") {
       const result = await getReader().readExcel(file);
-      const saved = findCoveringMapping(companyId, result);
-      return patchBatch(companyId, created.id, (b) => ({
-        ...b,
+      const saved = await findCoveringMapping(companyId, result);
+      const suggested = Object.fromEntries(result.columns.map((c) => [c.header, c.suggestedField]));
+      return store().saveBatch(created, {
+        ...created,
         status: "read",
         detectedAs: "booking_report",
         result,
-        mapping: saved
-          ? {
-              ...Object.fromEntries(result.columns.map((c) => [c.header, c.suggestedField])),
-              ...saved.columns,
-            }
-          : Object.fromEntries(result.columns.map((c) => [c.header, c.suggestedField])),
+        mapping: saved ? { ...suggested, ...saved.columns } : suggested,
         confirmedColumns: saved ? result.columns.map((c) => c.header) : [],
         mappingName: saved?.name ?? null,
-      }));
+      });
     }
     const result = await getReader().readDocument(file);
-    return patchBatch(companyId, created.id, (b) => ({
-      ...b,
+    return store().saveBatch(created, {
+      ...created,
       status: "read",
       detectedAs: result.documentType,
       result,
-    }));
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Couldn't read this file";
-    return patchBatch(companyId, created.id, (b) => ({ ...b, status: "failed", error: message }));
+    return store().saveBatch(created, { ...created, status: "failed", error: message });
   }
 }
 
 /** A saved mapping that names every column of the sheet is applied automatically. */
-function findCoveringMapping(companyId: string, result: ExcelReadResult): ImportMapping | null {
-  return (
-    scoped(db.importMappings, companyId).find((m) =>
-      result.columns.every((c) => c.header in m.columns),
-    ) ?? null
-  );
+async function findCoveringMapping(
+  companyId: string,
+  result: ExcelReadResult,
+): Promise<ImportMapping | null> {
+  const all = await store().mappings(companyId);
+  return all.find((m) => result.columns.every((c) => c.header in m.columns)) ?? null;
 }
 
 // ---------- the Files table and history ----------
@@ -284,7 +213,7 @@ export type ImportFileRow = {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-function describe(companyId: string, b: ImportBatch, selectedId: string | null): ImportFileRow {
+function describe(l: ImportLookups, b: ImportBatch, selectedId: string | null): ImportFileRow {
   const base = {
     id: b.id,
     fileName: b.fileName,
@@ -336,7 +265,7 @@ function describe(companyId: string, b: ImportBatch, selectedId: string | null):
   const excel = excelResult(b);
   if (excel) {
     const confirm = columnsToConfirm(b).length;
-    const { counts } = reviewOf(companyId, b);
+    const { counts } = reviewOf(l, b);
     return {
       ...base,
       found: `${excel.sheetName} · header on row ${excel.headerRow} · ${plural(excel.columns.length, "column")} · ${plural(excel.rows.length, "row")}`,
@@ -352,8 +281,8 @@ function describe(companyId: string, b: ImportBatch, selectedId: string | null):
 
   const doc = documentResult(b)!;
   if (doc.documentType === "tax_invoice" && doc.invoice) {
-    const existing = findExistingInvoice(companyId, doc.invoice);
-    if (existing && (existing.status === "final" || existing.cancelledAt)) {
+    const existing = findExistingInvoice(l, doc.invoice);
+    if (existing && isLocked(existing)) {
       return {
         ...base,
         found: doc.summary,
@@ -377,7 +306,7 @@ function describe(companyId: string, b: ImportBatch, selectedId: string | null):
     };
   }
   if (doc.documentType === "lr" && doc.lr) {
-    const exists = lookupsFor(companyId).lrByNo(String(Number(doc.lr.lrNo)));
+    const exists = l.lrByNo(String(Number(doc.lr.lrNo)));
     return {
       ...base,
       found: doc.summary,
@@ -401,10 +330,16 @@ export async function listImportFiles(
   selectedId: string | null = null,
 ): Promise<ImportFileRow[]> {
   await assertImporter(companyId);
-  return scoped(db.importBatches, companyId)
-    .filter((b) => b.status !== "imported")
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map((b) => describe(companyId, b, selectedId));
+  const s = store();
+  return s.read(async () => {
+    const [batches, prefix] = await Promise.all([s.openBatches(companyId), s.lrPrefix(companyId)]);
+    return resolveLookups(
+      s,
+      companyId,
+      (l) => batches.map((b) => describe(l, b, selectedId)),
+      prefix,
+    );
+  });
 }
 
 export type ImportHistoryRow = {
@@ -424,28 +359,28 @@ export async function listImportHistory(
   params: { page?: number } = {},
 ): Promise<Page<ImportHistoryRow>> {
   await assertImporter(companyId);
-  const rows = scoped(db.importBatches, companyId)
-    .filter((b) => b.status === "imported" || (b.status === "failed" && b.result !== null))
-    .sort((a, b) => (b.importedAt ?? b.updatedAt).localeCompare(a.importedAt ?? a.updatedAt))
-    .map((b): ImportHistoryRow => ({
+  const page = await store().history(companyId, params);
+  return {
+    ...page,
+    rows: page.rows.map((b) => ({
       id: b.id,
       date: formatDate((b.importedAt ?? b.updatedAt).slice(0, 10)),
       fileName: b.fileName,
-      by: db.users.find((u) => u.id === b.createdBy)?.name ?? "—",
+      by: b.byName ?? "—",
       counts: b.counts,
       created: b.createdRecords.length,
       status: b.status === "imported" ? "imported" : "failed",
       note: b.status === "failed" ? b.error : null,
-    }));
-  return paginate(rows, params);
+    })),
+  };
 }
 
 /** Takes an unfinished file off the list (soft delete — the record stays for the audit trail). */
 export async function removeImportBatch(companyId: string, id: string): Promise<void> {
   await assertImporter(companyId);
-  const b = getBatch(companyId, id);
+  const b = await getBatch(companyId, id);
   if (b.status === "imported") fail("", "This file has been imported — it stays in the history.");
-  cancelRecord("import_batches", db.importBatches, companyId, id, "Import file");
+  await store().cancelBatch(companyId, id);
 }
 
 // ---------- Excel: mapping ----------
@@ -492,8 +427,7 @@ export type ExcelReviewView = {
   canImport: boolean;
 };
 
-function savedIntoOf(companyId: string, rows: ReviewRow[]): SavedInto {
-  const lookups = lookupsFor(companyId);
+function savedIntoOf(lookups: ImportLookups, rows: ReviewRow[]): SavedInto {
   const out: SavedInto = {
     lrNew: 0,
     lrUpdate: 0,
@@ -541,35 +475,50 @@ export async function getExcelReview(
   batchId: string,
 ): Promise<ExcelReviewView | null> {
   await assertImporter(companyId);
-  const b = findById(db.importBatches, companyId, batchId);
-  const result = b && !b.cancelledAt ? excelResult(b) : null;
-  if (!b || !result) return null;
-  const { rows, counts } = reviewOf(companyId, b);
-  const todo = importableRows(rows);
-  const toConfirm = new Set(columnsToConfirm(b));
-  return {
-    batchId: b.id,
-    fileName: b.fileName,
-    fileUrl: b.fileUrl,
-    status: b.status,
-    columns: result.columns.map((c) => {
-      const field = b.mapping[c.header] ?? c.suggestedField;
-      return {
-        header: c.header,
-        sample: c.sample,
-        field,
-        fieldLabel: fieldLabel(field),
-        match: c.confidence === "sure" ? "sure" : toConfirm.has(c.header) ? "confirm" : "confirmed",
-      };
-    }),
-    mappingName: b.mappingName,
-    savedMappings: scoped(db.importMappings, companyId).map((m) => ({ id: m.id, name: m.name })),
-    rows: rows.map(toView),
-    counts,
-    importable: todo.length,
-    savedInto: savedIntoOf(companyId, rows),
-    canImport: b.status !== "imported" && b.status !== "uploaded" && todo.length > 0,
-  };
+  const s = store();
+  return s.read(async () => {
+    const [b, mappings, prefix] = await Promise.all([
+      liveBatch(companyId, batchId),
+      s.mappings(companyId),
+      s.lrPrefix(companyId),
+    ]);
+    const result = b ? excelResult(b) : null;
+    if (!b || !result) return null;
+    const { rows, counts, savedInto } = await resolveLookups(
+      s,
+      companyId,
+      (l) => {
+        const review = reviewOf(l, b);
+        return { ...review, savedInto: savedIntoOf(l, review.rows) };
+      },
+      prefix,
+    );
+    const todo = importableRows(rows);
+    const toConfirm = new Set(columnsToConfirm(b));
+    return {
+      batchId: b.id,
+      fileName: b.fileName,
+      fileUrl: b.fileUrl,
+      status: b.status,
+      columns: result.columns.map((c) => {
+        const field = b.mapping[c.header] ?? c.suggestedField;
+        return {
+          header: c.header,
+          sample: c.sample,
+          field,
+          fieldLabel: fieldLabel(field),
+          match: c.confidence === "sure" ? "sure" : toConfirm.has(c.header) ? "confirm" : "confirmed",
+        };
+      }),
+      mappingName: b.mappingName,
+      savedMappings: mappings.map((m) => ({ id: m.id, name: m.name })),
+      rows: rows.map(toView),
+      counts,
+      importable: todo.length,
+      savedInto,
+      canImport: b.status !== "imported" && b.status !== "uploaded" && todo.length > 0,
+    };
+  });
 }
 
 /** The user answered a column ("Confirm" → chosen field). Saved mapping name no longer applies. */
@@ -581,12 +530,12 @@ export async function setColumnMapping(
 ): Promise<void> {
   await assertImporter(companyId);
   if (!isFieldKey(field)) fail("field", "Choose where this column goes");
-  const b = getBatch(companyId, batchId);
+  const b = await getBatch(companyId, batchId);
   const result = excelResult(b);
   if (!result?.columns.some((c) => c.header === header))
     fail("header", "That column isn't in this file");
   if (b.status === "imported") fail("", "This file has already been imported");
-  patchBatch(companyId, batchId, (cur) => ({
+  await patchBatch(companyId, batchId, (cur) => ({
     ...cur,
     status: "reviewed",
     mapping: { ...cur.mapping, [header]: field },
@@ -602,9 +551,9 @@ export async function setRowAction(
   action: ImportRowAction,
 ): Promise<void> {
   await assertImporter(companyId);
-  const b = getBatch(companyId, batchId);
+  const b = await getBatch(companyId, batchId);
   if (b.status === "imported") fail("", "This file has already been imported");
-  patchBatch(companyId, batchId, (cur) => ({
+  await patchBatch(companyId, batchId, (cur) => ({
     ...cur,
     status: "reviewed",
     rowActions: { ...cur.rowActions, [String(rowNo)]: action },
@@ -613,7 +562,7 @@ export async function setRowAction(
 
 export async function listImportMappings(companyId: string): Promise<ImportMapping[]> {
   await assertImporter(companyId);
-  return scoped(db.importMappings, companyId).map(clone);
+  return store().mappings(companyId);
 }
 
 const mappingName = z
@@ -630,31 +579,10 @@ export async function saveImportMapping(
 ): Promise<ImportMapping> {
   await assertImporter(companyId);
   const n = parseInput(mappingName, name);
-  const b = getBatch(companyId, batchId);
+  const b = await getBatch(companyId, batchId);
   if (!excelResult(b)) fail("", "Only Excel files have a column mapping");
-  const columns = { ...b.mapping };
-  const existing = scoped(db.importMappings, companyId).find((m) => sameName(m.name, n));
-  const saved = existing
-    ? updateRecord(
-        "import_mappings",
-        db.importMappings,
-        companyId,
-        existing.id,
-        existing.version,
-        (m) => ({ ...m, name: n, columns }),
-        "Mapping",
-      )
-    : insertRecord("import_mappings", db.importMappings, {
-        id: newId(),
-        companyId,
-        createdAt: now(),
-        updatedAt: now(),
-        version: 1,
-        ...authorStamp(),
-        name: n,
-        columns,
-      });
-  patchBatch(companyId, batchId, (cur) => ({
+  const saved = await store().upsertMapping(companyId, n, { ...b.mapping });
+  await patchBatch(companyId, batchId, (cur) => ({
     ...cur,
     mappingName: saved.name,
     confirmedColumns: Object.keys(cur.mapping),
@@ -669,23 +597,26 @@ export async function applyImportMapping(
   mappingId: string,
 ): Promise<void> {
   await assertImporter(companyId);
-  const m = getOrThrow(db.importMappings, companyId, mappingId, "Saved mapping");
-  const b = getBatch(companyId, batchId);
+  const [m, b] = await Promise.all([
+    store().mappingById(companyId, mappingId),
+    getBatch(companyId, batchId),
+  ]);
+  if (!m) throw new NotFoundError("Saved mapping");
   const result = excelResult(b);
   if (!result) fail("", "Only Excel files have a column mapping");
   if (b.status === "imported") fail("", "This file has already been imported");
-  patchBatch(companyId, batchId, (cur) => ({
+  await patchBatch(companyId, batchId, (cur) => ({
     ...cur,
     status: "reviewed",
     mapping: {
       ...cur.mapping,
       ...Object.fromEntries(
-        result!.columns
+        result.columns
           .filter((c) => c.header in m.columns)
           .map((c) => [c.header, m.columns[c.header]]),
       ),
     },
-    confirmedColumns: result!.columns.map((c) => c.header),
+    confirmedColumns: result.columns.map((c) => c.header),
     mappingName: m.name,
   }));
 }
@@ -759,137 +690,141 @@ function lrPatchFillingBlanks(
 export async function commitExcelBatch(companyId: string, batchId: string): Promise<CommitSummary> {
   await assertImporter(companyId);
   await assertCan(companyId, "lr.edit");
-  const batch = getBatch(companyId, batchId);
+  const s = store();
+  const batch = await getBatch(companyId, batchId);
   if (!excelResult(batch)) fail("", "This file isn't an Excel booking report");
   if (batch.status === "imported") fail("", "This file has already been imported");
-  const { rows, counts } = reviewOf(companyId, batch);
-  const todo = importableRows(rows);
-  if (!todo.length) fail("", "Nothing to import — every row is skipped or has an error.");
-  const skipped = rows.length - todo.length;
 
   try {
-    return await withTransaction(() =>
-      runAsSystem(batchId, async () => {
-        const created: ImportBatch["createdRecords"] = [];
-        const partyIds = new Map<string, string>();
-        const truckIds = new Map<string, string>();
-        const summary: CommitSummary = {
-          lrsCreated: 0,
-          lrsUpdated: 0,
-          skipped,
-          partiesCreated: 0,
-          trucksCreated: 0,
-        };
+    return await s.importTx(batch, true, async () => {
+      const lrPrefix = await s.lrPrefix(companyId);
+      const { lookups, rows, counts } = await resolveLookups(
+        s,
+        companyId,
+        (l) => ({ lookups: l, ...reviewOf(l, batch) }),
+        lrPrefix,
+      );
+      const todo = importableRows(rows);
+      if (!todo.length) fail("", "Nothing to import — every row is skipped or has an error.");
+      const created: ImportBatch["createdRecords"] = [];
+      const partyIds = new Map<string, string>();
+      const truckIds = new Map<string, string>();
+      const summary: CommitSummary = {
+        lrsCreated: 0,
+        lrsUpdated: 0,
+        skipped: rows.length - todo.length,
+        partiesCreated: 0,
+        trucksCreated: 0,
+      };
 
-        const partyFor = async (p: { name: string; gstin: string | null } | null) => {
-          if (!p) return null;
-          const key = p.gstin ?? `name:${p.name.toLowerCase()}`;
-          const cached = partyIds.get(key);
-          if (cached) return cached;
-          const found =
-            (p.gstin ? scoped(db.parties, companyId).find((x) => x.gstin === p.gstin) : null) ??
-            (p.name
-              ? scoped(db.parties, companyId).find((x) => !x.isSelf && sameName(x.name, p.name))
-              : null);
-          let id = found?.id;
-          if (!id) {
-            const party = await createParty(companyId, {
-              name: p.name || p.gstin!,
-              gstin: p.gstin ?? undefined,
-              source: "excel_import",
-            });
-            id = party.id;
-            created.push({ table: "parties", id });
-            summary.partiesCreated++;
-          }
-          partyIds.set(key, id);
-          return id;
-        };
-        const truckFor = async (number: string | null) => {
-          if (!number) return null;
-          const cached = truckIds.get(number);
-          if (cached) return cached;
-          let id = scoped(db.trucks, companyId).find((t) => t.number === number)?.id;
-          if (!id) {
-            const truck = await createTruck(companyId, { number, source: "excel_import" });
-            id = truck.id;
-            created.push({ table: "trucks", id });
-            summary.trucksCreated++;
-          }
-          truckIds.set(number, id);
-          return id;
-        };
-
-        for (const r of todo) {
-          const p = r.parsed;
-          try {
-            const truckId = await truckFor(p.vehicleNo);
-            if (r.action === "update" && r.existingLrId) {
-              const lr = db.lrs.find((l) => l.id === r.existingLrId)!;
-              const patch = lrPatchFillingBlanks(lr, p, truckId);
-              if (Object.keys(patch).length) {
-                await updateLr(companyId, lr.id, lr.version, patch);
-                summary.lrsUpdated++;
-              }
-              continue;
-            }
-            const taxInvoiceId = p.invoiceNo
-              ? lookupsFor(companyId).taxInvoice(p.invoiceNo, p.consignor?.gstin ?? null)?.id
-              : undefined;
-            const hasGoods = p.packages != null || p.goods || p.billingWeight || p.actualWeight;
-            const input: LrInput = {
-              lrDate: p.lrDate,
-              fromPlace: p.fromPlace,
-              toPlace: p.toPlace,
-              consignorId: await partyFor(p.consignor),
-              consigneeId: await partyFor(p.consignee),
-              truckId,
-              driverMobile: p.driverMobile,
-              ratePaise: p.ratePaise,
-              lrInvoices: p.invoiceNo ? [{ invoiceNo: p.invoiceNo, taxInvoiceId }] : [],
-              items: hasGoods
-                ? [
-                    {
-                      description: p.goods ?? "Goods",
-                      packages: p.packages ?? 0,
-                      actualWeight: p.actualWeight,
-                      chargedWeight: p.billingWeight,
-                    },
-                  ]
-                : [],
-              charges: { freight: p.freightPaise },
-              remarks: p.remarks,
-            };
-            const lr = await createImportedLr(companyId, input, p.lrNo!, batchId);
-            created.push({ table: "lrs", id: lr.id });
-            summary.lrsCreated++;
-          } catch (e) {
-            // Name the row, so the message tells the user what to fix.
-            if (e instanceof ValidationError) {
-              throw new ValidationError([
-                { path: "", message: `Excel row ${r.rowNo}: ${e.message}` },
-              ]);
-            }
-            throw e;
-          }
+      const partyFor = async (p: { name: string; gstin: string | null } | null) => {
+        if (!p) return null;
+        const key = p.gstin ?? `name:${p.name.toLowerCase()}`;
+        const cached = partyIds.get(key);
+        if (cached) return cached;
+        const found =
+          (p.gstin ? lookups.partyByGstin(p.gstin) : null) ??
+          (p.name ? lookups.partyByName(p.name) : null);
+        let id = found?.id;
+        if (!id) {
+          const party = await createParty(companyId, {
+            name: p.name || p.gstin!,
+            gstin: p.gstin ?? undefined,
+            source: "excel_import",
+          });
+          id = party.id;
+          created.push({ table: "parties", id });
+          summary.partiesCreated++;
         }
+        partyIds.set(key, id);
+        return id;
+      };
+      const truckFor = async (number: string | null) => {
+        if (!number) return null;
+        const cached = truckIds.get(number);
+        if (cached) return cached;
+        let id = lookups.truckByNumber(number)?.id;
+        if (!id) {
+          const truck = await createTruck(companyId, { number, source: "excel_import" });
+          id = truck.id;
+          created.push({ table: "trucks", id });
+          summary.trucksCreated++;
+        }
+        truckIds.set(number, id);
+        return id;
+      };
 
-        patchBatch(companyId, batchId, (b) => ({
-          ...b,
-          status: "imported",
-          counts,
-          createdRecords: created,
-          importedAt: now(),
-          error: null,
-        }));
-        return summary;
-      }),
-    );
+      for (const r of todo) {
+        const p = r.parsed;
+        try {
+          const truckId = await truckFor(p.vehicleNo);
+          if (r.action === "update" && r.existingLrId) {
+            const lr = await getLrById(companyId, r.existingLrId);
+            if (!lr) throw new NotFoundError("LR");
+            const patch = lrPatchFillingBlanks(lr, p, truckId);
+            if (Object.keys(patch).length) {
+              await updateLr(companyId, lr.id, lr.version, patch);
+              summary.lrsUpdated++;
+            }
+            continue;
+          }
+          const taxInvoiceId = p.invoiceNo
+            ? lookups.taxInvoice(p.invoiceNo, p.consignor?.gstin ?? null)?.id
+            : undefined;
+          const hasGoods = p.packages != null || p.goods || p.billingWeight || p.actualWeight;
+          const input: LrInput = {
+            lrDate: p.lrDate,
+            fromPlace: p.fromPlace,
+            toPlace: p.toPlace,
+            consignorId: await partyFor(p.consignor),
+            consigneeId: await partyFor(p.consignee),
+            truckId,
+            driverMobile: p.driverMobile,
+            ratePaise: p.ratePaise,
+            lrInvoices: p.invoiceNo ? [{ invoiceNo: p.invoiceNo, taxInvoiceId }] : [],
+            items: hasGoods
+              ? [
+                  {
+                    description: p.goods ?? "Goods",
+                    packages: p.packages ?? 0,
+                    actualWeight: p.actualWeight,
+                    chargedWeight: p.billingWeight,
+                  },
+                ]
+              : [],
+            charges: { freight: p.freightPaise },
+            remarks: p.remarks,
+          };
+          const lr = await createImportedLr(companyId, input, p.lrNo!, batchId, lrPrefix);
+          created.push({ table: "lrs", id: lr.id });
+          summary.lrsCreated++;
+        } catch (e) {
+          // Name the row, so the message tells the user what to fix.
+          if (e instanceof ValidationError) {
+            throw new ValidationError([
+              { path: "", message: `Excel row ${r.rowNo}: ${e.message}` },
+            ]);
+          }
+          throw e;
+        }
+      }
+
+      await patchBatch(companyId, batchId, (b) => ({
+        ...b,
+        status: "imported",
+        counts,
+        createdRecords: created,
+        importedAt: now(),
+        error: null,
+      }));
+      return summary;
+    });
   } catch (e) {
     // Everything was rolled back; just remember why on the file.
     const message = e instanceof Error ? e.message : "The import failed";
-    if (!(e instanceof ForbiddenError)) {
-      patchBatch(companyId, batchId, (b) => ({ ...b, status: "failed", error: message }));
+    const nothingToDo = e instanceof ValidationError && message.startsWith("Nothing to import");
+    if (!(e instanceof ForbiddenError) && !nothingToDo) {
+      await patchBatch(companyId, batchId, (b) => ({ ...b, status: "failed", error: message }));
     }
     throw e;
   }
@@ -907,66 +842,30 @@ export async function errorReportRows(
   batchId: string,
 ): Promise<ErrorReport | null> {
   await assertImporter(companyId);
-  const b = findById(db.importBatches, companyId, batchId);
-  const result = b && !b.cancelledAt ? excelResult(b) : null;
-  if (!b || !result) return null;
-  const { rows } = reviewOf(companyId, b);
-  const headers = result.columns.map((c) => c.header);
-  const byRow = new Map(result.rows.map((r) => [r.rowNo, r.cells]));
-  return {
-    fileName: b.fileName,
-    headers,
-    rows: rows
-      .filter((r) => r.status === "error")
-      .map((r) => ({
-        rowNo: r.rowNo,
-        record: r.record,
-        reason: r.reasons.join("; "),
-        cells: headers.map((h) => byRow.get(r.rowNo)?.[h] ?? ""),
-      })),
-  };
+  const s = store();
+  return s.read(async () => {
+    const [b, prefix] = await Promise.all([liveBatch(companyId, batchId), s.lrPrefix(companyId)]);
+    const result = b ? excelResult(b) : null;
+    if (!b || !result) return null;
+    const { rows } = await resolveLookups(s, companyId, (l) => reviewOf(l, b), prefix);
+    const headers = result.columns.map((c) => c.header);
+    const byRow = new Map(result.rows.map((r) => [r.rowNo, r.cells]));
+    return {
+      fileName: b.fileName,
+      headers,
+      rows: rows
+        .filter((r) => r.status === "error")
+        .map((r) => ({
+          rowNo: r.rowNo,
+          record: r.record,
+          reason: r.reasons.join("; "),
+          cells: headers.map((h) => byRow.get(r.rowNo)?.[h] ?? ""),
+        })),
+    };
+  });
 }
 
 // ---------- invoices and other documents ----------
-const toPartyOption = (p: Party): PartyOption => ({
-  id: p.id,
-  name: p.name,
-  place: p.place,
-  gstin: p.gstin,
-  phone: p.phone,
-  address: p.address,
-  stateCode: p.stateCode,
-  isSelf: p.isSelf,
-});
-
-function prefillLookups(companyId: string): PrefillLookups {
-  return {
-    partyByGstin: (gstin) => {
-      const p = scoped(db.parties, companyId).find((x) => x.gstin === gstin);
-      return p ? toPartyOption(p) : null;
-    },
-    partyByName: (name) => {
-      const p = scoped(db.parties, companyId).find((x) => !x.isSelf && sameName(x.name, name));
-      return p ? toPartyOption(p) : null;
-    },
-    truckByNumber: (number) => {
-      const t = scoped(db.trucks, companyId).find((x) => x.number === normaliseVehicleNo(number));
-      if (!t) return null;
-      const driver = t.driverId ? db.drivers.find((d) => d.id === t.driverId) : null;
-      return {
-        id: t.id,
-        number: t.number,
-        driverMobile: driver?.mobile ?? null,
-        lastLrNo: null,
-      } satisfies TruckOption;
-    },
-    itemByCode: (code) => {
-      const i = scoped(db.items, companyId).find((x) => x.code === code.toUpperCase());
-      return i ? { id: i.id } : null;
-    },
-  };
-}
-
 export type InvoiceImportView = {
   batch: {
     id: string;
@@ -992,29 +891,41 @@ export async function getInvoiceImport(
 ): Promise<InvoiceImportView | null> {
   await assertImporter(companyId);
   await assertCan(companyId, "invoice.edit");
-  const b = findById(db.importBatches, companyId, batchId);
-  const doc = b && !b.cancelledAt ? documentResult(b) : null;
-  if (!b || !doc || doc.documentType !== "tax_invoice" || !doc.invoice) return null;
-  if (b.status === "imported" || b.status === "failed") return null;
-  const existing = findExistingInvoice(companyId, doc.invoice);
-  return {
-    batch: {
-      id: b.id,
-      fileName: b.fileName,
-      fileUrl: b.fileUrl,
-      format: b.format,
-      sizeBytes: b.sizeBytes,
-    },
-    prefill: invoicePrefill(doc.invoice, doc.lowConfidence, prefillLookups(companyId)),
-    existing: existing
-      ? {
-          id: existing.id,
-          version: existing.version,
-          status: existing.cancelledAt ? "cancelled" : existing.status,
-          invoiceNo: existing.invoiceNo,
-        }
-      : null,
-  };
+  const s = store();
+  return s.read(async () => {
+    const [b, prefix] = await Promise.all([liveBatch(companyId, batchId), s.lrPrefix(companyId)]);
+    const doc = b ? documentResult(b) : null;
+    if (!b || !doc || doc.documentType !== "tax_invoice" || !doc.invoice) return null;
+    if (b.status === "imported" || b.status === "failed") return null;
+    const inv = doc.invoice;
+    const { prefill, existing } = await resolveLookups(
+      s,
+      companyId,
+      (l) => ({
+        prefill: invoicePrefill(inv, doc.lowConfidence, l),
+        existing: findExistingInvoice(l, inv),
+      }),
+      prefix,
+    );
+    return {
+      batch: {
+        id: b.id,
+        fileName: b.fileName,
+        fileUrl: b.fileUrl,
+        format: b.format,
+        sizeBytes: b.sizeBytes,
+      },
+      prefill,
+      existing: existing
+        ? {
+            id: existing.id,
+            version: existing.version,
+            status: existing.cancelled ? "cancelled" : existing.status,
+            invoiceNo: existing.invoiceNo,
+          }
+        : null,
+    };
+  });
 }
 
 /** One row of the review table for a non-Excel file (the whole document is one record). */
@@ -1038,9 +949,20 @@ export async function getDocumentReview(
   batchId: string,
 ): Promise<DocumentReviewView | null> {
   await assertImporter(companyId);
-  const b = findById(db.importBatches, companyId, batchId);
-  const doc = b && !b.cancelledAt ? documentResult(b) : null;
-  if (!b || !doc) return null;
+  const s = store();
+  return s.read(async () => {
+    const [b, prefix] = await Promise.all([liveBatch(companyId, batchId), s.lrPrefix(companyId)]);
+    const doc = b ? documentResult(b) : null;
+    if (!b || !doc) return null;
+    return resolveLookups(s, companyId, (l) => documentReview(l, b, doc), prefix);
+  });
+}
+
+function documentReview(
+  l: ImportLookups,
+  b: ImportBatch,
+  doc: DocumentReadResult,
+): DocumentReviewView {
   const how = b.kind === "image" ? "photo" : b.kind === "pdf" ? "PDF" : "file";
   const base = {
     batchId: b.id,
@@ -1062,17 +984,17 @@ export async function getDocumentReview(
     }
     if (!reasons.length) checks.push("GSTIN valid");
     checks.push(`${plural(inv.lines.length, "item")} read`);
-    const existing = findExistingInvoice(companyId, inv);
+    const existing = findExistingInvoice(l, inv);
     if (existing) {
       reasons.push(
-        existing.cancelledAt
+        existing.cancelled
           ? `${inv.invoiceNo} is already in the system (cancelled)`
           : existing.status === "final"
             ? `${inv.invoiceNo} is already in the system (final) — it can't be changed`
             : `${inv.invoiceNo} is already in the system as a draft — saving updates it`,
       );
     }
-    const locked = existing && (existing.status === "final" || existing.cancelledAt);
+    const locked = isLocked(existing);
     return {
       ...base,
       record: `${inv.invoiceNo} · ${inv.billTo.name}`,
@@ -1084,13 +1006,13 @@ export async function getDocumentReview(
             : "valid",
       checks,
       reasons,
-      openHref: locked ? `/invoices/${existing.id}` : `/invoices/new?import=${b.id}`,
+      openHref: locked ? `/invoices/${existing!.id}` : `/invoices/new?import=${b.id}`,
       openLabel: "Open in Tax invoice",
       note: null,
     };
   }
   if (doc.documentType === "lr" && doc.lr) {
-    const exists = lookupsFor(companyId).lrByNo(String(Number(doc.lr.lrNo)));
+    const exists = l.lrByNo(String(Number(doc.lr.lrNo)));
     return {
       ...base,
       source: `LR ${how}`,
@@ -1133,60 +1055,58 @@ export async function saveImportedInvoice(
 ): Promise<TaxInvoice> {
   await assertImporter(companyId);
   await assertCan(companyId, "invoice.edit");
-  const batch = getBatch(companyId, args.batchId);
+  const batch = await getBatch(companyId, args.batchId);
   if (!documentResult(batch)) fail("", "This file isn't an invoice");
   if (batch.status === "imported") fail("", "This invoice file has already been saved");
 
-  return withTransaction(() =>
-    withBatchContext(batch.id, async () => {
-      const created: ImportBatch["createdRecords"] = [];
-      const ids = new Map<string, string>();
-      const swap = (id: unknown) => (typeof id === "string" ? (ids.get(id) ?? id) : id);
-      // Only records the invoice really points at get created.
-      const used = new Set(
-        [
-          args.input.sellerPartyId,
-          args.input.billToId,
-          args.input.shipToId,
-          args.input.truckId,
-        ].filter((x): x is string => typeof x === "string"),
-      );
-      for (const [token, party] of Object.entries(args.pending.parties)) {
-        if (!used.has(token)) continue;
-        const p = await createParty(companyId, party);
-        ids.set(token, p.id);
-        created.push({ table: "parties", id: p.id });
-      }
-      for (const [token, truck] of Object.entries(args.pending.trucks)) {
-        if (!used.has(token)) continue;
-        const t = await createTruck(companyId, { number: truck.number, source: "invoice_scan" });
-        ids.set(token, t.id);
-        created.push({ table: "trucks", id: t.id });
-      }
-      const input = {
-        ...args.input,
-        sellerPartyId: swap(args.input.sellerPartyId),
-        billToId: swap(args.input.billToId),
-        shipToId: swap(args.input.shipToId),
-        truckId: swap(args.input.truckId),
-        importBatchId: batch.id,
-        sourceFileUrl: batch.fileUrl,
-      } as TaxInvoiceInput;
-      const invoice = args.update
-        ? await updateTaxInvoice(companyId, args.update.id, args.update.expectedVersion, input)
-        : await createTaxInvoice(companyId, input);
-      created.unshift({ table: "tax_invoices", id: invoice.id });
-      patchBatch(companyId, batch.id, (b) => ({
-        ...b,
-        status: "imported",
-        counts: { valid: 1, warning: 0, error: 0 },
-        createdRecords: created,
-        importedAt: now(),
-        error: null,
-      }));
-      return invoice;
-    }),
-  );
+  return store().importTx(batch, false, async () => {
+    const created: ImportBatch["createdRecords"] = [];
+    const ids = new Map<string, string>();
+    const swap = (id: unknown) => (typeof id === "string" ? (ids.get(id) ?? id) : id);
+    // Only records the invoice really points at get created.
+    const used = new Set(
+      [
+        args.input.sellerPartyId,
+        args.input.billToId,
+        args.input.shipToId,
+        args.input.truckId,
+      ].filter((x): x is string => typeof x === "string"),
+    );
+    for (const [token, party] of Object.entries(args.pending.parties)) {
+      if (!used.has(token)) continue;
+      const p = await createParty(companyId, party);
+      ids.set(token, p.id);
+      created.push({ table: "parties", id: p.id });
+    }
+    for (const [token, truck] of Object.entries(args.pending.trucks)) {
+      if (!used.has(token)) continue;
+      const t = await createTruck(companyId, { number: truck.number, source: "invoice_scan" });
+      ids.set(token, t.id);
+      created.push({ table: "trucks", id: t.id });
+    }
+    const input = {
+      ...args.input,
+      sellerPartyId: swap(args.input.sellerPartyId),
+      billToId: swap(args.input.billToId),
+      shipToId: swap(args.input.shipToId),
+      truckId: swap(args.input.truckId),
+      importBatchId: batch.id,
+      sourceFileUrl: batch.fileUrl,
+    } as TaxInvoiceInput;
+    const invoice = args.update
+      ? await updateTaxInvoice(companyId, args.update.id, args.update.expectedVersion, input)
+      : await createTaxInvoice(companyId, input);
+    created.unshift({ table: "tax_invoices", id: invoice.id });
+    await patchBatch(companyId, batch.id, (b) => ({
+      ...b,
+      status: "imported",
+      counts: { valid: 1, warning: 0, error: 0 },
+      createdRecords: created,
+      importedAt: now(),
+      error: null,
+    }));
+    return invoice;
+  });
 }
 
 // ---------- after an import ----------
@@ -1207,8 +1127,8 @@ export async function getImportResult(
   batchId: string,
 ): Promise<ImportResultView | null> {
   await assertImporter(companyId);
-  const b = findById(db.importBatches, companyId, batchId);
-  if (!b || b.cancelledAt || b.status !== "imported") return null;
+  const b = await liveBatch(companyId, batchId);
+  if (!b || b.status !== "imported") return null;
   const count = (table: string) => b.createdRecords.filter((r) => r.table === table).length;
   return {
     batchId: b.id,

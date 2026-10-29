@@ -4,6 +4,8 @@ import { fail, newId } from "./_store";
 import { ForbiddenError } from "./errors";
 import { withUserRead } from "./db/conn";
 import {
+  importObjectPath,
+  importUrlFromPath,
   objectPath,
   podObjectPath,
   podUrlFromPath,
@@ -11,7 +13,6 @@ import {
   safeName,
   urlFromPath,
 } from "./db/storage";
-import { NotOnDatabaseError } from "./errors";
 import { assertCan } from "./session";
 import { onDatabase } from "./source";
 
@@ -128,10 +129,19 @@ export async function uploadImportFile(
   file: { name: string; format: ImportFormat; bytes: Uint8Array },
 ): Promise<{ url: string; name: string }> {
   await assertCan(companyId, "import.run");
-  if (onDatabase()) throw new NotOnDatabaseError();
   if (file.bytes.byteLength === 0) fail("file", `${file.name}: the file is empty`);
   if (file.bytes.byteLength > IMPORT_MAX_BYTES) fail("file", `${file.name}: larger than 10 MB`);
   const id = newId();
+  if (onDatabase()) {
+    // Private imports bucket under the company's folder; the batch keeps the path.
+    const name = safeName(file.name, "import-file");
+    const path = importObjectPath(companyId, id, name);
+    await putObject("imports", path, {
+      type: IMPORT_CONTENT_TYPE[file.format].split(";")[0],
+      bytes: file.bytes,
+    });
+    return { url: importUrlFromPath(path)!, name: file.name.slice(0, 100) || name };
+  }
   const name = file.name.slice(0, 100) || "import-file";
   files.set(id, {
     companyId,

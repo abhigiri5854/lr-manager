@@ -1,6 +1,5 @@
 import { getTaxInvoiceById } from "@/lib/data/invoices";
 import { getPartyById } from "@/lib/data/parties";
-import { onDatabase } from "@/lib/data/source";
 import { getTruckById } from "@/lib/data/trucks";
 import type { LrFormValues, PartyOption, TruckOption } from "@/lib/lr-form";
 
@@ -38,8 +37,6 @@ export async function loadPicked(companyId: string, v: LrFormValues) {
 
 /** The tax invoice the LR's goods came from, if any (for the "Linked to tax invoice" strip). */
 export async function loadLinkedInvoice(companyId: string, v: LrFormValues) {
-  // Tax invoices aren't on the database yet, so no LR there links to one.
-  if (onDatabase()) return null;
   const id = v.invoices.find((r) => r.taxInvoiceId)?.taxInvoiceId;
   const inv = id ? await getTaxInvoiceById(companyId, id) : null;
   return inv ? { id: inv.id, invoiceNo: inv.invoiceNo ?? "draft" } : null;

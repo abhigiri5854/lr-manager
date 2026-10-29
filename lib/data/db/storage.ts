@@ -8,7 +8,7 @@
 // secret key. Server only.
 
 export type CompanyBucket = "logos" | "signatures";
-export type Bucket = CompanyBucket | "pod";
+export type Bucket = CompanyBucket | "pod" | "imports";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -88,6 +88,30 @@ export function podPathFromUrl(companyId: string, lrId: string, url: string): st
     throw new Error("Upload the file again");
   }
   return podObjectPath(companyId, lrId, id, name);
+}
+
+/** Smart import originals: imports/{company}/{id}-{name}. */
+export function importObjectPath(companyId: string, id: string, name: string) {
+  return `${companyId}/${id}-${name}`;
+}
+
+/** The app link for a stored import path (null in, null out). */
+export function importUrlFromPath(path: string | null): string | null {
+  if (!path) return null;
+  const file = path.split("/").at(-1)!;
+  return `/uploads/${file.slice(0, 36)}?b=imports&n=${encodeURIComponent(file.slice(37))}`;
+}
+
+/** The stored path for an import link of this company; anything else throws. */
+export function importPathFromUrl(companyId: string, url: string | null | undefined): string | null {
+  if (!url) return null;
+  const u = new URL(url, "http://x");
+  const id = u.pathname.replace(/^\/uploads\//, "");
+  const name = u.searchParams.get("n") ?? "";
+  if (!UUID.test(id) || u.searchParams.get("b") !== "imports" || safeName(name, "") !== name || !name) {
+    throw new Error("Upload the file again");
+  }
+  return importObjectPath(companyId, id, name);
 }
 
 function config() {

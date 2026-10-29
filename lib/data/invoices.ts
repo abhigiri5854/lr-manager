@@ -1,15 +1,12 @@
 import { financialYear } from "@/lib/fy";
-import { partyState } from "@/lib/gst";
 import { invoiceStatus } from "@/lib/invoice-status";
 import { companySnapshot, partySnapshot } from "@/lib/snapshots";
-import { computeInvoiceTax } from "@/lib/tax";
 import type {
   Company,
   LrView,
   Page,
   Party,
   TaxInvoice,
-  TaxInvoiceLine,
   TaxInvoiceRow,
   TaxInvoiceStatus,
 } from "@/lib/types";
@@ -43,7 +40,19 @@ import {
   type ListParams,
   authorStamp,
 } from "./_store";
+import * as dbi from "./db/invoices";
+import {
+  applyInvoicePatch,
+  assertImportedHasNo,
+  INVOICE_NO_TOO_LONG,
+  invoiceDay,
+  placeOfSupply,
+  priceInvoice,
+  type InvoiceCtx,
+  type InvoiceHeader,
+} from "./invoice-calc";
 import { assertCan } from "./session";
+import { onDatabase } from "./source";
 
 export type TaxInvoiceListParams = ListParams & {
   status?: TaxInvoiceStatus;
@@ -54,60 +63,13 @@ export type TaxInvoiceListParams = ListParams & {
   to?: string;
 };
 
-type ParsedLine = ReturnType<typeof taxInvoiceFields.parse>["lines"][number];
-type Header = Pick<
-  TaxInvoice,
-  "companyId" | "sellerPartyId" | "placeOfSupplyStateCode" | "billToId" | "shipToId"
->;
-
 const company = (companyId: string): Company => db.companies.find((c) => c.id === companyId)!;
 const partyById = (id: string | null): Party | undefined =>
   id ? db.parties.find((p) => p.id === id) : undefined;
-
-/** Seller's GST state: the seller party's, or this company's when we are the seller. */
-function sellerState(inv: Pick<Header, "companyId" | "sellerPartyId">): string | null {
-  if (inv.sellerPartyId) return partyState(partyById(inv.sellerPartyId));
-  return company(inv.companyId).gstin.slice(0, 2);
-}
-
-/**
- * Place of supply = ship-to state (bill-to when shipped to the same party). The typed state is only
- * used when that party has none — an unregistered buyer.
- */
-function placeOfSupply(h: Omit<Header, "placeOfSupplyStateCode">, typed: string | null): string {
-  const state = partyState(partyById(h.shipToId ?? h.billToId)) ?? typed;
-  if (!state) fail("placeOfSupplyStateCode", "Choose the buyer's state");
-  return state;
-}
-
-/** Day of the invoice in India (invoiceAt is UTC). */
-const invoiceDay = (iso: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(iso));
-
-/** Recalculates every line's tax and the totals from rate × qty. */
-function priced(inv: Header, lines: Array<ParsedLine | TaxInvoiceLine>) {
-  const intraState = sellerState(inv) === inv.placeOfSupplyStateCode;
-  const input = lines.map((l) => ({ ...l, discountPaise: l.discountPaise ?? 0 }));
-  // Round-off is our setting: an imported invoice keeps the seller's own total.
-  const tax = computeInvoiceTax(input, intraState, {
-    roundOff: !inv.sellerPartyId && company(inv.companyId).invoiceRoundOff,
-  });
-  const out: TaxInvoiceLine[] = input.map((l, i) => ({
-    id: l.id ?? newId(),
-    lineNo: i + 1,
-    itemId: l.itemId ?? null,
-    itemCode: l.itemCode ?? null,
-    description: l.description,
-    hsn: l.hsn ?? null,
-    uom: l.uom ?? null,
-    qty: l.qty,
-    ratePaise: l.ratePaise,
-    discountPaise: l.discountPaise,
-    gstRateBp: l.gstRateBp,
-    ...tax.lines[i],
-  }));
-  return { lines: out, totals: tax.totals };
-}
+const ctxFor = (companyId: string): InvoiceCtx => ({
+  company: company(companyId),
+  party: partyById,
+});
 
 function assertInvoiceRefs(companyId: string, v: ReturnType<typeof taxInvoicePatchSchema.parse>) {
   assertRef(db.parties, companyId, v.sellerPartyId, "sellerPartyId", "Seller");
@@ -135,11 +97,6 @@ function assertUniqueNo(
   if (clash) fail("invoiceNo", `Invoice ${inv.invoiceNo} is already used in FY ${fy}`);
 }
 
-/** Imported invoices carry the seller's own number. */
-function assertImportedHasNo(inv: Pick<TaxInvoice, "invoiceNo" | "sellerPartyId">) {
-  if (inv.sellerPartyId && !inv.invoiceNo) fail("invoiceNo", "Enter the seller's invoice number");
-}
-
 function toRow(i: TaxInvoice): TaxInvoiceRow {
   const billTo = i.snapshot?.billTo ?? partyById(i.billToId);
   return {
@@ -157,6 +114,7 @@ export async function listTaxInvoices(
   companyId: string,
   params: TaxInvoiceListParams = {},
 ): Promise<Page<TaxInvoiceRow>> {
+  if (onDatabase()) return dbi.listTaxInvoices(companyId, params);
   const rows = scoped(db.taxInvoices, companyId, true)
     .filter((i) => !params.status || invoiceStatus(i) === params.status)
     .filter(
@@ -179,12 +137,14 @@ export async function listTaxInvoices(
 }
 
 export async function getTaxInvoiceById(companyId: string, id: string): Promise<TaxInvoice | null> {
+  if (onDatabase()) return dbi.getTaxInvoiceById(companyId, id);
   const i = findById(db.taxInvoices, companyId, id);
   return i ? clone(i) : null;
 }
 
 /** LRs that carry this invoice (the link lives on Lr.lrInvoices). */
 export async function listLrsForInvoice(companyId: string, invoiceId: string): Promise<LrView[]> {
+  if (onDatabase()) return dbi.listLrsForInvoice(companyId, invoiceId);
   return scoped(db.lrs, companyId)
     .filter((lr) => lr.lrInvoices.some((i) => i.taxInvoiceId === invoiceId))
     .map(toLrView);
@@ -196,6 +156,10 @@ export async function peekNextInvoiceNo(
   date: string,
 ): Promise<{ invoiceNo: string | null; fy: string; counter: number }> {
   const fy = financialYear(date);
+  if (onDatabase()) {
+    const { prefix, counter } = await dbi.peekInvoiceCounter(companyId, fy);
+    return { invoiceNo: formatInvoiceNo(prefix, counter), fy, counter };
+  }
   const counter = peekNumber(companyId, "tax_invoice", fy) ?? 1;
   return { invoiceNo: formatInvoiceNo(company(companyId).taxInvoicePrefix, counter), fy, counter };
 }
@@ -207,20 +171,23 @@ export async function createTaxInvoice(
 ): Promise<TaxInvoice> {
   await assertCan(companyId, "invoice.edit");
   const v = parseInput(taxInvoiceFields, input);
+  if (onDatabase()) return dbi.insertTaxInvoice(companyId, v);
   assertInvoiceRefs(companyId, v);
   const sellerPartyId = v.sellerPartyId ?? null;
   // Own invoices get their number on Finalise only.
   const invoiceNo = sellerPartyId ? (v.invoiceNo ?? null) : null;
   assertImportedHasNo({ invoiceNo, sellerPartyId });
   assertUniqueNo(companyId, { invoiceNo, sellerPartyId, invoiceAt: v.invoiceAt });
-  const parties = { companyId, sellerPartyId, billToId: v.billToId, shipToId: v.shipToId ?? null };
-  const header: Header = {
+  const parties = { sellerPartyId, billToId: v.billToId, shipToId: v.shipToId ?? null };
+  const ctx = ctxFor(companyId);
+  const header: InvoiceHeader = {
     ...parties,
-    placeOfSupplyStateCode: placeOfSupply(parties, v.placeOfSupplyStateCode ?? null),
+    placeOfSupplyStateCode: placeOfSupply(ctx, parties, v.placeOfSupplyStateCode ?? null),
   };
   const t = now();
   const invoice: TaxInvoice = {
     id: newId(),
+    companyId,
     createdAt: t,
     updatedAt: t,
     version: 1,
@@ -240,7 +207,7 @@ export async function createTaxInvoice(
     driverMobile: v.driverMobile ?? null,
     shipFrom: v.shipFrom ?? null,
     incoterm: v.incoterm ?? null,
-    ...priced(header, v.lines),
+    ...priceInvoice(ctx, header, v.lines),
     irn: v.irn ?? null,
     ewayBillNo: v.ewayBillNo ?? null,
     sourceFileUrl: v.sourceFileUrl ?? null,
@@ -259,6 +226,7 @@ export async function updateTaxInvoice(
 ): Promise<TaxInvoice> {
   await assertCan(companyId, "invoice.edit");
   const p = parseInput(taxInvoicePatchSchema, patch);
+  if (onDatabase()) return dbi.updateTaxInvoice(companyId, id, expectedVersion, p);
   assertInvoiceRefs(companyId, p);
   return updateRecord(
     "tax_invoices",
@@ -267,27 +235,12 @@ export async function updateTaxInvoice(
     id,
     expectedVersion,
     (current) => {
-      if (current.status === "final") fail("", "Finalised invoices can't be edited");
-      const { lines, placeOfSupplyStateCode, sellerPartyId, invoiceNo, ...fields } = p;
-      void sellerPartyId; // who the seller is never changes after the invoice is created
-      const next: TaxInvoice = {
-        ...current,
-        ...fields,
-        invoiceNo: current.sellerPartyId
-          ? invoiceNo === undefined
-            ? current.invoiceNo
-            : invoiceNo
-          : null,
-      };
-      assertImportedHasNo(next);
+      const { next, typed } = applyInvoicePatch(current, p);
       assertUniqueNo(companyId, next, id);
-      const typed =
-        placeOfSupplyStateCode === undefined
-          ? current.placeOfSupplyStateCode
-          : placeOfSupplyStateCode;
-      next.placeOfSupplyStateCode = placeOfSupply(next, typed);
+      const ctx = ctxFor(companyId);
+      next.placeOfSupplyStateCode = placeOfSupply(ctx, next, typed);
       // Re-price every save: lines, parties or place of supply may have changed.
-      return { ...next, ...priced(next, lines ?? current.lines) };
+      return { ...next, ...priceInvoice(ctx, next, p.lines ?? current.lines) };
     },
     "Tax invoice",
   );
@@ -304,6 +257,7 @@ export async function finaliseTaxInvoice(
   expectedVersion: number,
 ): Promise<TaxInvoice> {
   await assertCan(companyId, "invoice.edit");
+  if (onDatabase()) return dbi.finaliseTaxInvoice(companyId, id, expectedVersion);
   return updateRecord(
     "tax_invoices",
     db.taxInvoices,
@@ -318,12 +272,7 @@ export async function finaliseTaxInvoice(
         const fy = financialYear(invoiceDay(current.invoiceAt));
         const next = peekNumber(companyId, "tax_invoice", fy) ?? 1;
         invoiceNo = formatInvoiceNo(co.taxInvoicePrefix, next);
-        if (!invoiceNo) {
-          fail(
-            "invoiceNo",
-            "Invoice number would be longer than 16 characters — shorten the prefix in Company profile",
-          );
-        }
+        if (!invoiceNo) fail("invoiceNo", INVOICE_NO_TOO_LONG);
         assertUniqueNo(companyId, { ...current, invoiceNo }, id);
         allocateNumber(companyId, "tax_invoice", fy);
       }
@@ -360,6 +309,7 @@ export async function cancelTaxInvoice(
 ): Promise<TaxInvoice> {
   await assertCan(companyId, "record.cancel");
   const cancelReason = parseInput(cancelReasonSchema, reason);
+  if (onDatabase()) return dbi.cancelTaxInvoice(companyId, id, cancelReason);
   return cancelRecord("tax_invoices", db.taxInvoices, companyId, id, "Tax invoice", {
     cancelReason,
   });

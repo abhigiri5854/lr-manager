@@ -384,31 +384,87 @@ export async function insertLr(source: Lr): Promise<LrView> {
       checked = true;
       snapshot = snapshotFrom(company, partiesById(parties), lr);
     }
-    const items = itemRows(lr);
-    const invoices = invoiceRows(lr);
     const pendingChecks = checked ? Promise.resolve([] as Row[]) : runChecks(tx, checks);
-    const insert = tx`
-      with nx as (select p.lr_prefix || n.no::text as lr_no, n.no
-                    from app.allocate_number(${companyId}, 'lr', ${fy}) n
-                    join companies p on p.id = ${companyId}),
-           ins as (insert into lrs ${tx({
-             id: lr.id,
-             company_id: companyId,
-             lr_no: tx`(select lr_no from nx)`,
-             lr_fy: fy,
-             lr_seq: tx`(select no from nx)`,
-             ...lrColumns(tx, { ...lr, snapshot }),
-           } as never)} returning *)
-           ${items.length ? tx`, li as (insert into lr_items ${tx(items as never)})` : tx``}
-           ${invoices.length ? tx`, lv as (insert into lr_invoices ${tx(invoices as never)})` : tx``}
-      select ins.* ${namesCols(tx)(tx`ins`)} from ins`.execute();
+    const insert = insertWithLines(
+      tx,
+      lr,
+      snapshot,
+      tx`with nx as (select p.lr_prefix || n.no::text as lr_no, n.no
+                       from app.allocate_number(${companyId}, 'lr', ${fy}) n
+                       join companies p on p.id = ${companyId})`,
+      { lr_no: tx`(select lr_no from nx)`, lr_fy: fy, lr_seq: tx`(select no from nx)` },
+    );
     // Checks and insert travel together (checks first on the connection), so an FK error never
     // hides the friendly message.
     const [c, i] = await Promise.allSettled([pendingChecks, insert]);
     if (c.status === "rejected") throw c.reason;
     assertNoProblems(c.value as { field: string; msg: string }[]);
     if (i.status === "rejected") throw i.reason;
-    const saved = { ...i.value[0], items: lr.items, invoices: lr.lrInvoices };
+    const saved = { ...i.value, items: lr.items, invoices: lr.lrInvoices };
+    audit(tx, companyId, "lrs", lr.id, "create", null, toLr(saved));
+    return toLrView(saved);
+  });
+}
+
+/**
+ * The LR row, then its lines in their own statements right behind it (one round trip). Separate
+ * statements so the line triggers see the new LR (its search text picks up invoice nos.).
+ */
+async function insertWithLines(
+  tx: Tx,
+  lr: Lr,
+  snapshot: LrSnapshot | null,
+  prelude: Fragment | null,
+  numberCols: Row,
+): Promise<Row> {
+  const items = itemRows(lr);
+  const invoices = invoiceRows(lr);
+  const [[row]] = await Promise.all([
+    tx`${prelude ? tx`${prelude},` : tx`with`} ins as (insert into lrs ${tx({
+      id: lr.id,
+      company_id: lr.companyId,
+      ...numberCols,
+      import_batch_id: lr.importBatchId ?? null,
+      ...lrColumns(tx, { ...lr, snapshot }),
+    } as never)} returning *)
+      select ins.* ${namesCols(tx)(tx`ins`)} from ins`.execute(),
+    ...(items.length ? [tx`insert into lr_items ${tx(items as never)}`.execute()] : []),
+    ...(invoices.length ? [tx`insert into lr_invoices ${tx(invoices as never)}`.execute()] : []),
+  ]);
+  return row;
+}
+
+/**
+ * Smart import: a draft LR keeping the sheet's number (company prefix + digits), and the LR
+ * series moved past it so the next new LR can't collide — all in one round trip.
+ */
+export async function insertImportedLr(source: Lr, seq: number, fy: string): Promise<LrView> {
+  const companyId = source.companyId;
+  const lr: Lr = {
+    ...source,
+    items: itemsForDb(source.items),
+    lrInvoices: lrInvoicesForDb(source.lrInvoices),
+  };
+  return withUser(async (tx) => {
+    const checks = [
+      check(
+        tx,
+        "lrNo",
+        `LR ${lr.lrNo} already exists`,
+        tx`exists (select 1 from lrs where company_id = ${companyId} and lr_no = ${lr.lrNo})`,
+      ),
+      ...refChecks(tx, companyId, lr),
+    ];
+    const pendingChecks = runChecks(tx, checks);
+    const insert = insertWithLines(tx, lr, null, null, { lr_no: lr.lrNo, lr_fy: fy, lr_seq: seq });
+    const raise = tx`select app.raise_number(${companyId}, 'lr', ${fy},
+                       greatest(${seq + 1}::bigint, coalesce(app.peek_number(${companyId}, 'lr', ${fy}), 0)))`.execute();
+    const [c, i, r] = await Promise.allSettled([pendingChecks, insert, raise]);
+    if (c.status === "rejected") throw c.reason;
+    assertNoProblems(c.value as { field: string; msg: string }[]);
+    if (i.status === "rejected") throw i.reason;
+    if (r.status === "rejected") throw r.reason;
+    const saved = { ...i.value, items: lr.items, invoices: lr.lrInvoices };
     audit(tx, companyId, "lrs", lr.id, "create", null, toLr(saved));
     return toLrView(saved);
   });

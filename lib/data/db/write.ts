@@ -160,6 +160,66 @@ export async function lockRow(
   return r;
 }
 
+/** Runs checks as their own statement (pipelined with others), resolving to the problems found. */
+export const runChecks = (tx: Tx, checks: Check[]): Promise<{ field: string; msg: string }[]> =>
+  checks.length
+    ? (tx`select field, msg from (${checksSql(tx, checks)}) c`.execute() as unknown as Promise<
+        { field: string; msg: string }[]
+      >)
+    : Promise.resolve([]);
+
+/** "<what> not found in this company" unless the id is a live row of this company (null = fine). */
+export function refCheck(
+  tx: Tx,
+  companyId: string,
+  table: TableName | "items",
+  field: string,
+  what: string,
+  id: string | null | undefined,
+): Check[] {
+  if (!id) return [];
+  return [
+    check(
+      tx,
+      field,
+      `${what} not found in this company`,
+      tx`not exists (select 1 from ${tx(table)} where company_id = ${companyId}
+                       and ${UUID.test(id) ? tx`id = ${id}` : tx`false`} and cancelled_at is null)`,
+    ),
+  ];
+}
+
+/** `in (…)` list of uuids for SQL (non-uuids are dropped, so a bad id matches nothing). */
+export function uuidsIn(tx: Tx, ids: Array<string | null | undefined>): Fragment {
+  const list = [...new Set(ids.filter((x): x is string => !!x && UUID.test(x)))];
+  return tx`(select x::uuid from jsonb_array_elements_text(${tx.json(list as never)}::jsonb) x)`;
+}
+
+/** `in (…)` list of text values for SQL. */
+export function textsIn(tx: Tx, values: string[]): Fragment {
+  return tx`(select jsonb_array_elements_text(${tx.json([...new Set(values)] as never)}::jsonb))`;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Sends `check` first and the write statements right after it on the same connection (one round
+ * trip), then reports: the check's problem (friendly message) wins over the write's own error.
+ */
+export async function checkedWrite<T extends postgres.Row[][]>(
+  check: Fragment | null,
+  writes: Fragment[],
+  problem: (rows: postgres.Row[]) => void,
+): Promise<T> {
+  const c = check ? check.execute() : Promise.resolve([] as unknown as postgres.Row[]);
+  const w = Promise.all(writes.map((s) => s.execute()));
+  const [cr, wr] = await Promise.allSettled([c, w]);
+  if (cr.status === "rejected") throw cr.reason;
+  problem(cr.value);
+  if (wr.status === "rejected") throw wr.reason;
+  return wr.value as unknown as T;
+}
+
 /** camelCase patch → snake_case columns, only for the listed fields that are present. */
 export function columns<T extends object>(
   patch: Partial<T>,

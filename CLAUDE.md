@@ -63,10 +63,11 @@ Put these in `tailwind.config` / CSS variables once; never use raw hex in compon
 
 ## Code conventions
 - `app/` routes · `components/ui/` shared pieces (Sidebar, PageHeader, Card, Field, Chip, Table)
-- `lib/data/` = data access layer; screens only call `lib/data/*`. `DATA_SOURCE=db` (default) runs
-  on Postgres through `lib/data/db/*` (one RLS transaction per call via `withUser`); `DATA_SOURCE=mock`
-  uses the in-memory `lib/mock/` data (unit tests always do). Areas not moved yet (invoices, bills,
-  import, driver app, PDFs) show "not yet on the database" in db mode.
+- `lib/data/` = data access layer; screens only call `lib/data/*`. The app always runs on Postgres
+  through `lib/data/db/*` (one RLS transaction per call via `withUser`). The in-memory `lib/mock/`
+  data is for unit tests only (`DATA_SOURCE=mock` is honoured only under Vitest). Rules shared by
+  both live in pure modules (`invoice-calc.ts`, `bill-calc.ts`, `lr-patch.ts`); Smart import goes
+  through `import-store.ts` (mock) / `db/imports.ts`.
 - **Fast data access (every `lib/data/db/*` function and screen follows these; measured on remote Supabase):**
   - One RLS-context statement: `withUser` (writes) / `withUserRead` (reads, read-only tx, returns without
     waiting for the commit) send `begin; set_config(claims), set_config(role)` as ONE statement, un-awaited.
