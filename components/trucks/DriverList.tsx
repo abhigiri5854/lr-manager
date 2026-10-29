@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { inviteDriverAction } from "@/app/(app)/trucks/actions";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
+import { useSavedRows } from "@/components/ui/useSavedRows";
 import { IfCan } from "@/components/ui/Permissions";
 import { formatDate } from "@/lib/format";
-import type { DriverRow, IsoDate } from "@/lib/types";
+import type { DriverRow, DriverView, IsoDate } from "@/lib/types";
 import { DriverForm } from "./DriverForm";
 import { ExpiryCell } from "./ExpiryCell";
 import { LinkButton } from "./LinkButton";
@@ -15,7 +16,13 @@ import { LinkButton } from "./LinkButton";
  * "Invite to driver app" is a placeholder: it records when the invite was made. No SMS is
  * sent until messaging exists.
  */
-function InviteCell({ driver }: { driver: DriverRow }) {
+function InviteCell({
+  driver,
+  onSaved,
+}: {
+  driver: DriverRow;
+  onSaved: (saved: DriverView) => void;
+}) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (
@@ -27,6 +34,7 @@ function InviteCell({ driver }: { driver: DriverRow }) {
           startTransition(async () => {
             const result = await inviteDriverAction(driver.id);
             setError(result.ok ? null : result.message);
+            if (result.ok) onSaved(result.saved);
           })
         }
       >
@@ -39,7 +47,7 @@ function InviteCell({ driver }: { driver: DriverRow }) {
 
 /** Drivers table with its Edit dialog. */
 export function DriverList({
-  rows,
+  rows: serverRows,
   today,
   empty,
 }: {
@@ -48,7 +56,16 @@ export function DriverList({
   empty: React.ReactNode;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const { rows, remember, refreshInBackground } = useSavedRows(serverRows);
   const close = () => setOpenId(null);
+  /** Saved: show it now; the truck list (driver names) catches up in the background. */
+  const done = (saved?: DriverView) => {
+    close();
+    if (saved) {
+      remember(saved);
+      refreshInBackground();
+    }
+  };
   const current = openId ? rows.find((r) => r.id === openId) : undefined;
 
   const columns: Column<DriverRow>[] = [
@@ -79,7 +96,7 @@ export function DriverList({
           action="company.manage"
           fallback={r.invitedAt ? `Invited ${formatDate(r.invitedAt)}` : "Not invited"}
         >
-          <InviteCell driver={r} />
+          <InviteCell driver={r} onSaved={remember} />
         </IfCan>
       ),
     },
@@ -104,7 +121,7 @@ export function DriverList({
         description="To change which truck a driver usually drives, set the driver on the truck."
       >
         {current && (
-          <DriverForm key={`${current.id}:${current.version}`} driver={current} onDone={close} />
+          <DriverForm key={`${current.id}:${current.version}`} driver={current} onDone={done} />
         )}
       </Dialog>
     </>

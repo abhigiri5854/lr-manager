@@ -41,17 +41,17 @@ function roleLabel(u: PartyUsage): string {
 async function PartyPageContent({ params }: Pick<PageProps<"/parties/[id]">, "params">) {
   const { id } = await params;
   const companyId = await getActiveCompanyId();
-  const party = await getPartyById(companyId, id);
-  if (!party || party.cancelledAt) notFound();
-
   // Temporary (prompt 19a): the shipment history lists LRs and invoices, still on the mock store.
   const history = !onDatabase();
-  const [usage, shipsTo, shipments, invoices] = await Promise.all([
+  // All at once (one round trip), then the not-found check.
+  const [party, usage, shipsTo, shipments, invoices] = await Promise.all([
+    getPartyById(companyId, id),
     getPartyUsage(companyId, id),
     listShipsTo(companyId, id),
     history ? listLrs(companyId, { partyId: id, pageSize: 50 }) : null,
     history ? listTaxInvoices(companyId, { partyId: id, pageSize: 50 }) : null,
   ]);
+  if (!party || party.cancelledAt) notFound();
   const self = party.isSelf;
   const title = self
     ? partyLabel(party)

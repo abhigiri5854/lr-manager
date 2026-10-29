@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { daysUntil, EXPIRY_WARN_DAYS } from "@/lib/expiry";
 import { isGoodsMoving } from "@/lib/lr-status";
 import type {
@@ -366,11 +367,14 @@ export async function listDriverRows(
   };
 }
 
+/** The page header and the list both ask: one query per render (cache() is per render only). */
+const driverOptionsOnce = cache((companyId: string) => dbt.listDriverOptions(companyId));
+
 /** Every active driver, for the "Driver" dropdowns (not paginated). */
 export async function listDriverOptions(
   companyId: string,
 ): Promise<{ id: string; label: string }[]> {
-  if (onDatabase()) return dbt.listDriverOptions(companyId);
+  if (onDatabase()) return driverOptionsOnce(companyId);
   return scoped(db.drivers, companyId)
     .sort((a, b) => a.mobile.localeCompare(b.mobile))
     .map((d) => ({ id: d.id, label: d.name ? `${d.name} · ${d.mobile}` : d.mobile }));

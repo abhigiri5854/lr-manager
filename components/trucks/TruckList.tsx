@@ -5,8 +5,9 @@ import { useState } from "react";
 import { Chip } from "@/components/ui/Chip";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
+import { useSavedRows } from "@/components/ui/useSavedRows";
 import { recordSourceLabel } from "@/lib/labels";
-import type { IsoDate, TruckRow } from "@/lib/types";
+import type { IsoDate, TruckRow, TruckView } from "@/lib/types";
 import { ExpiryCell } from "./ExpiryCell";
 import { LinkButton } from "./LinkButton";
 import { AssignDriverForm, TruckForm, type DriverOption } from "./TruckForm";
@@ -15,7 +16,7 @@ type Open = { kind: "edit" | "assign"; id: string } | null;
 
 /** Trucks table with its Edit and Assign driver dialogs. */
 export function TruckList({
-  rows,
+  rows: serverRows,
   driverOptions,
   today,
   empty,
@@ -27,7 +28,16 @@ export function TruckList({
   empty: React.ReactNode;
 }) {
   const [open, setOpen] = useState<Open>(null);
+  const { rows, remember, refreshInBackground } = useSavedRows(serverRows);
   const close = () => setOpen(null);
+  /** Saved: show it now; the driver list (truck numbers) catches up in the background. */
+  const done = (saved?: TruckView) => {
+    close();
+    if (saved) {
+      remember(saved);
+      refreshInBackground();
+    }
+  };
   const current = open ? rows.find((r) => r.id === open.id) : undefined;
 
   const columns: Column<TruckRow>[] = [
@@ -112,7 +122,7 @@ export function TruckList({
             key={`${current.id}:${current.version}`}
             truck={current}
             driverOptions={driverOptions}
-            onDone={close}
+            onDone={done}
           />
         )}
       </Dialog>
@@ -127,7 +137,7 @@ export function TruckList({
             key={`${current.id}:${current.version}`}
             truck={current}
             driverOptions={driverOptions}
-            onDone={close}
+            onDone={done}
           />
         )}
       </Dialog>

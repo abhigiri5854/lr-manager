@@ -51,6 +51,20 @@ export async function listParties(
   return paginate(rows, params);
 }
 
+/** The Parties list page: one page of parties with their LR stats (one query on the database). */
+export async function listPartyRows(
+  companyId: string,
+  params: PartyListParams = {},
+): Promise<Page<Party & PartyStats>> {
+  if (onDatabase()) return dbp.listPartyRows(companyId, params);
+  const page = await listParties(companyId, params);
+  const stats = await getPartyStats(
+    companyId,
+    page.rows.map((p) => p.id),
+  );
+  return { ...page, rows: page.rows.map((p) => ({ ...p, ...stats[p.id] })) };
+}
+
 /** Every active party as id + name + place, for filter dropdowns (not paginated). */
 export async function listPartyOptions(
   companyId: string,
@@ -247,11 +261,11 @@ export async function listShipsTo(companyId: string, consignorId: string): Promi
  */
 export async function cancelParty(companyId: string, id: string, reason?: string): Promise<Party> {
   await assertCan(companyId, "record.cancel");
-  const party = onDatabase()
-    ? await dbp.getPartyById(companyId, id)
-    : findById(db.parties, companyId, id);
+  const [party, usage] = await Promise.all([
+    onDatabase() ? dbp.getPartyById(companyId, id) : findById(db.parties, companyId, id),
+    getPartyUsage(companyId, id),
+  ]);
   if (party?.isSelf) fail("", SELF_PARTY_LOCKED);
-  const usage = await getPartyUsage(companyId, id);
   const blocked = partyBlockedReason(usage);
   if (blocked) fail("", blocked);
   const why = reason?.trim();

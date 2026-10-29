@@ -11,6 +11,8 @@ vi.mock("next/headers", () => ({
     set: (name: string, value: string) => void jar.set(name, value),
     delete: (name: string) => void jar.delete(name),
   }),
+  // A new object per call: every lib/data call is its own "request" (no per-request memo).
+  headers: async () => new Headers(),
 }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {

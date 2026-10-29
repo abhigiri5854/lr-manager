@@ -99,9 +99,11 @@ export function CompanyProfileForm({
     startTransition(async () => {
       const r = await saveCompanyAction(company.id, version.current, patchFromForm(form));
       if (r.ok) {
-        version.current = r.version;
+        version.current = r.company.version;
         setConflict(null);
         setSaved(true);
+        // The sidebar and LR numbering read the profile too; they catch up in the background.
+        router.refresh();
         return;
       }
       if (r.kind === "conflict") setConflict(r.message);

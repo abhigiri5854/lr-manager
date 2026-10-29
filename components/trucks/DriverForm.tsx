@@ -5,12 +5,18 @@ import { cancelDriverAction, saveDriverAction } from "@/app/(app)/trucks/actions
 import { Button } from "@/components/ui/Button";
 import { DateField, focusFirstInvalidDate } from "@/components/ui/DateField";
 import { Field } from "@/components/ui/Field";
-import type { DriverRow } from "@/lib/types";
+import type { DriverRow, DriverView } from "@/lib/types";
 import { mobileSchema } from "@/lib/validators/common";
 import { CancelSection } from "./CancelSection";
 
 /** Add / edit driver, inside a Dialog. Editing also offers Cancel driver. */
-export function DriverForm({ driver, onDone }: { driver?: DriverRow; onDone: () => void }) {
+export function DriverForm({
+  driver,
+  onDone,
+}: {
+  driver?: DriverRow;
+  onDone: (saved?: DriverView) => void;
+}) {
   const [mobile, setMobile] = useState(driver?.mobile ?? "");
   const [name, setName] = useState(driver?.name ?? "");
   const [licenceNo, setLicenceNo] = useState(driver?.licenceNo ?? "");
@@ -32,7 +38,7 @@ export function DriverForm({ driver, onDone }: { driver?: DriverRow; onDone: () 
         expectedVersion: driver?.version,
         input: { mobile, name, licenceNo, licenceExpiry },
       });
-      if (result.ok) return onDone();
+      if (result.ok) return onDone(result.saved);
       if (result.kind === "validation") {
         setErrors(Object.fromEntries(result.issues.map((i) => [i.path || "form", i.message])));
       } else {
@@ -92,7 +98,7 @@ export function DriverForm({ driver, onDone }: { driver?: DriverRow; onDone: () 
         <div className="text-[13px] text-danger">{errors.form ?? errors[""]}</div>
       )}
       <div className="flex flex-wrap justify-end gap-3">
-        <Button variant="secondary" onClick={onDone}>
+        <Button variant="secondary" onClick={() => onDone()}>
           Close
         </Button>
         <Button type="submit" disabled={pending}>
@@ -104,7 +110,7 @@ export function DriverForm({ driver, onDone }: { driver?: DriverRow; onDone: () 
           what="driver"
           blockedBy={driver.cancelBlockedBy}
           onCancel={() => cancelDriverAction(driver.id)}
-          onDone={onDone}
+          onDone={() => onDone()}
         />
       )}
     </form>

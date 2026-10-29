@@ -14,6 +14,15 @@ import { partyFields, type PartyInput } from "@/lib/validators/party";
 
 export const PARTY_FORM_ID = "party-form";
 
+/**
+ * The last party saved here. The detail page keys this form by version, so the background
+ * refresh after a save remounts it; this keeps "Saved" showing across that.
+ */
+let lastSaved: { id: string; version: number } | null = null;
+
+/** What the page header shows about a party (refreshed after a save only when it changed). */
+const headerOf = (p: Party) => [p.name, p.place, p.gstin, p.phone].join("|");
+
 const gstPayerLabel = {
   consignor: "Consignor",
   consignee: "Consignee",
@@ -35,7 +44,9 @@ export function PartyForm({ mode, party, onDone }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(
+    () => !!party && lastSaved?.id === party.id && lastSaved.version === party.version,
+  );
   const [pending, startTransition] = useTransition();
   const version = useRef(party?.version ?? 0);
 
@@ -79,9 +90,12 @@ export function PartyForm({ mode, party, onDone }: Props) {
           ? await addPartyAction(input)
           : await updatePartyAction(party!.id, version.current, input);
       if (result.ok) {
-        if ("version" in result) {
-          version.current = result.version;
+        if ("party" in result) {
+          version.current = result.party.version;
+          lastSaved = { id: result.party.id, version: result.party.version };
           setSaved(true);
+          // The header shows name, place, GSTIN and phone; re-read the page only if they changed.
+          if (headerOf(result.party) !== headerOf(party!)) router.refresh();
         } else {
           onDone?.();
           router.push(`/parties/${result.id}`);

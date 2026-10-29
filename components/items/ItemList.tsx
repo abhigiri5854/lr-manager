@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LinkButton } from "@/components/trucks/LinkButton";
 import { Button } from "@/components/ui/Button";
@@ -8,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Dialog } from "@/components/ui/Dialog";
 import { Pagination } from "@/components/ui/Pagination";
+import { useSavedRows } from "@/components/ui/useSavedRows";
 import { formatPaise } from "@/lib/format";
 import { formatGstRate } from "@/lib/gst";
 import type { Item, Page } from "@/lib/types";
@@ -17,6 +19,7 @@ import { ItemForm } from "./ItemForm";
 
 /** "+ Add item" button with its dialog (page header). */
 export function AddItemButton() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -27,7 +30,13 @@ export function AddItemButton() {
         title="Add item"
         description="Typing its code or name on an invoice line fills HSN, UOM, GST % and rate."
       >
-        <ItemForm onDone={() => setOpen(false)} />
+        <ItemForm
+          onDone={(saved) => {
+            setOpen(false);
+            // The new row appears when the list refreshes in the background.
+            if (saved) router.refresh();
+          }}
+        />
       </Dialog>
     </>
   );
@@ -63,8 +72,9 @@ export function ItemList({
   loading?: boolean;
 }) {
   const data = page ?? { rows: [], total: 0, page: 1, pageSize: 50 };
+  const { rows, remember } = useSavedRows(data.rows);
   const [editId, setEditId] = useState<string | null>(null);
-  const editing = data.rows.find((r) => r.id === editId);
+  const editing = rows.find((r) => r.id === editId);
 
   const columns: Column<Item>[] = [
     { key: "code", header: "Item code", cell: (r) => r.code ?? "—", mono: true },
@@ -101,7 +111,7 @@ export function ItemList({
         <DataTable
           label="Items"
           columns={columns}
-          rows={data.rows}
+          rows={rows}
           rowKey={(r) => r.id}
           empty={loading ? "Loading…" : emptyText(query, data)}
         />
@@ -118,7 +128,16 @@ export function ItemList({
         )}
       </Card>
       <Dialog open={!!editing} onClose={() => setEditId(null)} title="Edit item">
-        {editing && <ItemForm item={editing} onDone={() => setEditId(null)} />}
+        {editing && (
+          <ItemForm
+            item={editing}
+            onDone={(saved) => {
+              setEditId(null);
+              // Nothing else on the page depends on an item: no refresh needed.
+              if (saved) remember(saved);
+            }}
+          />
+        )}
       </Dialog>
     </>
   );

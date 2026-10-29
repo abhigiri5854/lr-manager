@@ -5,6 +5,7 @@ import { refresh } from "next/cache";
 import { ConflictError, NotFoundError, ValidationError, ForbiddenError } from "@/lib/data/errors";
 import { cancelParty, createParty, findPartyByGstin, updateParty } from "@/lib/data/parties";
 import { getActiveCompanyId } from "@/lib/data/session";
+import type { Party } from "@/lib/types";
 import type { RuleError } from "@/lib/validators/common";
 import type { PartyInput, PartyPatch } from "@/lib/validators/party";
 
@@ -27,8 +28,8 @@ export async function addPartyAction(
 ): Promise<{ ok: true; id: string } | PartyActionFailure> {
   const companyId = await getActiveCompanyId();
   try {
+    // The form opens the new party's page; nothing here needs re-rendering.
     const party = await createParty(companyId, { ...input, source: "manual" });
-    refresh();
     return { ok: true, id: party.id };
   } catch (e) {
     return failure(e);
@@ -39,12 +40,11 @@ export async function updatePartyAction(
   id: string,
   expectedVersion: number,
   patch: PartyPatch,
-): Promise<{ ok: true; version: number } | PartyActionFailure> {
+): Promise<{ ok: true; party: Party } | PartyActionFailure> {
   const companyId = await getActiveCompanyId();
   try {
-    const party = await updateParty(companyId, id, expectedVersion, patch);
-    refresh();
-    return { ok: true, version: party.version };
+    // The saved party goes back to the form; the page isn't re-rendered (CLAUDE.md).
+    return { ok: true, party: await updateParty(companyId, id, expectedVersion, patch) };
   } catch (e) {
     return failure(e);
   }

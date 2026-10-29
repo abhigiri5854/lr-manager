@@ -5,9 +5,9 @@ import { normaliseGstin } from "@/lib/validators/common";
 import { partyRuleErrors } from "@/lib/validators/party";
 import { assertRules, fail } from "../_store";
 import { NotFoundError } from "../errors";
-import { contains, paging, withUser, type Tx } from "./conn";
+import { contains, paging, withUser, withUserRead, type Tx } from "./conn";
 import { audit, toParty, type Row } from "./rows";
-import { cancelRow, columns, lockForUpdate, updateVersioned } from "./write";
+import { cancelRow, columns, insertRow, saveRow, type Fragment } from "./write";
 import type { PartyListParams, PartyStats, PartyUsage, ShipsTo } from "../parties";
 
 /** Party fields → parties columns (logoUrl is a plain value until party logos are uploaded). */
@@ -28,40 +28,78 @@ const PARTY_COLUMNS: Partial<Record<keyof Party, string>> = {
   source: "source",
 };
 
-async function assertUniqueGstin(
+/** "GSTIN already saved for …" when another active party has it (runs inside the save). */
+function gstinCheck(
   tx: Tx,
   companyId: string,
-  gstin: string | null,
+  gstin: string | Fragment,
   exceptId?: string,
 ) {
-  if (!gstin) return;
-  const [clash] = await tx`select name from parties
-                            where company_id = ${companyId} and gstin = ${gstin}
-                              and cancelled_at is null and id is distinct from ${exceptId ?? null}`;
-  if (clash) fail("gstin", `GSTIN already saved for ${clash.name}`);
+  return tx`select 'gstin'::text as field, 'GSTIN already saved for ' || name as msg from parties
+             where company_id = ${companyId} and gstin = ${gstin}
+               and cancelled_at is null and id is distinct from ${exceptId ?? null}
+             limit 1`;
 }
 
 export async function listParties(
   companyId: string,
   params: PartyListParams,
 ): Promise<Page<Party>> {
+  return listPartyPage(companyId, params, false);
+}
+
+/** The Parties list page: each party with its LR count and last LR date, one round trip. */
+export async function listPartyRows(
+  companyId: string,
+  params: PartyListParams,
+): Promise<Page<Party & PartyStats>> {
+  return listPartyPage(companyId, params, true);
+}
+
+async function listPartyPage<S extends boolean>(
+  companyId: string,
+  params: PartyListParams,
+  stats: S,
+): Promise<Page<S extends true ? Party & PartyStats : Party>> {
   const { page, pageSize, offset } = paging(params);
   const q = contains(params.search);
-  return withUser(async (tx) => {
-    const where = () => tx`company_id = ${companyId}
-                           ${params.includeCancelled ? tx`` : tx`and cancelled_at is null`}
-                           ${q ? tx`and search_text like ${q}` : tx``}`;
+  return withUserRead(async (tx) => {
+    const where = () => tx`p.company_id = ${companyId}
+                           ${params.includeCancelled ? tx`` : tx`and p.cancelled_at is null`}
+                           ${q ? tx`and p.search_text like ${q}` : tx``}`;
+    const statsJoin = stats
+      ? tx`, s.lr_count, s.last_lr_date from parties p
+           left join lateral (
+             select count(*) as lr_count, max(l.lr_date) as last_lr_date from lrs l
+              where l.company_id = p.company_id and l.cancelled_at is null
+                and p.id in (l.consignor_id, l.consignee_id, l.billed_to_id)) s on true`
+      : tx` from parties p`;
+    // Both statements go out together on the one connection: one round trip.
     const [rows, [{ n }]] = await Promise.all([
-      tx`select * from parties where ${where()}
-          order by lower(name), id limit ${pageSize} offset ${offset}`,
-      tx`select count(*) as n from parties where ${where()}`,
+      tx`select p.* ${statsJoin} where ${where()}
+          order by lower(p.name), p.id limit ${pageSize} offset ${offset}`,
+      tx`select count(*) as n from parties p where ${where()}`,
     ]);
-    return { rows: rows.map(toParty), total: n as number, page, pageSize };
+    return {
+      rows: rows.map((r) =>
+        stats
+          ? {
+              ...toParty(r),
+              lrCount: r.lr_count as number,
+              lastLrDate: r.last_lr_date as string | null,
+              outstandingPaise: 0,
+            }
+          : toParty(r),
+      ) as (S extends true ? Party & PartyStats : Party)[],
+      total: n as number,
+      page,
+      pageSize,
+    };
   });
 }
 
 export async function listPartyOptions(companyId: string) {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const rows = await tx`select id, name, place, is_self from parties
                            where company_id = ${companyId} and cancelled_at is null
                            order by lower(name), id`;
@@ -75,7 +113,7 @@ export async function listPartyOptions(companyId: string) {
 }
 
 export async function getPartyById(companyId: string, id: string): Promise<Party | null> {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const [r] = await tx`select * from parties where company_id = ${companyId} and id = ${id}`;
     return r ? toParty(r) : null;
   });
@@ -83,7 +121,7 @@ export async function getPartyById(companyId: string, id: string): Promise<Party
 
 export async function findPartyByGstin(companyId: string, gstin: string): Promise<Party | null> {
   const g = normaliseGstin(gstin);
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const [r] = await tx`select * from parties
                           where company_id = ${companyId} and gstin = ${g} and cancelled_at is null`;
     return r ? toParty(r) : null;
@@ -93,15 +131,19 @@ export async function findPartyByGstin(companyId: string, gstin: string): Promis
 /** `party` is the fully built record from ../parties.ts (id, defaults, rules already applied). */
 export async function insertParty(party: Party): Promise<Party> {
   return withUser(async (tx) => {
-    await assertUniqueGstin(tx, party.companyId, party.gstin);
-    const [r] = await tx`insert into parties ${tx({
-      id: party.id,
-      company_id: party.companyId,
-      ...columns(party, PARTY_COLUMNS),
-      is_self: false,
-    })} returning *`;
+    const r = await insertRow(
+      tx,
+      "parties",
+      {
+        id: party.id,
+        company_id: party.companyId,
+        ...columns(party, PARTY_COLUMNS),
+        is_self: false,
+      },
+      { checks: party.gstin ? [gstinCheck(tx, party.companyId, party.gstin)] : [] },
+    );
     const saved = toParty(r);
-    await audit(tx, party.companyId, "parties", saved.id, "create", null, saved);
+    audit(tx, party.companyId, "parties", saved.id, "create", null, saved);
     return saved;
   });
 }
@@ -113,30 +155,34 @@ export async function updateParty(
   patch: Partial<Party>,
 ): Promise<Party> {
   return withUser(async (tx) => {
-    const current = toParty(
-      await lockForUpdate(tx, "parties", companyId, id, expectedVersion, "Party"),
+    // The GSTIN after the save: the patched one, else the current one.
+    const gstin = "gstin" in patch ? (patch.gstin ?? null) : tx`(select gstin from cur)`;
+    const { before, after } = await saveRow(
+      tx,
+      "parties",
+      companyId,
+      id,
+      expectedVersion,
+      columns(patch, PARTY_COLUMNS),
+      {
+        what: "Party",
+        guard: tx`not cur.is_self`,
+        checks: gstin === null ? [] : [gstinCheck(tx, companyId, gstin, id)],
+        validate: (row) => {
+          const current = toParty(row);
+          if (current.isSelf) fail("", SELF_PARTY_LOCKED);
+          assertRules(partyRuleErrors({ ...current, ...patch }));
+        },
+      },
     );
-    if (current.isSelf) fail("", SELF_PARTY_LOCKED);
-    const next = { ...current, ...patch };
-    assertRules(partyRuleErrors(next));
-    await assertUniqueGstin(tx, companyId, next.gstin, id);
-    const saved = toParty(
-      await updateVersioned(
-        tx,
-        "parties",
-        companyId,
-        id,
-        expectedVersion,
-        columns(patch, PARTY_COLUMNS),
-      ),
-    );
-    await audit(tx, companyId, "parties", id, "update", current, saved);
+    const saved = toParty(after);
+    audit(tx, companyId, "parties", id, "update", toParty(before), saved);
     return saved;
   });
 }
 
 export async function getPartyUsage(companyId: string, id: string): Promise<PartyUsage> {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const [r] = await tx`
       select
         (select count(*) from lrs l where l.company_id = ${companyId} and l.cancelled_at is null
@@ -167,7 +213,7 @@ export async function getPartyStats(
   ids: string[],
 ): Promise<Record<string, PartyStats>> {
   if (ids.length === 0) return {};
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const rows = await tx`
       select p.id, count(l.id) as lr_count, max(l.lr_date) as last_lr_date
         from unnest(string_to_array(${uuidList(ids)}, ',')::uuid[]) as p(id)
@@ -188,7 +234,7 @@ export async function getPartyStats(
 }
 
 export async function listShipsTo(companyId: string, consignorId: string): Promise<ShipsTo[]> {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const rows = await tx`
       select l.consignee_id, l.billed_to_id, l.to_place, l.booked_at,
              c.name, c.place, c.source, b.name as billed_to_name
@@ -233,13 +279,13 @@ export async function cancelPartyRow(
       reason,
     );
     const saved = toParty(after);
-    if (changed) await audit(tx, companyId, "parties", id, "cancel", toParty(before), saved);
+    if (changed) audit(tx, companyId, "parties", id, "cancel", toParty(before), saved);
     return saved;
   });
 }
 
 export async function getSelfParty(companyId: string): Promise<Party> {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const [r] = await tx`select * from parties where company_id = ${companyId} and is_self`;
     if (!r) throw new NotFoundError("Company");
     return toParty(r);

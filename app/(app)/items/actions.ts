@@ -1,7 +1,7 @@
 "use server";
 
-// Server actions for the item master. Role checks come with auth (Phase 4).
-import { refresh } from "next/cache";
+// Server actions for the item master. Role checks happen in lib/data (lib/permissions.ts).
+// A save hands back the saved item and doesn't re-render the page (CLAUDE.md).
 import { toActionFailure, type ActionFailure } from "@/lib/data/errors";
 import { createItem, searchItems, updateItem } from "@/lib/data/items";
 import { getActiveCompanyId } from "@/lib/data/session";
@@ -19,7 +19,6 @@ export async function saveItemAction(args: {
     const item = args.id
       ? await updateItem(companyId, args.id, args.expectedVersion ?? -1, args.input)
       : await createItem(companyId, args.input as ItemInput);
-    refresh();
     return { ok: true, item };
   } catch (e) {
     return toActionFailure(e);

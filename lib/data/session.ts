@@ -1,8 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { cache } from "react";
 import { can, deniedMessage, type Action } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 import { normaliseMobile } from "@/lib/validators/common";
@@ -81,6 +80,7 @@ async function loadDbAccount(userId: string): Promise<Account | null> {
                           and c.cancelled_at is null), '[]') as memberships
         from users u
        where u.id = ${userId} and u.cancelled_at is null`,
+    "read",
   );
   const r = rows[0];
   if (!r) return null;
@@ -89,8 +89,32 @@ async function loadDbAccount(userId: string): Promise<Account | null> {
     memberships: r.memberships as Account["memberships"],
   };
 }
-/** Once per request (a page asks for the session many times). */
-const dbAccount = cache(loadDbAccount);
+
+/**
+ * Once per request — pages, layouts AND server actions. React's cache() only lasts for a render,
+ * so a save (action + refresh) used to read the account 5–6 times. The request's headers object
+ * is the key: one per request, gone with it.
+ */
+const accountsByRequest = new WeakMap<object, Map<string, Promise<Account | null>>>();
+
+async function requestMemo(): Promise<Map<string, Promise<Account | null>>> {
+  const key = await headers();
+  let memo = accountsByRequest.get(key);
+  if (!memo) accountsByRequest.set(key, (memo = new Map()));
+  return memo;
+}
+
+async function dbAccount(userId: string): Promise<Account | null> {
+  const memo = await requestMemo().catch(() => null); // outside a request: no memo
+  if (!memo) return loadDbAccount(userId);
+  let found = memo.get(userId);
+  if (!found) {
+    found = loadDbAccount(userId);
+    memo.set(userId, found);
+    found.catch(() => memo.delete(userId));
+  }
+  return found;
+}
 
 async function account(userId: string): Promise<Account | null> {
   return onDatabase() ? dbAccount(userId) : mockAccount(userId);
@@ -147,8 +171,10 @@ export async function getActiveCompanyId(): Promise<string> {
 /** Switches "Working as". Only from a server action (it sets a cookie). */
 export async function setActiveCompany(companyId: string): Promise<void> {
   const userId = await getCurrentUserId();
-  // Uncached: "+ Add company" switches to the company it just created in the same request.
+  // Fresh: "+ Add company" switches to the company it just created in the same request; the
+  // rest of this request (the refreshed page) then sees the new membership too.
   const acc = (onDatabase() ? await loadDbAccount(userId) : mockAccount(userId))!;
+  if (onDatabase()) (await requestMemo().catch(() => null))?.set(userId, Promise.resolve(acc));
   if (!acc.memberships.some((m) => m.companyId === companyId)) throw new NotFoundError("Company");
   (await cookies()).set(COMPANY_COOKIE, companyId, {
     httpOnly: true,

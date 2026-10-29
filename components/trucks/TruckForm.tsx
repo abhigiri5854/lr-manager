@@ -6,7 +6,7 @@ import { cancelTruckAction, saveTruckAction, truckOwnerAction } from "@/app/(app
 import { Button } from "@/components/ui/Button";
 import { DateField, focusFirstInvalidDate } from "@/components/ui/DateField";
 import { Field, Select } from "@/components/ui/Field";
-import type { TruckRow } from "@/lib/types";
+import type { TruckRow, TruckView } from "@/lib/types";
 import { normaliseVehicleNo, vehicleNoSchema } from "@/lib/validators/common";
 import { CancelSection } from "./CancelSection";
 
@@ -21,7 +21,7 @@ export function TruckForm({
   /** Omit to add a new truck. */
   truck?: TruckRow;
   driverOptions: DriverOption[];
-  onDone: () => void;
+  onDone: (saved?: TruckView) => void;
 }) {
   const [number, setNumber] = useState(truck?.number ?? "");
   const [driverId, setDriverId] = useState(truck?.driverId ?? "");
@@ -60,7 +60,7 @@ export function TruckForm({
           fitnessExpiry: fitness,
         },
       });
-      if (result.ok) return onDone();
+      if (result.ok) return onDone(result.saved);
       if (result.kind === "validation") {
         setErrors(Object.fromEntries(result.issues.map((i) => [i.path || "form", i.message])));
         if (result.issues.some((i) => i.path === "number")) await checkDuplicate(number);
@@ -73,7 +73,7 @@ export function TruckForm({
   const numberError = existing ? (
     <>
       Truck {existing.number} is already saved.{" "}
-      <Link href={`/trucks?q=${existing.number}`} onClick={onDone}>
+      <Link href={`/trucks?q=${existing.number}`} onClick={() => onDone()}>
         Open it
       </Link>
     </>
@@ -151,7 +151,7 @@ export function TruckForm({
         <div className="text-[13px] text-danger">{errors.form ?? errors[""]}</div>
       )}
       <div className="flex flex-wrap justify-end gap-3">
-        <Button variant="secondary" onClick={onDone}>
+        <Button variant="secondary" onClick={() => onDone()}>
           Close
         </Button>
         <Button type="submit" disabled={pending || (!truck && existing !== null)}>
@@ -163,7 +163,7 @@ export function TruckForm({
           what="truck"
           blockedBy={truck.cancelBlockedBy}
           onCancel={() => cancelTruckAction(truck.id)}
-          onDone={onDone}
+          onDone={() => onDone()}
         />
       )}
     </form>
@@ -178,7 +178,7 @@ export function AssignDriverForm({
 }: {
   truck: TruckRow;
   driverOptions: DriverOption[];
-  onDone: () => void;
+  onDone: (saved?: TruckView) => void;
 }) {
   const [driverId, setDriverId] = useState(truck.driverId ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -192,7 +192,7 @@ export function AssignDriverForm({
         expectedVersion: truck.version,
         input: { driverId },
       });
-      if (result.ok) onDone();
+      if (result.ok) onDone(result.saved);
       else setError(result.message);
     });
   }
@@ -221,7 +221,7 @@ export function AssignDriverForm({
         ))}
       </Select>
       <div className="flex flex-wrap justify-end gap-3">
-        <Button variant="secondary" onClick={onDone}>
+        <Button variant="secondary" onClick={() => onDone()}>
           Close
         </Button>
         <Button type="submit" disabled={pending}>

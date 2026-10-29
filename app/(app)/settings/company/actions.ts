@@ -5,6 +5,7 @@ import { createCompany, updateCompany } from "@/lib/data/companies";
 import { toActionFailure, type ActionFailure } from "@/lib/data/errors";
 import { getActiveCompanyId, setActiveCompany } from "@/lib/data/session";
 import { uploadCompanyImage } from "@/lib/data/uploads";
+import type { Company } from "@/lib/types";
 import type { CompanyCreateInput, CompanyPatch } from "@/lib/validators/company";
 
 const SWITCHED: ActionFailure = {
@@ -18,12 +19,11 @@ export async function saveCompanyAction(
   companyId: string,
   expectedVersion: number,
   patch: CompanyPatch,
-): Promise<{ ok: true; version: number } | ActionFailure> {
+): Promise<{ ok: true; company: Company } | ActionFailure> {
   if (companyId !== (await getActiveCompanyId())) return SWITCHED;
   try {
-    const c = await updateCompany(companyId, expectedVersion, patch);
-    refresh();
-    return { ok: true, version: c.version };
+    // The saved profile goes back to the form; the form refreshes the page in the background.
+    return { ok: true, company: await updateCompany(companyId, expectedVersion, patch) };
   } catch (e) {
     return toActionFailure(e);
   }

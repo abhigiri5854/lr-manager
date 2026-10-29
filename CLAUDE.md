@@ -67,6 +67,23 @@ Put these in `tailwind.config` / CSS variables once; never use raw hex in compon
   on Postgres through `lib/data/db/*` (one RLS transaction per call via `withUser`); `DATA_SOURCE=mock`
   uses the in-memory `lib/mock/` data (unit tests always do). Areas not moved yet (LRs, POD,
   invoices, bills, import, dashboard, PDFs) show "not yet on the database" in db mode.
+- **Fast data access (every `lib/data/db/*` function and screen follows these; measured on remote Supabase):**
+  - One RLS-context statement: `withUser` (writes) / `withUserRead` (reads, read-only tx, returns without
+    waiting for the commit) send `begin; set_config(claims), set_config(role)` as ONE statement, un-awaited.
+    Never add extra round trips for context; never call `begin`/`set_config` yourself.
+  - One combined SQL per write type: the write, its `audit_log` row and any version/number bump go in a
+    single statement (CTEs) returning the saved row; extra statements that need no result go through
+    `withCommit` so they leave with the commit. Aim for ≤ 2 round trips per save.
+  - Return the saved record, don't reload: actions return the saved row and the client updates its list
+    (`components/ui/useSavedRows.ts`) or `router.push`es to it; `router.refresh()` only if something the
+    page header shows changed.
+  - Per-request session cache: the account is loaded once per request (page, layout and server action
+    share it, keyed on the request `headers()`); don't use React `cache()` for it. Use `cache()` to dedupe
+    other identical reads within one render (e.g. driver options in header + list).
+  - Joins/aggregates instead of N+1: lists fetch their rows plus counts/last-activity with `left join
+    lateral` / `array_agg` in one query; never query per row. Run independent queries with `Promise.all`.
+  - Check with `LRM_SQL_LOG=1` (prints each statement) on a production build (`pnpm build && pnpm start`).
+    Targets: save < 1 s, page < 0.8 s. Benchmark reflects `next start`, never `next dev`.
 - `lib/validators/` Zod schemas shared by forms and API (GSTIN, PAN, vehicle no., e-way bill).
 - Server Components by default; Client Components only for interactive forms.
 - Lists are paginated (50/page) and searchable server-side.

@@ -11,7 +11,7 @@ import type {
   User,
 } from "@/lib/types";
 import { auditChanges, type TableName } from "../_store";
-import type { Tx } from "./conn";
+import { withCommit, type Tx } from "./conn";
 import { urlFromPath } from "./storage";
 
 // postgres.js rows are untyped records; each mapper below names every column it reads.
@@ -165,8 +165,11 @@ export function toItem(r: Row): Item {
   });
 }
 
-/** One audit_log row as the signed-in user, in the caller's transaction. */
-export async function audit(
+/**
+ * One audit_log row as the signed-in user, in the caller's transaction. It is sent with the
+ * commit (withCommit), so it costs no round trip of its own; if it fails, nothing is saved.
+ */
+export function audit(
   tx: Tx,
   companyId: string,
   table: TableName,
@@ -174,9 +177,12 @@ export async function audit(
   action: AuditEntry["action"],
   before: object | null,
   after: object,
-): Promise<void> {
+): void {
   const changes = auditChanges(before, after);
-  await tx`insert into audit_log (company_id, actor, user_id, table_name, record_id, action, changes)
-           values (${companyId}, 'user', auth.uid(), ${table}, ${recordId}, ${action},
-                   ${tx.json(changes as never)})`;
+  withCommit(
+    tx,
+    tx`insert into audit_log (company_id, actor, user_id, table_name, record_id, action, changes)
+       values (${companyId}, 'user', auth.uid(), ${table}, ${recordId}, ${action},
+               ${tx.json(changes as never)})`,
+  );
 }

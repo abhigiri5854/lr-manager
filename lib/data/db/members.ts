@@ -6,13 +6,13 @@ import type { Membership, Role } from "@/lib/types";
 import type { z } from "zod";
 import type { inviteMemberSchema } from "@/lib/validators/member";
 import { fail, newId } from "../_store";
-import { withUser, type Tx } from "./conn";
+import { withUser, withUserRead, type Tx } from "./conn";
 import { audit, toMembership, toUser } from "./rows";
-import { cancelRow, lockForUpdate, lockRow, updateVersioned } from "./write";
+import { cancelRow, check, lockRow, saveRow } from "./write";
 import { LAST_OWNER_MESSAGE, type MemberRow } from "../members";
 
 export async function listMembers(companyId: string): Promise<Membership[]> {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const rows = await tx`select * from memberships
                            where company_id = ${companyId} and cancelled_at is null
                            order by created_at, id`;
@@ -24,7 +24,7 @@ async function assertKeepsOwner(
   tx: Tx,
   companyId: string,
   membershipId: string,
-  nextRole: Role | null,
+  nextRole: null,
 ) {
   const owners = await tx`select id from memberships
                            where company_id = ${companyId} and role = 'owner' and cancelled_at is null`;
@@ -39,22 +39,35 @@ export async function changeMemberRole(
   role: Role,
 ): Promise<Membership> {
   return withUser(async (tx) => {
-    const current = toMembership(
-      await lockForUpdate(tx, "memberships", companyId, membershipId, expectedVersion, "Member"),
+    const lastOwner = check(
+      tx,
+      "role",
+      LAST_OWNER_MESSAGE,
+      tx`(select role from cur) = 'owner' and ${role}::text <> 'owner'
+          and (select count(*) from memberships where company_id = ${companyId}
+                 and role = 'owner' and cancelled_at is null) <= 1`,
     );
-    await assertKeepsOwner(tx, companyId, membershipId, role);
-    const saved = toMembership(
-      await updateVersioned(tx, "memberships", companyId, membershipId, expectedVersion, { role }),
+    const { before, after } = await saveRow(
+      tx,
+      "memberships",
+      companyId,
+      membershipId,
+      expectedVersion,
+      { role },
+      { what: "Member", checks: [lastOwner] },
     );
-    await audit(tx, companyId, "memberships", membershipId, "update", current, saved);
+    const saved = toMembership(after);
+    audit(tx, companyId, "memberships", membershipId, "update", toMembership(before), saved);
     return saved;
   });
 }
 
 export async function removeMember(companyId: string, membershipId: string): Promise<Membership> {
   return withUser(async (tx) => {
-    await lockRow(tx, "memberships", companyId, membershipId, "Member");
-    await assertKeepsOwner(tx, companyId, membershipId, null);
+    await Promise.all([
+      lockRow(tx, "memberships", companyId, membershipId, "Member"),
+      assertKeepsOwner(tx, companyId, membershipId, null),
+    ]);
     const { before, after, changed } = await cancelRow(
       tx,
       "memberships",
@@ -64,7 +77,7 @@ export async function removeMember(companyId: string, membershipId: string): Pro
     );
     const saved = toMembership(after);
     if (changed)
-      await audit(
+      audit(
         tx,
         companyId,
         "memberships",
@@ -79,7 +92,7 @@ export async function removeMember(companyId: string, membershipId: string): Pro
 
 /** Rows for the table; ../members.ts sorts them and checks the viewer is a member. */
 export async function listMemberRows(companyId: string): Promise<Omit<MemberRow, "isMe">[]> {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const rows = await tx`
       select m.id as membership_id, m.version, m.role, u.id as user_id, u.name, u.mobile, u.email,
              u.last_login_at,
@@ -148,9 +161,9 @@ export async function inviteMember(
     if (password) {
       // Visible now that they share this company.
       const [u] = await tx`select * from users where id = ${userId}`;
-      await audit(tx, companyId, "users", userId, "create", null, toUser(u));
+      audit(tx, companyId, "users", userId, "create", null, toUser(u));
     }
-    await audit(tx, companyId, "memberships", membership.id, "create", null, membership);
+    audit(tx, companyId, "memberships", membership.id, "create", null, membership);
     return { membership, tempPassword: password };
   });
 }

@@ -2,20 +2,20 @@
 // Same behaviour as the mock half of ../companies.ts. The self party follows the company by
 // trigger (f_self_party); its change is audited here, as the mock does.
 import { financialYear } from "@/lib/fy";
-import type { Company } from "@/lib/types";
+import type { Company, Party } from "@/lib/types";
 import type { z } from "zod";
 import {
   companyRuleErrors,
   type companyCreateSchema,
   type companyPatchSchema,
 } from "@/lib/validators/company";
-import { assertRules, fail, today } from "../_store";
+import { assertRules, auditChanges, fail, today } from "../_store";
 import { ConflictError, NotFoundError } from "../errors";
 import type { NumberingState } from "../companies";
-import { withUser, type Tx } from "./conn";
+import { withCommit, withUser, withUserRead, type Tx } from "./conn";
 import { audit, toCompany, toMembership, toParty, type Row } from "./rows";
 import { pathFromUrl } from "./storage";
-import { columns } from "./write";
+import { columns, type Fragment } from "./write";
 
 const COMPANY_COLUMNS: Partial<Record<keyof Company, string>> = {
   label: "label",
@@ -60,7 +60,7 @@ const COMPANY_SELECT = (tx: Tx, fy: string) =>
 const company = (r: Row) => toCompany(r, r.next_lr_no === null ? null : Number(r.next_lr_no));
 
 export async function listCompanies(): Promise<Company[]> {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const rows = await tx`${COMPANY_SELECT(tx, fyNow())}
       join memberships m on m.company_id = c.id
      where m.user_id = auth.uid() and m.cancelled_at is null and c.cancelled_at is null
@@ -70,7 +70,7 @@ export async function listCompanies(): Promise<Company[]> {
 }
 
 export async function getCompany(companyId: string): Promise<Company | null> {
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const [r] = await tx`${COMPANY_SELECT(tx, fyNow())} where c.id = ${companyId}`;
     return r ? company(r) : null;
   });
@@ -78,7 +78,7 @@ export async function getCompany(companyId: string): Promise<Company | null> {
 
 export async function getNumbering(companyId: string): Promise<NumberingState> {
   const fy = fyNow();
-  return withUser(async (tx) => {
+  return withUserRead(async (tx) => {
     const rows = await tx`select series, fy, next_no from number_series
                            where company_id = ${companyId} order by fy desc`;
     const both = (series: "freight_bill" | "tax_invoice") => {
@@ -115,86 +115,112 @@ function imagePath(
   }
 }
 
-/** Patch already parsed by ../companies.ts. */
+/**
+ * Patch already parsed by ../companies.ts. One statement locks the company, checks the GSTIN,
+ * updates it at the expected version and returns before / after (with what the f_self_party
+ * trigger copies onto our own party); the LR number raise and the audit rows go with the commit.
+ */
 export async function updateCompany(
   companyId: string,
   expectedVersion: number,
   p: z.output<typeof companyPatchSchema>,
 ): Promise<Company> {
   const fy = fyNow();
+  const { nextLrNo, ...rest } = p;
+  const fields = rest as Partial<Company>;
+  const set: Row = columns(fields, COMPANY_COLUMNS);
+  if ("bank" in fields) {
+    const b = fields.bank ?? null;
+    Object.assign(set, {
+      bank_account_name: b?.accountName ?? null,
+      bank_name: b?.bankName ?? null,
+      bank_account_no: b?.accountNo ?? null,
+      bank_ifsc: b?.ifsc ?? null,
+    });
+  }
+  if ("logoUrl" in fields) set.logo_path = imagePath("logos", companyId, fields.logoUrl);
+  if ("signatureUrl" in fields) {
+    set.signature_path = imagePath("signatures", companyId, fields.signatureUrl);
+  }
+
   return withUser(async (tx) => {
-    const [row] = await tx`${COMPANY_SELECT(tx, fy)} where c.id = ${companyId} for update of c`;
-    if (!row) throw new NotFoundError("Company");
-    if (row.version !== expectedVersion) throw new ConflictError();
-    const current = company(row);
-    const { nextLrNo, ...rest } = p;
-    const fields = rest as Partial<Company>;
-    const next: Company = { ...current, ...fields } as Company;
-    assertRules(companyRuleErrors(next));
-    if (fields.gstin && fields.gstin !== current.gstin)
-      await assertGstinFree(tx, fields.gstin, companyId);
+    const ok = tx`cur.version = ${expectedVersion} and not exists (select 1 from checks)`;
+    const upd =
+      Object.keys(set).length > 0
+        ? tx`update companies t set ${tx(set)} from cur where t.id = cur.id and ${ok}
+              returning t.*, cur.next_lr_no`
+        : tx`select cur.* from cur where ${ok}`;
+    const gstinCheck = fields.gstin
+      ? tx`select 'gstin'::text as field, 'A company with this GSTIN already exists'::text as msg
+            where ${fields.gstin} is distinct from (select gstin from cur)
+              and app.company_gstin_taken(${fields.gstin}, ${companyId})`
+      : tx`select null::text as field, null::text as msg where false`;
+    // Our own party before the trigger touches it (sent first, same round trip).
+    const [[selfBefore], rows] = await Promise.all([
+      tx`select * from parties where company_id = ${companyId} and is_self`,
+      tx`
+        with cur as (select c.*, app.peek_number(c.id, 'lr', ${fy}) as next_lr_no from companies c
+                      where c.id = ${companyId} for update of c),
+             checks as (${gstinCheck}),
+             upd as (${upd})
+        select 'before' as k,
+               (select json_agg(json_build_object('field', field, 'msg', msg)) from checks) as problems,
+               cur.* ${selfMirror(tx, tx`cur`)}
+          from cur
+        union all
+        select 'after', null, upd.* ${selfMirror(tx, tx`upd`)} from upd`,
+    ]);
+    const beforeRow = rows.find((r) => r.k === "before");
+    const afterRow = rows.find((r) => r.k === "after");
+    if (!beforeRow) throw new NotFoundError("Company");
+    if (beforeRow.version !== expectedVersion) throw new ConflictError();
+    const current = company(beforeRow);
+    assertRules(companyRuleErrors({ ...current, ...fields } as Company));
+    const problem = beforeRow.problems?.[0];
+    if (problem) fail(problem.field, problem.msg);
+    if (!afterRow) throw new ConflictError();
 
     const before = current.nextLrNo;
-    if (nextLrNo !== undefined && nextLrNo !== null && nextLrNo !== before) {
+    const raise = nextLrNo !== undefined && nextLrNo !== null && nextLrNo !== before;
+    if (raise) {
       if (before !== null && nextLrNo < before) {
         fail(
           "nextLrNo",
           `Can't go below ${before} — numbers up to ${before - 1} may already be used`,
         );
       }
-      await tx`select app.raise_number(${companyId}, 'lr', ${fy}, ${nextLrNo})`;
+      withCommit(tx, tx`select app.raise_number(${companyId}, 'lr', ${fy}, ${nextLrNo})`);
     }
-
-    const set: Row = columns(fields, COMPANY_COLUMNS);
-    if ("bank" in fields) {
-      const b = fields.bank ?? null;
-      Object.assign(set, {
-        bank_account_name: b?.accountName ?? null,
-        bank_name: b?.bankName ?? null,
-        bank_account_no: b?.accountNo ?? null,
-        bank_ifsc: b?.ifsc ?? null,
-      });
-    }
-    if ("logoUrl" in fields) set.logo_path = imagePath("logos", companyId, fields.logoUrl);
-    if ("signatureUrl" in fields) {
-      set.signature_path = imagePath("signatures", companyId, fields.signatureUrl);
-    }
-
-    const [selfBefore] =
-      await tx`select * from parties where company_id = ${companyId} and is_self`;
-    if (Object.keys(set).length > 0) {
-      const [updated] = await tx`update companies set ${tx(set)}
-                                  where id = ${companyId} and version = ${expectedVersion} returning id`;
-      if (!updated) throw new ConflictError();
-    }
-    const [savedRow] = await tx`${COMPANY_SELECT(tx, fy)} where c.id = ${companyId}`;
-    const saved = company(savedRow);
-    await audit(
-      tx,
-      companyId,
-      "companies",
-      companyId,
-      "update",
-      { ...current, nextLrNo: before },
-      saved,
-    );
+    const saved = toCompany(afterRow, raise ? nextLrNo : before);
+    audit(tx, companyId, "companies", companyId, "update", { ...current, nextLrNo: before }, saved);
 
     // Our own party (used on LRs) mirrors the profile — the trigger copied it; audit that too.
-    const [selfAfter] = await tx`select * from parties where company_id = ${companyId} and is_self`;
-    if (selfBefore && selfAfter && selfAfter.version !== selfBefore.version) {
-      await audit(
-        tx,
-        companyId,
-        "parties",
-        selfAfter.id,
-        "update",
-        toParty(selfBefore),
-        toParty(selfAfter),
-      );
+    if (selfBefore) {
+      const from = toParty(selfBefore);
+      const to: Party = {
+        ...from,
+        name: afterRow.self_name,
+        place: afterRow.self_place,
+        gstin: afterRow.self_gstin,
+        pan: afterRow.self_pan,
+        phone: afterRow.self_phone,
+        address: afterRow.self_address,
+        stateCode: afterRow.self_state_code,
+        pincode: afterRow.self_pincode,
+      };
+      if (auditChanges(from, to).length > 0) {
+        audit(tx, companyId, "parties", from.id, "update", from, to);
+      }
     }
     return saved;
   });
 }
+
+/** What app.tg_company_self_party copies from a company row onto its self party. */
+const selfMirror = (tx: Tx, a: Fragment) => tx`,
+  ${a}.name as self_name, nullif(${a}.city, '') as self_place, ${a}.gstin as self_gstin,
+  ${a}.pan as self_pan, ${a}.mobile1 as self_phone, nullif(${a}.office, '') as self_address,
+  left(${a}.gstin, 2) as self_state_code, app.self_party_pincode(${a}.office) as self_pincode`;
 
 /**
  * "+ Add company": app.create_company makes the company, its Owner membership (the current
@@ -207,12 +233,12 @@ export async function createCompany(v: z.output<typeof companyCreateSchema>): Pr
                                                          ${v.gstin}, ${v.pan}) as id`;
     const [c] = await tx`${COMPANY_SELECT(tx, fyNow())} where c.id = ${id}`;
     const created = company(c);
-    await audit(tx, id, "companies", id, "create", null, created);
+    audit(tx, id, "companies", id, "create", null, created);
     const [m] =
       await tx`select * from memberships where company_id = ${id} and user_id = auth.uid()`;
-    await audit(tx, id, "memberships", m.id, "create", null, toMembership(m));
+    audit(tx, id, "memberships", m.id, "create", null, toMembership(m));
     const [self] = await tx`select * from parties where company_id = ${id} and is_self`;
-    await audit(tx, id, "parties", self.id, "create", null, toParty(self));
+    audit(tx, id, "parties", self.id, "create", null, toParty(self));
     return created;
   });
 }
