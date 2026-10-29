@@ -22,7 +22,12 @@ export const risk = pgEnum("risk", ["owner", "carrier"]);
 export const podCondition = pgEnum("pod_condition", ["good", "short", "damaged"]);
 export const freightGstMode = pgEnum("freight_gst_mode", ["reverse_charge", "forward_charge"]);
 export const receiptMode = pgEnum("receipt_mode", ["neft_upi", "cheque", "cash"]);
-export const recordSource = pgEnum("record_source", ["manual", "lr", "invoice_scan", "excel_import"]);
+export const recordSource = pgEnum("record_source", [
+  "manual",
+  "lr",
+  "invoice_scan",
+  "excel_import",
+]);
 export const docStatus = pgEnum("doc_status", ["draft", "final"]);
 export const numberSeriesKind = pgEnum("number_series_kind", ["lr", "freight_bill", "tax_invoice"]);
 export const auditAction = pgEnum("audit_action", ["create", "update", "cancel"]);

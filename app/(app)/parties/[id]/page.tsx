@@ -21,6 +21,8 @@ import {
   type PartyUsage,
 } from "@/lib/data/parties";
 import { getActiveCompanyId } from "@/lib/data/session";
+import { onDatabase } from "@/lib/data/source";
+import { NotOnDatabase } from "@/components/ui/NotOnDatabase";
 import { partyLabel } from "@/lib/self-party";
 import type { Party } from "@/lib/types";
 
@@ -42,11 +44,13 @@ async function PartyPageContent({ params }: Pick<PageProps<"/parties/[id]">, "pa
   const party = await getPartyById(companyId, id);
   if (!party || party.cancelledAt) notFound();
 
+  // Temporary (prompt 19a): the shipment history lists LRs and invoices, still on the mock store.
+  const history = !onDatabase();
   const [usage, shipsTo, shipments, invoices] = await Promise.all([
     getPartyUsage(companyId, id),
     listShipsTo(companyId, id),
-    listLrs(companyId, { partyId: id, pageSize: 50 }),
-    listTaxInvoices(companyId, { partyId: id, pageSize: 50 }),
+    history ? listLrs(companyId, { partyId: id, pageSize: 50 }) : null,
+    history ? listTaxInvoices(companyId, { partyId: id, pageSize: 50 }) : null,
   ]);
   const self = party.isSelf;
   const title = self
@@ -106,7 +110,11 @@ async function PartyPageContent({ params }: Pick<PageProps<"/parties/[id]">, "pa
         <ShipsToCard consignorId={party.id} rows={shipsTo} />
       </div>
 
-      <PartyShipments partyId={party.id} lrs={shipments} invoices={invoices.rows} />
+      {shipments && invoices ? (
+        <PartyShipments partyId={party.id} lrs={shipments} invoices={invoices.rows} />
+      ) : (
+        <NotOnDatabase what="Shipment history" />
+      )}
 
       {!self && (
         <Card title="Cancel party">

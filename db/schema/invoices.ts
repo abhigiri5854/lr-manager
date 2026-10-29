@@ -17,14 +17,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { TaxInvoice } from "@/lib/types";
-import {
-  businessColumns,
-  businessConstraints,
-  companyFk,
-  docStatus,
-  paise,
-  ts,
-} from "./_common";
+import { businessColumns, businessConstraints, companyFk, docStatus, paise, ts } from "./_common";
 import { companies, users } from "./companies";
 import { importBatches } from "./imports";
 import { items, parties, trucks } from "./masters";
@@ -135,6 +128,6 @@ export const taxInvoiceLines = pgTable(
       "tax_invoice_lines_amounts_check",
       sql`qty >= 0 and rate_paise >= 0 and discount_paise >= 0 and taxable_paise >= 0 and sgst_paise >= 0 and cgst_paise >= 0 and igst_paise >= 0`,
     ),
-    check("tax_invoice_lines_gst_rate_check", sql`gst_rate_bp between 0 and 2800`),
+    check("tax_invoice_lines_gst_rate_check", sql`gst_rate_bp between 0 and 4000`),
   ],
 ).enableRLS();

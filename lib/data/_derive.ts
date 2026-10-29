@@ -84,7 +84,9 @@ export function syncLrStampsForPayment(
   companyId: string,
   ...payments: Array<Pick<Payment, "allocations"> | null | undefined>
 ): void {
-  const billIds = new Set(payments.flatMap((p) => p?.allocations.map((a) => a.freightBillId) ?? []));
+  const billIds = new Set(
+    payments.flatMap((p) => p?.allocations.map((a) => a.freightBillId) ?? []),
+  );
   syncLrStampsForBill(
     companyId,
     ...[...billIds].map((id) => findById(db.freightBills, companyId, id)),

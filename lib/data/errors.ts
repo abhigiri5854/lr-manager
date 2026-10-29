@@ -34,6 +34,19 @@ export class ForbiddenError extends Error {
   }
 }
 
+/**
+ * DATA_SOURCE=db and this area still runs on the mock store (moves in prompt 19b). Thrown by
+ * any read of the mock store, so nothing shows mock data next to database data.
+ */
+export class NotOnDatabaseError extends Error {
+  constructor() {
+    super(
+      "Not yet on the database — this part moves over in the next step. Set DATA_SOURCE=mock in .env.local to use it on sample data.",
+    );
+    this.name = "NotOnDatabaseError";
+  }
+}
+
 /** What a server action hands back to a form when a data call throws. */
 export type ActionFailure =
   | { ok: false; kind: "validation"; issues: RuleError[]; message: string }
@@ -45,7 +58,7 @@ export function toActionFailure(e: unknown): ActionFailure {
   if (e instanceof ValidationError)
     return { ok: false, kind: "validation", issues: e.issues, message: e.message };
   if (e instanceof ConflictError) return { ok: false, kind: "conflict", message: e.message };
-  if (e instanceof NotFoundError || e instanceof ForbiddenError)
+  if (e instanceof NotFoundError || e instanceof ForbiddenError || e instanceof NotOnDatabaseError)
     return { ok: false, kind: "error", message: e.message };
   throw e;
 }

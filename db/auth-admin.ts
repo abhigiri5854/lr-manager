@@ -32,6 +32,8 @@ export type NewAuthUser = {
   password: string;
   name: string;
   mobile?: string | null;
+  /** The e-mail is made up (Supabase Auth needs one); users.email stays empty. */
+  emailPlaceholder?: boolean;
 };
 
 /** Creates the Auth user with this exact id, or leaves an existing one as it is. */
@@ -44,10 +46,20 @@ export async function ensureAuthUser(u: NewAuthUser): Promise<"created" | "exist
     email: u.email,
     password: u.password,
     email_confirm: true,
-    user_metadata: { name: u.name, mobile: u.mobile ?? null },
+    user_metadata: {
+      name: u.name,
+      mobile: u.mobile ?? null,
+      ...(u.emailPlaceholder ? { email_placeholder: true } : {}),
+    },
   });
   if (!res.ok) await fail(`create ${u.email}`, res);
   const created = (await res.json()) as AdminUser;
   if (created.id !== u.id) throw new Error(`Supabase Auth gave ${u.email} a different id`);
   return "created";
+}
+
+/** Sets a new password (Owner's "reset password" for a member). */
+export async function setAuthPassword(id: string, password: string): Promise<void> {
+  const res = await call("PUT", `/${id}`, { password });
+  if (!res.ok) await fail("password reset", res);
 }

@@ -47,13 +47,18 @@ export const pods = pgTable(
     packagesReceived: integer("packages_received"),
     condition: podCondition("condition").notNull().default("good"),
     remarks: text("remarks"),
-    documentPaths: text("document_paths").array().notNull().default(sql`'{}'::text[]`),
+    documentPaths: text("document_paths")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     receivedAt: ts("received_at"),
   },
   (t) => [
     ...businessConstraints("pods", t),
     ...companyFk("pods_lr", t.companyId, t.lrId, lrs),
-    uniqueIndex("pods_live_lr_key").on(t.companyId, t.lrId).where(sql`cancelled_at is null`),
+    uniqueIndex("pods_live_lr_key")
+      .on(t.companyId, t.lrId)
+      .where(sql`cancelled_at is null`),
     index("pods_company_received_idx").on(t.companyId, t.receivedAt.desc()),
     check("pods_packages_check", sql`packages_received is null or packages_received >= 0`),
   ],
@@ -148,11 +153,7 @@ export const payments = pgTable(
   (t) => [
     ...businessConstraints("payments", t),
     ...companyFk("payments_party", t.companyId, t.partyId, parties, false),
-    index("payments_company_party_received_idx").on(
-      t.companyId,
-      t.partyId,
-      t.receivedOn.desc(),
-    ),
+    index("payments_company_party_received_idx").on(t.companyId, t.partyId, t.receivedOn.desc()),
     check("payments_amount_check", sql`amount_paise > 0`),
     check("payments_tds_check", sql`tds_paise >= 0`),
   ],

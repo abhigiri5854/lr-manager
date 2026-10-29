@@ -36,7 +36,10 @@ export const importBatches = pgTable(
     error: text("error"),
     result: jsonb("result").$type<ImportReadResult>(),
     mapping: jsonb("mapping").$type<Record<string, string>>().notNull().default({}),
-    confirmedColumns: text("confirmed_columns").array().notNull().default(sql`'{}'::text[]`),
+    confirmedColumns: text("confirmed_columns")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     mappingName: text("mapping_name"),
     rowActions: jsonb("row_actions").$type<Record<string, ImportRowAction>>().notNull().default({}),
     countValid: integer("count_valid").notNull().default(0),

@@ -42,7 +42,9 @@ import {
   type ListParams,
   authorStamp,
 } from "./_store";
+import * as dbt from "./db/trucks";
 import { assertCan } from "./session";
+import { onDatabase } from "./source";
 
 export type TruckListParams = ListParams & { includeCancelled?: boolean };
 
@@ -73,6 +75,7 @@ export async function listTrucks(
   companyId: string,
   params: TruckListParams = {},
 ): Promise<Page<TruckView>> {
+  if (onDatabase()) return dbt.listTrucks(companyId, params);
   const q = params.search ? normaliseVehicleNo(params.search) : "";
   const rows = scoped(db.trucks, companyId, params.includeCancelled)
     .map(toTruckView)
@@ -91,6 +94,7 @@ export async function listTruckSuggestions(
   companyId: string,
   search: string,
 ): Promise<TruckSuggestion[]> {
+  if (onDatabase()) return dbt.listTruckSuggestions(companyId, search);
   const { rows } = await listTrucks(companyId, { search, pageSize: 8 });
   const lrs = scoped(db.lrs, companyId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return rows.map((t) => ({
@@ -103,12 +107,14 @@ export async function listTruckSuggestions(
 export async function listTruckOptions(
   companyId: string,
 ): Promise<{ id: string; number: string }[]> {
+  if (onDatabase()) return dbt.listTruckOptions(companyId);
   return scoped(db.trucks, companyId)
     .map((t) => ({ id: t.id, number: t.number }))
     .sort((a, b) => a.number.localeCompare(b.number));
 }
 
 export async function getTruckById(companyId: string, id: string): Promise<TruckView | null> {
+  if (onDatabase()) return dbt.getTruckById(companyId, id);
   const t = findById(db.trucks, companyId, id);
   return t ? toTruckView(t) : null;
 }
@@ -118,6 +124,7 @@ export async function findTruckByNumber(
   companyId: string,
   number: string,
 ): Promise<TruckView | null> {
+  if (onDatabase()) return dbt.findTruckByNumber(companyId, number);
   const n = normaliseVehicleNo(number);
   const t = scoped(db.trucks, companyId).find((x) => x.number === n);
   return t ? toTruckView(t) : null;
@@ -126,8 +133,10 @@ export async function findTruckByNumber(
 export async function createTruck(companyId: string, input: TruckInput): Promise<TruckView> {
   await assertCan(companyId, "master.edit");
   const v = parseInput(truckFields, input);
-  assertRef(db.drivers, companyId, v.driverId, "driverId", "Driver");
-  assertUniqueNumber(companyId, v.number);
+  if (!onDatabase()) {
+    assertRef(db.drivers, companyId, v.driverId, "driverId", "Driver");
+    assertUniqueNumber(companyId, v.number);
+  }
   const t = now();
   const truck: Truck = {
     id: newId(),
@@ -144,6 +153,7 @@ export async function createTruck(companyId: string, input: TruckInput): Promise
     fitnessExpiry: v.fitnessExpiry ?? null,
     source: v.source ?? "manual",
   };
+  if (onDatabase()) return dbt.insertTruck(truck);
   return toTruckView(insertRecord("trucks", db.trucks, truck));
 }
 
@@ -155,6 +165,7 @@ export async function updateTruck(
 ): Promise<TruckView> {
   await assertCan(companyId, "master.edit");
   const p = parseInput(truckPatchSchema, patch);
+  if (onDatabase()) return dbt.updateTruck(companyId, id, expectedVersion, p);
   assertRef(db.drivers, companyId, p.driverId, "driverId", "Driver");
   if (p.number) assertUniqueNumber(companyId, p.number, id);
   const saved = updateRecord(
@@ -172,6 +183,7 @@ export async function updateTruck(
 /** Cancels a truck that isn't on an undelivered LR. */
 export async function cancelTruck(companyId: string, id: string): Promise<TruckView> {
   await assertCan(companyId, "record.cancel");
+  if (onDatabase()) return dbt.cancelTruck(companyId, id);
   const truck = getOrThrow(db.trucks, companyId, id, "Truck");
   const blocked = cancelBlockedReason("truck", openLrsFor(companyId, { truckIds: [truck.id] }));
   if (blocked) fail("", blocked);
@@ -183,6 +195,7 @@ export async function listDrivers(
   companyId: string,
   params: TruckListParams = {},
 ): Promise<Page<DriverView>> {
+  if (onDatabase()) return dbt.listDrivers(companyId, params);
   const digits = params.search ? normaliseMobile(params.search) : "";
   const rows = scoped(db.drivers, companyId, params.includeCancelled)
     .filter(
@@ -196,6 +209,7 @@ export async function listDrivers(
 }
 
 export async function getDriverById(companyId: string, id: string): Promise<DriverView | null> {
+  if (onDatabase()) return dbt.getDriverById(companyId, id);
   const d = findById(db.drivers, companyId, id);
   return d ? toDriverView(d) : null;
 }
@@ -203,7 +217,7 @@ export async function getDriverById(companyId: string, id: string): Promise<Driv
 export async function createDriver(companyId: string, input: DriverInput): Promise<DriverView> {
   await assertCan(companyId, "master.edit");
   const v = parseInput(driverFields, input);
-  assertUniqueMobile(companyId, v.mobile);
+  if (!onDatabase()) assertUniqueMobile(companyId, v.mobile);
   const t = now();
   const driver: Driver = {
     id: newId(),
@@ -219,6 +233,7 @@ export async function createDriver(companyId: string, input: DriverInput): Promi
     userId: v.userId ?? null,
     invitedAt: null,
   };
+  if (onDatabase()) return dbt.insertDriver(driver);
   return toDriverView(insertRecord("drivers", db.drivers, driver));
 }
 
@@ -230,6 +245,7 @@ export async function updateDriver(
 ): Promise<DriverView> {
   await assertCan(companyId, "master.edit");
   const p = parseInput(driverPatchSchema, patch);
+  if (onDatabase()) return dbt.updateDriver(companyId, id, expectedVersion, p);
   if (p.mobile) assertUniqueMobile(companyId, p.mobile, id);
   const saved = updateRecord(
     "drivers",
@@ -246,6 +262,7 @@ export async function updateDriver(
 /** Cancels a driver who isn't on an undelivered LR, and unlinks them from their trucks. */
 export async function cancelDriver(companyId: string, id: string): Promise<DriverView> {
   await assertCan(companyId, "record.cancel");
+  if (onDatabase()) return dbt.cancelDriver(companyId, id);
   const driver = getOrThrow(db.drivers, companyId, id, "Driver");
   const open = openLrsFor(companyId, driverMatch(companyId, driver));
   const blocked = cancelBlockedReason("driver", open);
@@ -260,6 +277,7 @@ export async function cancelDriver(companyId: string, id: string): Promise<Drive
 /** "Invite to driver app": records when it was sent. No SMS goes out until messaging is wired. */
 export async function inviteDriver(companyId: string, id: string): Promise<DriverView> {
   await assertCan(companyId, "company.manage");
+  if (onDatabase()) return dbt.inviteDriver(companyId, id);
   const d = getOrThrow(db.drivers, companyId, id, "Driver");
   const stamp = (c: Driver): Driver => ({ ...c, invitedAt: now() });
   return toDriverView(
@@ -290,7 +308,11 @@ function driverMatch(companyId: string, d: Driver): OpenLrQuery {
   return { truckIds, driverMobile: d.mobile };
 }
 
-function cancelBlockedReason(what: "truck" | "driver", open: LrView[]): string | null {
+/** Why a truck / driver can't be cancelled (its undelivered LRs), or null. */
+export function cancelBlockedReason(
+  what: "truck" | "driver",
+  open: Pick<LrView, "lrNo" | "status">[],
+): string | null {
   if (open.length === 0) return null;
   const list = open
     .slice(0, 3)
@@ -316,6 +338,7 @@ export async function listTruckRows(
   companyId: string,
   params: TruckListParams = {},
 ): Promise<Page<TruckRow>> {
+  if (onDatabase()) return dbt.listTruckRows(companyId, params);
   const page = await listTrucks(companyId, params);
   return {
     ...page,
@@ -332,6 +355,7 @@ export async function listDriverRows(
   companyId: string,
   params: TruckListParams = {},
 ): Promise<Page<DriverRow>> {
+  if (onDatabase()) return dbt.listDriverRows(companyId, params);
   const page = await listDrivers(companyId, params);
   return {
     ...page,
@@ -346,6 +370,7 @@ export async function listDriverRows(
 export async function listDriverOptions(
   companyId: string,
 ): Promise<{ id: string; label: string }[]> {
+  if (onDatabase()) return dbt.listDriverOptions(companyId);
   return scoped(db.drivers, companyId)
     .sort((a, b) => a.mobile.localeCompare(b.mobile))
     .map((d) => ({ id: d.id, label: d.name ? `${d.name} · ${d.mobile}` : d.mobile }));
@@ -360,6 +385,7 @@ const TRUCK_DOCS = [
 
 /** Truck documents and driver licences that are expired or lapse within 15 days, soonest first. */
 export async function listExpiryAlerts(companyId: string): Promise<AttentionItem[]> {
+  if (onDatabase()) return dbt.listExpiryAlerts(companyId);
   const day = today();
   const items: Extract<AttentionItem, { kind: "doc_expiry" }>[] = [];
   const add = (

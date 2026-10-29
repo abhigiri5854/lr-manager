@@ -2,6 +2,9 @@
 // request cookies; here they live in a Map and the sample Owner is signed in by default.
 import { beforeEach, vi } from "vitest";
 
+// Unit tests run on the in-memory sample data, never the database.
+process.env.DATA_SOURCE = "mock";
+
 const jar = vi.hoisted(() => new Map<string, string>());
 
 vi.mock("next/server", () => ({ connection: async () => {} }));

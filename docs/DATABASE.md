@@ -444,6 +444,7 @@ printed. All come from the Supabase dashboard.
 | `SUPABASE_SECRET_KEY`                  | server only: Auth admin (seed / test users, later invites, password reset), PDF renderer reading Storage | API Keys → secret key (`sb_secret_…`; legacy: service_role). **Never** `NEXT_PUBLIC_` |
 | `DATABASE_URL`                         | app runtime (Drizzle) and the DB integration tests                                                       | Connect → Transaction pooler (port 6543)                                              |
 | `DATABASE_URL_DIRECT`                  | migrations, seed, reset, drizzle-kit                                                                     | Connect → Session pooler / direct (port 5432)                                         |
+| `DATA_SOURCE`                          | `db` (default) or `mock` — where `lib/data` reads and writes                                             | not a secret                                                                          |
 | `ANTHROPIC_API_KEY`                    | Smart import reader (when the mock reader is replaced)                                                   | console.anthropic.com                                                                 |
 
 `SESSION_SECRET` (today's mock login) is removed once Supabase Auth is in.
@@ -581,3 +582,16 @@ version.
     SVG `Content-Disposition` is left to the app.
 34. Seed: sample users get `seed.<name>@example.com` when they have no e-mail (Supabase Auth needs one)
     and the mock password; the seed runs once (does nothing on a seeded DB).
+
+**After the first switch to the database (prompt 19a)**
+
+35. `0006_mock_login.sql`: helpers for the mock login while it runs on the database —
+    `app.login_lookup` (anon: the account for a mobile / e-mail), `app.record_login`,
+    `app.find_user` (invite an existing login), `app.can_reset_password`,
+    `app.company_gstin_taken`; anon gets usage on schema `app` for `login_lookup` only. People
+    invited without an e-mail get a placeholder Auth e-mail and `users.email` stays empty.
+36. `0007_goods_gst_40.sql`: items and tax invoice lines allow GST up to 40% (4000 bp, the app's
+    `GST_RATES_BP`); the design's 0–2800 refused 40% items. Freight bills stay at 0–2800.
+37. Logos and signatures are uploaded to Storage with the secret key after `lib/data` checks the
+    permission in the user's RLS transaction (no user token until Supabase logins, prompt 20);
+    they are read through short-lived signed URLs.

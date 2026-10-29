@@ -63,8 +63,10 @@ Put these in `tailwind.config` / CSS variables once; never use raw hex in compon
 
 ## Code conventions
 - `app/` routes · `components/ui/` shared pieces (Sidebar, PageHeader, Card, Field, Chip, Table)
-- `lib/data/` = data access layer. Until the DB exists it returns typed mock data from
-  `lib/mock/`; screens must only call `lib/data/*` so swapping to the DB changes nothing in UI.
+- `lib/data/` = data access layer; screens only call `lib/data/*`. `DATA_SOURCE=db` (default) runs
+  on Postgres through `lib/data/db/*` (one RLS transaction per call via `withUser`); `DATA_SOURCE=mock`
+  uses the in-memory `lib/mock/` data (unit tests always do). Areas not moved yet (LRs, POD,
+  invoices, bills, import, dashboard, PDFs) show "not yet on the database" in db mode.
 - `lib/validators/` Zod schemas shared by forms and API (GSTIN, PAN, vehicle no., e-way bill).
 - Server Components by default; Client Components only for interactive forms.
 - Lists are paginated (50/page) and searchable server-side.

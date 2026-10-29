@@ -25,7 +25,8 @@ import type {
 } from "@/lib/types";
 import { selfPartyFields } from "@/lib/self-party";
 import type { RuleError } from "@/lib/validators/common";
-import { ConflictError, NotFoundError, ValidationError } from "./errors";
+import { ConflictError, NotFoundError, NotOnDatabaseError, ValidationError } from "./errors";
+import { onDatabase } from "./source";
 
 type Store = {
   companies: Company[];
@@ -116,7 +117,14 @@ if (g.__lrManagerStoreV !== STORE_VERSION) {
   g.__lrManagerStore = seed();
   g.__lrManagerStoreV = STORE_VERSION;
 }
-export const db: Store = g.__lrManagerStore!;
+// With DATA_SOURCE=db, any read of the mock store means an area that hasn't moved to the
+// database yet: it fails with NotOnDatabaseError instead of mixing sample and real data.
+export const db: Store = new Proxy(g.__lrManagerStore!, {
+  get(target, key, receiver) {
+    if (onDatabase()) throw new NotOnDatabaseError();
+    return Reflect.get(target, key, receiver);
+  },
+});
 
 /** Tests only: put the sample data back. */
 export function resetStore(): void {
@@ -293,6 +301,15 @@ export function paginate<T>(rows: T[], params: ListParams): Page<T> {
 // ---------- writes (each writes audit_log) ----------
 const SKIP_AUDIT = new Set(["updatedAt", "version", "updatedBy"]);
 
+/** Field-level old → new diff, as stored in audit_log.changes (mock and database alike). */
+export function auditChanges(before: object | null, after: object): AuditEntry["changes"] {
+  const b = (before ?? {}) as Record<string, unknown>;
+  const a = after as Record<string, unknown>;
+  return [...new Set([...Object.keys(b), ...Object.keys(a)])]
+    .filter((k) => !SKIP_AUDIT.has(k) && JSON.stringify(b[k]) !== JSON.stringify(a[k]))
+    .map((field) => ({ field, old: b[field] ?? null, new: a[field] ?? null }));
+}
+
 export function writeAudit(
   companyId: string,
   table: TableName,
@@ -301,11 +318,7 @@ export function writeAudit(
   before: object | null,
   after: object,
 ): void {
-  const b = (before ?? {}) as Record<string, unknown>;
-  const a = after as Record<string, unknown>;
-  const changes = [...new Set([...Object.keys(b), ...Object.keys(a)])]
-    .filter((k) => !SKIP_AUDIT.has(k) && JSON.stringify(b[k]) !== JSON.stringify(a[k]))
-    .map((field) => ({ field, old: b[field] ?? null, new: a[field] ?? null }));
+  const changes = auditChanges(before, after);
   db.audit.push({
     id: newId(),
     companyId,

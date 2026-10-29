@@ -23,7 +23,9 @@ import {
 } from "./_store";
 import { ConflictError, NotFoundError } from "./errors";
 import { syncSelfParty } from "./parties";
+import * as dbc from "./db/companies";
 import { assertCan, getCurrentUserId } from "./session";
+import { onDatabase } from "./source";
 
 /** nextLrNo always comes from the number series (single source of truth). */
 function withNextLrNo(c: Company): Company {
@@ -32,6 +34,7 @@ function withNextLrNo(c: Company): Company {
 
 /** Companies the current user can work as. */
 export async function listCompanies(): Promise<Company[]> {
+  if (onDatabase()) return dbc.listCompanies();
   const userId = await getCurrentUserId();
   const ids = new Set(
     db.memberships.filter((m) => m.userId === userId && !m.cancelledAt).map((m) => m.companyId),
@@ -40,6 +43,7 @@ export async function listCompanies(): Promise<Company[]> {
 }
 
 export async function getCompany(companyId: string): Promise<Company | null> {
+  if (onDatabase()) return dbc.getCompany(companyId);
   const c = db.companies.find((x) => x.id === companyId);
   return c ? withNextLrNo(c) : null;
 }
@@ -55,6 +59,7 @@ export type NumberingState = {
 };
 
 export async function getNumbering(companyId: string): Promise<NumberingState> {
+  if (onDatabase()) return dbc.getNumbering(companyId);
   const fy = financialYear(today());
   const both = (series: "freight_bill" | "tax_invoice") => {
     const thisFy = db.numberSeries.find(
@@ -83,6 +88,8 @@ export async function updateCompany(
   patch: CompanyPatch,
 ): Promise<Company> {
   await assertCan(companyId, "company.manage");
+  if (onDatabase())
+    return dbc.updateCompany(companyId, expectedVersion, parseInput(companyPatchSchema, patch));
   const current = db.companies.find((x) => x.id === companyId);
   if (!current) throw new NotFoundError("Company");
   if (current.version !== expectedVersion) throw new ConflictError();
@@ -131,6 +138,7 @@ export async function createCompany(input: CompanyCreateInput): Promise<Company>
   const userId = await getCurrentUserId();
   const v = parseInput(companyCreateSchema, input);
   assertRules(companyRuleErrors(v));
+  if (onDatabase()) return dbc.createCompany(v);
   assertGstinFree(v.gstin);
 
   const t = now();

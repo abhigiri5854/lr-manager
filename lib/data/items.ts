@@ -16,7 +16,9 @@ import {
   type ListParams,
   authorStamp,
 } from "./_store";
+import * as dbi from "./db/items";
 import { assertCan } from "./session";
+import { onDatabase } from "./source";
 
 function assertUniqueCode(companyId: string, code: string | null, exceptId?: string) {
   if (!code) return;
@@ -29,6 +31,7 @@ const byName = (a: Item, b: Item) => a.name.localeCompare(b.name);
 
 /** Item master, searchable by code, name or HSN. */
 export async function listItems(companyId: string, params: ListParams = {}): Promise<Page<Item>> {
+  if (onDatabase()) return dbi.listItems(companyId, params);
   const rows = scoped(db.items, companyId)
     .filter((i) => matchesSearch(params.search, i.code, i.name, i.hsn))
     .sort(byName)
@@ -38,6 +41,7 @@ export async function listItems(companyId: string, params: ListParams = {}): Pro
 
 /** Autocomplete on the invoice lines: code matches first, then name. */
 export async function searchItems(companyId: string, q: string, limit = 10): Promise<Item[]> {
+  if (onDatabase()) return dbi.searchItems(companyId, q, limit);
   const query = q.trim().toLowerCase();
   const all = scoped(db.items, companyId);
   if (!query) return all.sort(byName).slice(0, limit).map(clone);
@@ -47,6 +51,7 @@ export async function searchItems(companyId: string, q: string, limit = 10): Pro
 }
 
 export async function getItemById(companyId: string, id: string): Promise<Item | null> {
+  if (onDatabase()) return dbi.getItemById(companyId, id);
   const i = findById(db.items, companyId, id);
   return i ? clone(i) : null;
 }
@@ -55,7 +60,7 @@ export async function createItem(companyId: string, input: ItemInput): Promise<I
   await assertCan(companyId, "master.edit");
   const v = parseInput(itemFields, input);
   const code = v.code ?? null;
-  assertUniqueCode(companyId, code);
+  if (!onDatabase()) assertUniqueCode(companyId, code);
   const t = now();
   const item: Item = {
     id: newId(),
@@ -71,6 +76,7 @@ export async function createItem(companyId: string, input: ItemInput): Promise<I
     gstRateBp: v.gstRateBp ?? null,
     lastRatePaise: v.lastRatePaise ?? null,
   };
+  if (onDatabase()) return dbi.insertItem(item);
   return insertRecord("items", db.items, item);
 }
 
@@ -82,6 +88,7 @@ export async function updateItem(
 ): Promise<Item> {
   await assertCan(companyId, "master.edit");
   const p = parseInput(itemPatchSchema, patch);
+  if (onDatabase()) return dbi.updateItem(companyId, id, expectedVersion, p);
   return updateRecord(
     "items",
     db.items,

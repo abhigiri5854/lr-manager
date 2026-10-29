@@ -39,7 +39,9 @@ export const users = pgTable(
     cancelledAt: ts("cancelled_at"),
   },
   (t) => [
-    uniqueIndex("users_mobile_key").on(t.mobile).where(sql`mobile is not null`),
+    uniqueIndex("users_mobile_key")
+      .on(t.mobile)
+      .where(sql`mobile is not null`),
     check("users_mobile_check", sql`mobile is null or mobile ~ '^[0-9]{10}$'`),
   ],
 ).enableRLS();
@@ -84,7 +86,10 @@ export const companies = pgTable(
     jurisdiction: text("jurisdiction"),
     podDays: integer("pod_days"),
     podPenaltyPerDayPaise: paise("pod_penalty_per_day_paise"),
-    lrCopies: text("lr_copies").array().notNull().default(sql`'{}'::text[]`),
+    lrCopies: text("lr_copies")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     detention: text("detention"),
     lrTerms: text("lr_terms"),
     logoPath: text("logo_path"),
@@ -115,9 +120,7 @@ export const memberships = pgTable(
     companyId: uuid("company_id")
       .notNull()
       .references(() => companies.id),
-    userId: uuid("user_id")
-      .notNull()
-      .references(byUser),
+    userId: uuid("user_id").notNull().references(byUser),
     role: memberRole("role").notNull(),
   },
   (t) => [

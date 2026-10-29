@@ -60,14 +60,13 @@ export const parties = pgTable(
   },
   (t) => [
     ...businessConstraints("parties", t),
-    check(
-      "parties_gstin_check",
-      sql`gstin is null or gstin ~ ${sql.raw(`'${GSTIN_SHAPE_SQL}'`)}`,
-    ),
+    check("parties_gstin_check", sql`gstin is null or gstin ~ ${sql.raw(`'${GSTIN_SHAPE_SQL}'`)}`),
     uniqueIndex("parties_company_gstin_key")
       .on(t.companyId, t.gstin)
       .where(sql`gstin is not null and cancelled_at is null`),
-    uniqueIndex("parties_company_self_key").on(t.companyId).where(sql`is_self`),
+    uniqueIndex("parties_company_self_key")
+      .on(t.companyId)
+      .where(sql`is_self`),
     index("parties_company_name_idx").on(t.companyId, sql`lower(${t.name})`),
   ],
 ).enableRLS();
@@ -118,7 +117,9 @@ export const trucks = pgTable(
       .on(t.companyId, t.number)
       .where(sql`cancelled_at is null`),
     ...companyFk("trucks_driver", t.companyId, t.driverId, drivers),
-    index("trucks_rc_expiry_idx").on(t.companyId, t.rcExpiry).where(sql`cancelled_at is null`),
+    index("trucks_rc_expiry_idx")
+      .on(t.companyId, t.rcExpiry)
+      .where(sql`cancelled_at is null`),
     index("trucks_insurance_expiry_idx")
       .on(t.companyId, t.insuranceExpiry)
       .where(sql`cancelled_at is null`),
@@ -146,14 +147,11 @@ export const items = pgTable(
   },
   (t) => [
     ...businessConstraints("items", t),
-    check("items_gst_rate_check", sql`gst_rate_bp is null or gst_rate_bp between 0 and 2800`),
+    check("items_gst_rate_check", sql`gst_rate_bp is null or gst_rate_bp between 0 and 4000`),
     check("items_last_rate_check", sql`last_rate_paise is null or last_rate_paise >= 0`),
     uniqueIndex("items_company_code_key")
       .on(t.companyId, sql`lower(${t.code})`)
       .where(sql`code is not null and cancelled_at is null`),
-    index("items_company_code_prefix_idx").on(
-      t.companyId,
-      sql`lower(${t.code}) text_pattern_ops`,
-    ),
+    index("items_company_code_prefix_idx").on(t.companyId, sql`lower(${t.code}) text_pattern_ops`),
   ],
 ).enableRLS();

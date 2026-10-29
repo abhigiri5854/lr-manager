@@ -27,7 +27,9 @@ import {
   type ListParams,
   authorStamp,
 } from "./_store";
+import * as dbp from "./db/parties";
 import { assertCan } from "./session";
+import { onDatabase } from "./source";
 
 export type PartyListParams = ListParams & { includeCancelled?: boolean };
 
@@ -41,6 +43,7 @@ export async function listParties(
   companyId: string,
   params: PartyListParams = {},
 ): Promise<Page<Party>> {
+  if (onDatabase()) return dbp.listParties(companyId, params);
   const rows = scoped(db.parties, companyId, params.includeCancelled)
     .filter((p) => matchesSearch(params.search, p.name, p.place, p.gstin, p.phone))
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -52,18 +55,21 @@ export async function listParties(
 export async function listPartyOptions(
   companyId: string,
 ): Promise<{ id: string; name: string; place: string | null; isSelf: boolean }[]> {
+  if (onDatabase()) return dbp.listPartyOptions(companyId);
   return scoped(db.parties, companyId)
     .map((p) => ({ id: p.id, name: p.name, place: p.place, isSelf: p.isSelf }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function getPartyById(companyId: string, id: string): Promise<Party | null> {
+  if (onDatabase()) return dbp.getPartyById(companyId, id);
   const p = findById(db.parties, companyId, id);
   return p ? clone(p) : null;
 }
 
 /** Used by forms and import to match a party by GST number. */
 export async function findPartyByGstin(companyId: string, gstin: string): Promise<Party | null> {
+  if (onDatabase()) return dbp.findPartyByGstin(companyId, gstin);
   const g = normaliseGstin(gstin);
   const p = scoped(db.parties, companyId).find((x) => x.gstin === g);
   return p ? clone(p) : null;
@@ -97,6 +103,7 @@ export async function createParty(companyId: string, input: PartyInput): Promise
     isSelf: false,
   };
   assertRules(partyRuleErrors(party));
+  if (onDatabase()) return dbp.insertParty(party);
   assertUniqueGstin(companyId, party.gstin);
   return insertRecord("parties", db.parties, party);
 }
@@ -109,6 +116,7 @@ export async function updateParty(
 ): Promise<Party> {
   await assertCan(companyId, "master.edit");
   const p = parseInput(partyPatchSchema, patch);
+  if (onDatabase()) return dbp.updateParty(companyId, id, expectedVersion, p);
   return updateRecord(
     "parties",
     db.parties,
@@ -148,6 +156,7 @@ export function partyBlockedReason(usage: PartyUsage): string | null {
 }
 
 export async function getPartyUsage(companyId: string, id: string): Promise<PartyUsage> {
+  if (onDatabase()) return dbp.getPartyUsage(companyId, id);
   const lrs = scoped(db.lrs, companyId).filter((l) =>
     [l.consignorId, l.consigneeId, l.billedToId].includes(id),
   );
@@ -175,6 +184,7 @@ export async function getPartyStats(
   companyId: string,
   ids: string[],
 ): Promise<Record<string, PartyStats>> {
+  if (onDatabase()) return dbp.getPartyStats(companyId, ids);
   const stats: Record<string, PartyStats> = Object.fromEntries(
     ids.map((id) => [id, { lrCount: 0, lastLrDate: null, outstandingPaise: 0 }]),
   );
@@ -203,6 +213,7 @@ export type ShipsTo = {
 
 /** Consignees this party has sent to, newest first. */
 export async function listShipsTo(companyId: string, consignorId: string): Promise<ShipsTo[]> {
+  if (onDatabase()) return dbp.listShipsTo(companyId, consignorId);
   const byConsignee = new Map<string, ShipsTo>();
   const lrs = scoped(db.lrs, companyId)
     .filter((l) => l.consignorId === consignorId && l.consigneeId)
@@ -236,11 +247,15 @@ export async function listShipsTo(companyId: string, consignorId: string): Promi
  */
 export async function cancelParty(companyId: string, id: string, reason?: string): Promise<Party> {
   await assertCan(companyId, "record.cancel");
-  if (findById(db.parties, companyId, id)?.isSelf) fail("", SELF_PARTY_LOCKED);
+  const party = onDatabase()
+    ? await dbp.getPartyById(companyId, id)
+    : findById(db.parties, companyId, id);
+  if (party?.isSelf) fail("", SELF_PARTY_LOCKED);
   const usage = await getPartyUsage(companyId, id);
   const blocked = partyBlockedReason(usage);
   if (blocked) fail("", blocked);
   const why = reason?.trim();
+  if (onDatabase()) return dbp.cancelPartyRow(companyId, id, why || undefined);
   return cancelRecord(
     "parties",
     db.parties,
@@ -255,6 +270,7 @@ export async function cancelParty(companyId: string, id: string, reason?: string
 
 /** This company as a party (consignor of goods we invoice, etc.). Created if missing. */
 export async function getSelfParty(companyId: string): Promise<Party> {
+  if (onDatabase()) return dbp.getSelfParty(companyId);
   return clone(syncSelfParty(companyId));
 }
 

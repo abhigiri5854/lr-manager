@@ -21,12 +21,15 @@ import {
   authorStamp,
 } from "./_store";
 import { ForbiddenError } from "./errors";
+import * as dbm from "./db/members";
 import { assertCan, getCurrentUserId, getRole } from "./session";
+import { onDatabase } from "./source";
 
 export const LAST_OWNER_MESSAGE =
   "A company needs at least one Owner — make someone else Owner first.";
 
 export async function listMembers(companyId: string): Promise<Membership[]> {
+  if (onDatabase()) return dbm.listMembers(companyId);
   return scoped(db.memberships, companyId).map(clone);
 }
 
@@ -48,6 +51,7 @@ export async function changeMemberRole(
 ): Promise<Membership> {
   await assertCan(companyId, "company.manage");
   const next = parseInput(roleSchema, role);
+  if (onDatabase()) return dbm.changeMemberRole(companyId, membershipId, expectedVersion, next);
   getOrThrow(db.memberships, companyId, membershipId, "Member");
   assertKeepsOwner(companyId, membershipId, next);
   return updateRecord(
@@ -64,6 +68,7 @@ export async function changeMemberRole(
 /** Takes someone out of the company (soft: cancelledAt). Their records and audit rows stay. */
 export async function removeMember(companyId: string, membershipId: string): Promise<Membership> {
   await assertCan(companyId, "company.manage");
+  if (onDatabase()) return dbm.removeMember(companyId, membershipId);
   assertKeepsOwner(companyId, membershipId, null);
   return cancelRecord("memberships", db.memberships, companyId, membershipId, "Member");
 }
@@ -89,6 +94,11 @@ const ROLE_ORDER: Record<Role, number> = { owner: 0, accountant: 1, booking_staf
 export async function listMemberRows(companyId: string): Promise<MemberRow[]> {
   if (!(await getRole(companyId))) throw new ForbiddenError("You're not a member of this company.");
   const me = await getCurrentUserId();
+  if (onDatabase()) {
+    return (await dbm.listMemberRows(companyId))
+      .map((r) => ({ ...r, isMe: r.userId === me }))
+      .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.name.localeCompare(b.name));
+  }
   const active = db.memberships.filter((m) => !m.cancelledAt);
   const mine = new Set(active.filter((m) => m.userId === me).map((m) => m.companyId));
   const label = (id: string) => db.companies.find((c) => c.id === id && !c.cancelledAt)?.label;
@@ -133,6 +143,7 @@ export async function inviteMember(
 ): Promise<{ membership: Membership; tempPassword: string | null }> {
   await assertCan(companyId, "company.manage");
   const v = parseInput(inviteMemberSchema, input);
+  if (onDatabase()) return dbm.inviteMember(companyId, v, tempPassword);
   const t = now();
   let user = db.users.find(
     (u) => !u.cancelledAt && (u.mobile === v.mobile || (v.email != null && u.email === v.email)),
@@ -184,6 +195,7 @@ export async function resetMemberPassword(
   membershipId: string,
 ): Promise<{ tempPassword: string }> {
   await assertCan(companyId, "company.manage");
+  if (onDatabase()) return dbm.resetMemberPassword(companyId, membershipId, tempPassword);
   const m = getOrThrow(db.memberships, companyId, membershipId, "Member");
   if (m.cancelledAt) fail("", "This person is no longer in the company");
   const me = await getCurrentUserId();

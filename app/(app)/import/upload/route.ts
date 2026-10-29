@@ -1,3 +1,4 @@
+import { notOnDatabaseResponse, onDatabase } from "@/lib/data/source";
 import { NextResponse } from "next/server";
 import { ValidationError, ForbiddenError } from "@/lib/data/errors";
 import { createImportBatch } from "@/lib/data/import";
@@ -8,6 +9,7 @@ import { checkImportFile } from "@/lib/import/file-types";
 // A route handler, not a server action: PDFs and workbooks go up to 10 MB, more than the
 // 3 MB server-action limit. (next.config.ts raises proxyClientMaxBodySize so proxy.ts doesn't cut them.)
 export async function POST(request: Request) {
+  if (onDatabase()) return notOnDatabaseResponse();
   if (!(await getSessionUserId())) {
     return NextResponse.json({ ok: false, message: "Please log in again." }, { status: 401 });
   }

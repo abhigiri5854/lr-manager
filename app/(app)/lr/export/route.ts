@@ -1,3 +1,4 @@
+import { notOnDatabaseResponse, onDatabase } from "@/lib/data/source";
 import type { NextRequest } from "next/server";
 import { lrRegisterWorkbook } from "@/lib/export/lr-register-xlsx";
 import { LR_EXPORT_LIMIT, listLrsForExport } from "@/lib/data/lrs";
@@ -6,6 +7,7 @@ import { parseLrRegisterQuery, toLrListParams } from "@/lib/validators/lr-regist
 
 /** GET /lr/export?<register filters> → .xlsx of every matching LR (not just the current page). */
 export async function GET(request: NextRequest) {
+  if (onDatabase()) return notOnDatabaseResponse();
   const companyId = await getActiveCompanyId();
   const filters = toLrListParams(parseLrRegisterQuery(request.nextUrl.searchParams));
   // Every page, so `page` is ignored.
