@@ -5,7 +5,6 @@ import { cx } from "@/lib/cx";
 import {
   addDays,
   addMonths,
-  clampDate,
   formatDateTyping,
   isoToDisplay,
   MONTH_NAMES,
@@ -20,9 +19,6 @@ export type DateFieldProps = ShellProps & {
   value: string;
   /** Called with yyyy-mm-dd, or "" while the text is empty or isn't a complete real date. */
   onChange: (value: string) => void;
-  /** yyyy-mm-dd limits (inclusive). */
-  min?: string;
-  max?: string;
   required?: boolean;
   disabled?: boolean;
   /** Name for a plain form submit: the hidden field carries the yyyy-mm-dd value. */
@@ -71,23 +67,19 @@ const textButton =
 /** Month grid. Arrow keys move by day / week, Home / End to the week's ends, PageUp / PageDown by month (Shift: year). */
 function Calendar({
   selected,
-  min,
-  max,
   required,
   pos,
   onPick,
   onClose,
 }: {
   selected: string;
-  min?: string;
-  max?: string;
   required?: boolean;
   pos: Pos;
   onPick: (iso: string) => void;
   onClose: () => void;
 }) {
   const [today] = useState(localToday);
-  const [focus, setFocus] = useState(() => clampDate(selected || today, min, max));
+  const [focus, setFocus] = useState(() => selected || today);
   const gridRef = useRef<HTMLDivElement>(null);
   // Keyboard moves in the grid take focus with them; the month / year buttons keep it.
   const focusGrid = useRef(true);
@@ -99,7 +91,7 @@ function Calendar({
 
   const go = (iso: string, fromGrid: boolean) => {
     focusGrid.current = fromGrid;
-    setFocus(clampDate(iso, min, max));
+    setFocus(iso);
   };
 
   function onGridKey(e: React.KeyboardEvent) {
@@ -120,7 +112,6 @@ function Calendar({
   }
 
   const [year, month] = focus.split("-").map(Number) as [number, number];
-  const inRange = (iso: string) => (!min || iso >= min) && (!max || iso <= max);
 
   return (
     <div
@@ -198,16 +189,15 @@ function Calendar({
                     type="button"
                     data-iso={iso}
                     tabIndex={iso === focus ? 0 : -1}
-                    disabled={!inRange(iso)}
                     aria-label={longDate(iso)}
                     aria-current={iso === today ? "date" : undefined}
                     onClick={() => onPick(iso)}
                     className={cx(
-                      "h-control w-full cursor-pointer rounded-control border text-sm disabled:cursor-not-allowed disabled:text-border-input",
+                      "h-control w-full cursor-pointer rounded-control border text-sm",
                       iso === selected
                         ? "border-primary bg-primary font-bold text-white"
                         : cx(
-                            "bg-surface text-text enabled:hover:bg-primary-soft",
+                            "bg-surface text-text hover:bg-primary-soft",
                             iso === today ? "border-primary" : "border-transparent",
                           ),
                     )}
@@ -223,12 +213,7 @@ function Calendar({
         ))}
       </div>
       <div className="mt-1 flex justify-between">
-        <button
-          type="button"
-          className={textButton}
-          disabled={!inRange(today)}
-          onClick={() => onPick(today)}
-        >
+        <button type="button" className={textButton} onClick={() => onPick(today)}>
           Today
         </button>
         {!required && (
@@ -249,8 +234,6 @@ function Calendar({
 export function DateField({
   value,
   onChange,
-  min,
-  max,
   required,
   disabled,
   name,
@@ -275,13 +258,9 @@ export function DateField({
     if (value !== (parsed?.ok ? parsed.iso : "")) setText(isoToDisplay(value));
   }
 
-  let ownError: string | null = null;
-  if (parsed && !parsed.ok) {
-    if (touched || text.length >= 10) ownError = parsed.error;
-  } else if (parsed?.ok) {
-    if (min && parsed.iso < min) ownError = `Must be on or after ${isoToDisplay(min)}`;
-    else if (max && parsed.iso > max) ownError = `Must be on or before ${isoToDisplay(max)}`;
-  }
+  // Only an incomplete or impossible date is an error. Any real date is accepted; a caller
+  // passes `warning` for dates that look odd (future, far off, out of order).
+  const ownError = parsed && !parsed.ok && (touched || text.length >= 10) ? parsed.error : null;
   const error = ownError ?? shellProps.error;
   const shell = { ...shellProps, error };
 
@@ -393,8 +372,6 @@ export function DateField({
         {open && pos && (
           <Calendar
             selected={parsed?.ok ? parsed.iso : ""}
-            min={min}
-            max={max}
             required={required}
             pos={pos}
             onPick={pick}

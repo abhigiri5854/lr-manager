@@ -15,10 +15,13 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { DateField, focusFirstInvalidDate } from "@/components/ui/DateField";
+import { DateTimeField } from "@/components/ui/DateTimeField";
 import { Field, Select } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cx } from "@/lib/cx";
+import { dateWarning } from "@/lib/date-warnings";
 import { formatPaise, formatRupees } from "@/lib/format";
+import { todayInIndia } from "@/lib/fy";
 import { paymentModeLabel } from "@/lib/labels";
 import {
   applyConsignorDefaults,
@@ -70,6 +73,8 @@ export type LrFormProps = {
   notice?: string | null;
   /** Why the LR can't be edited (e.g. cancelled); the form is shown disabled. */
   readOnlyReason?: string | null;
+  /** Why only the dates can change (on a finalised freight bill); the rest is shown disabled. */
+  datesOnlyReason?: string | null;
 };
 
 const GST_PAYERS: { value: GstPayer; label: string }[] = [
@@ -98,8 +103,11 @@ export function LrForm({
   linkedInvoice,
   notice: initialNotice,
   readOnlyReason,
+  datesOnlyReason,
 }: LrFormProps) {
   const readOnly = !!readOnlyReason;
+  const datesOnly = !!datesOnlyReason && !readOnly;
+  const [today] = useState(() => todayInIndia());
   const router = useRouter();
   const [values, setValues] = useState(initial);
   const [picked, setPicked] = useState(initialPicked);
@@ -334,6 +342,54 @@ export function LrForm({
       </div>
 
       {readOnlyReason && <Alert tone="warning">{readOnlyReason}</Alert>}
+      {datesOnly && (
+        <>
+          <Alert tone="warning">{datesOnlyReason}</Alert>
+          <Card title="Dates">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <DateField
+                id="lrDate"
+                label="LR date"
+                value={values.lrDate}
+                onChange={(lrDate) => set({ lrDate })}
+                error={errors.lrDate}
+                warning={dateWarning(values.lrDate, { today })}
+              />
+              {values.invoices.map((r, i) => (
+                <div key={r.key} className="contents">
+                  <DateField
+                    label={`Invoice ${r.invoiceNo || i + 1} date`}
+                    value={r.invoiceDate}
+                    onChange={(invoiceDate) =>
+                      set({
+                        invoices: values.invoices.map((x) =>
+                          x.key === r.key ? { ...x, invoiceDate } : x,
+                        ),
+                      })
+                    }
+                    error={errors[`lrInvoices.${i}.invoiceDate`]}
+                    warning={dateWarning(r.invoiceDate, { today })}
+                  />
+                  {r.ewayBillNo.trim() && (
+                    <DateTimeField
+                      label={`E-way ${r.ewayBillNo} expiry`}
+                      value={r.ewayExpiresAt}
+                      onChange={(ewayExpiresAt) =>
+                        set({
+                          invoices: values.invoices.map((x) =>
+                            x.key === r.key ? { ...x, ewayExpiresAt } : x,
+                          ),
+                        })
+                      }
+                      error={errors[`lrInvoices.${i}.ewayExpiresAt`]}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        </>
+      )}
       {conflict && (
         <Alert
           tone="warning"
@@ -402,16 +458,18 @@ export function LrForm({
         onSubmit={(e) => e.preventDefault()}
         className="flex flex-wrap items-start gap-5"
       >
-        <fieldset disabled={readOnly} className="m-0 contents border-0 p-0">
+        <fieldset disabled={readOnly || datesOnly} className="m-0 contents border-0 p-0">
           <div className="flex min-w-0 flex-[999_1_640px] flex-col gap-5">
             <Card title="Booking">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <DateField
-                  id="lrDate"
+                  // In dates-only mode the editable copy sits in the Dates card above.
+                  id={datesOnly ? undefined : "lrDate"}
                   label="LR date"
                   value={values.lrDate}
                   onChange={(lrDate) => set({ lrDate })}
                   error={errors.lrDate}
+                  warning={dateWarning(values.lrDate, { today })}
                 />
                 <Field
                   id="fromPlace"
@@ -528,6 +586,7 @@ export function LrForm({
                   duplicates={duplicates}
                   onInvoiceNoBlur={checkInvoiceNo}
                   onDismissDuplicate={keepDuplicate}
+                  today={today}
                 />
               </div>
             </Card>

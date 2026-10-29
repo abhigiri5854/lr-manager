@@ -119,12 +119,6 @@ export function weekdayIndex(iso: IsoDate): number {
   return (toUtc(iso).getUTCDay() + 6) % 7;
 }
 
-export function clampDate(iso: IsoDate, min?: IsoDate, max?: IsoDate): IsoDate {
-  if (min && iso < min) return min;
-  if (max && iso > max) return max;
-  return iso;
-}
-
 export const MONTH_NAMES = [
   "January",
   "February",

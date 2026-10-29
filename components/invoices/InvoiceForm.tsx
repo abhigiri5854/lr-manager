@@ -8,6 +8,7 @@ import {
   finaliseInvoiceAction,
   saveImportedInvoiceAction,
   saveInvoiceAction,
+  saveInvoiceDatesAction,
 } from "@/app/(app)/invoices/actions";
 import { PartyPicker } from "@/components/lr/PartyPicker";
 import { TruckPicker } from "@/components/lr/TruckPicker";
@@ -20,7 +21,10 @@ import { Field, Select, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useCan } from "@/components/ui/Permissions";
 import { cx } from "@/lib/cx";
+import { dateWarning, joinWarnings, numberFyWarning } from "@/lib/date-warnings";
+import { todayInIndia } from "@/lib/fy";
 import { isPending, type ImportFlag, type PendingRecords } from "@/lib/import/invoice-prefill";
+import { istInputToIso } from "@/lib/lr-form";
 import { uploadName } from "@/lib/upload-name";
 import { formatDate, formatRupees } from "@/lib/format";
 import { EWAY_BILL_THRESHOLD_PAISE, GST_STATES, stateLabel } from "@/lib/gst";
@@ -51,6 +55,8 @@ export type InvoiceMeta = {
   lines: InvoiceLineTax[];
   totals: TaxInvoiceTotals;
   intraState: boolean;
+  /** Final invoices with a number: the FY that number belongs to (kept when the date moves). */
+  numberFy: string | null;
 };
 
 /** Smart import: an invoice read from a file, opened here to be checked and saved. */
@@ -121,13 +127,28 @@ export function InvoiceForm({
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const topRef = useRef<HTMLDivElement>(null);
-  const [initialJson] = useState(() => JSON.stringify(initial));
+  const [initialJson, setInitialJson] = useState(() => JSON.stringify(initial));
+  const [today] = useState(() => todayInIndia());
+  const [datesSaved, setDatesSaved] = useState(false);
 
   const status: TaxInvoiceStatus = invoice?.status ?? "draft";
   const locked = status !== "draft";
   // Imported drafts open read-only until "Correct".
   const readOnly = locked || (imported && !!invoice && !correcting);
+  // A finalised invoice keeps every field locked except its dates.
+  const datesOnly = status === "final";
+  const datesLocked = readOnly && !datesOnly;
   const dirty = JSON.stringify(values) !== initialJson;
+
+  const invoiceDayValue = values.invoiceAt.slice(0, 10);
+  const warnings = {
+    invoiceAt: joinWarnings(
+      dateWarning(invoiceDayValue, { today }),
+      numberFyWarning(invoice?.numberFy, invoiceDayValue),
+    ),
+    customerRefDate: dateWarning(values.customerRefDate, { today }),
+    soDate: dateWarning(values.soDate, { today }),
+  };
 
   const live = useMemo(
     () => liveTotals(values, seller.state, roundOff && !imported),
@@ -204,6 +225,39 @@ export function InvoiceForm({
     return null;
   }
 
+  /** Finalised invoice: save just the dates (number, lines and totals stay as issued). */
+  function saveDates() {
+    if (!invoice) return;
+    if (focusFirstInvalidDate()) return;
+    const invoiceAt = istInputToIso(values.invoiceAt);
+    if (!invoiceAt) return showErrors({ invoiceAt: "Enter the invoice date and time" });
+    startTransition(async () => {
+      const r = await saveInvoiceDatesAction({
+        id: invoice.id,
+        expectedVersion: invoice.version,
+        dates: {
+          invoiceAt,
+          customerRefDate: values.customerRefDate || null,
+          soDate: values.soDate || null,
+        },
+      });
+      if (r.ok) {
+        setErrors({});
+        setFormError(null);
+        setInitialJson(JSON.stringify(values));
+        setDatesSaved(true);
+        return;
+      }
+      if (r.kind === "conflict") setConflict(true);
+      else if (r.kind === "validation") {
+        showErrors(
+          Object.fromEntries(r.issues.filter((i) => i.path).map((i) => [i.path, i.message])),
+          r.message,
+        );
+      } else showErrors({}, r.message);
+    });
+  }
+
   function saveDraft() {
     startTransition(async () => {
       const saved = await saveIfNeeded();
@@ -258,6 +312,11 @@ export function InvoiceForm({
       {!readOnly && (
         <Button variant="secondary" onClick={saveDraft} disabled={pending}>
           {pending ? "Saving…" : invoice ? "Save changes" : "Save draft"}
+        </Button>
+      )}
+      {datesOnly && dirty && (
+        <Button variant="secondary" onClick={saveDates} disabled={pending}>
+          {pending ? "Saving…" : "Save dates"}
         </Button>
       )}
       {imported && invoice && status === "draft" && !correcting && (
@@ -343,9 +402,17 @@ export function InvoiceForm({
         </Alert>
       )}
       {status === "final" && (
-        <Alert tone="warning" title="Finalised — fields are locked.">
-          To change it, cancel this invoice with a reason and issue a new one.
+        <Alert tone="warning" title="Finalised — only the dates can change.">
+          {invoiceNo
+            ? `Number ${invoiceNo} stays the same even if the date moves. `
+            : ""}
+          To change anything else, cancel this invoice with a reason and issue a new one.
         </Alert>
+      )}
+      {datesSaved && !dirty && (
+        <div role="status" className="rounded-tile bg-success-soft px-4 py-3 text-sm text-success">
+          <b>Dates saved.</b>
+        </div>
       )}
       {readOnly && status === "draft" && (
         <Alert tone="warning" title="Imported from the consignor's invoice.">
@@ -400,16 +467,18 @@ export function InvoiceForm({
                 label="Date & time"
                 value={values.invoiceAt}
                 onChange={(v) => set("invoiceAt", v)}
-                disabled={readOnly}
+                disabled={datesLocked}
                 error={errors.invoiceAt}
+                warning={warnings.invoiceAt}
               />
               <Field label="Customer ref." {...text("customerRef")} />
               <DateField
                 label="Customer ref. date"
                 value={values.customerRefDate}
                 onChange={(v) => set("customerRefDate", v)}
-                disabled={readOnly}
+                disabled={datesLocked}
                 error={errors.customerRefDate}
+                warning={warnings.customerRefDate}
                 {...flag("customerRefDate")}
               />
               <Field label="SO no." {...text("soNo")} />
@@ -417,8 +486,9 @@ export function InvoiceForm({
                 label="SO date"
                 value={values.soDate}
                 onChange={(v) => set("soDate", v)}
-                disabled={readOnly}
+                disabled={datesLocked}
                 error={errors.soDate}
+                warning={warnings.soDate}
                 {...flag("soDate")}
               />
               <Field label="DO no." {...text("doNo")} />
@@ -670,10 +740,10 @@ export function InvoiceForm({
         title="Finalise this invoice?"
         description={
           imported
-            ? `It keeps the seller's number ${values.invoiceNo || ""} and all fields are locked.`
+            ? `It keeps the seller's number ${values.invoiceNo || ""} and all fields except the dates are locked.`
             : `It gets the next number in this financial year's series${
                 nextInvoiceNo ? ` (next: ${nextInvoiceNo})` : ""
-              } and all fields are locked. To change it later you cancel it and issue a new one.`
+              } and all fields except the dates are locked. To change them later you cancel it and issue a new one.`
         }
       >
         <div className="flex flex-col gap-3">

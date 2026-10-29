@@ -1,9 +1,10 @@
 import type { InvoiceMeta, LinkedLr } from "@/components/invoices/InvoiceForm";
 import { getCompany } from "@/lib/data/companies";
+import { invoiceDay } from "@/lib/data/invoice-calc";
 import { listLrsForInvoice, peekNextInvoiceNo } from "@/lib/data/invoices";
 import { getPartyById } from "@/lib/data/parties";
 import { getTruckById } from "@/lib/data/trucks";
-import { todayInIndia } from "@/lib/fy";
+import { financialYear, todayInIndia } from "@/lib/fy";
 import { partyState } from "@/lib/gst";
 import { invoiceStatus } from "@/lib/invoice-status";
 import type { PartyOption, TruckOption } from "@/lib/lr-form";
@@ -97,5 +98,9 @@ export function invoiceMeta(inv: TaxInvoice, sellerState: string | null): Invoic
     })),
     totals: inv.totals,
     intraState: sellerState === inv.placeOfSupplyStateCode,
+    numberFy:
+      inv.status === "final" && inv.invoiceNo
+        ? (inv.numberFy ?? financialYear(invoiceDay(inv.invoiceAt)))
+        : null,
   };
 }

@@ -33,14 +33,23 @@ describe("POD rules", () => {
 });
 
 describe("save delivery", () => {
-  it("rejects a future date and Short / Damaged without remarks", async () => {
+  it("rejects Short / Damaged without remarks", async () => {
     const co = acmId();
     const id = lrId("19019");
-    await expect(createPod(co, { lrId: id, deliveredOn: "2999-01-01" })).rejects.toThrow(/future/);
     await expect(
       createPod(co, { lrId: id, deliveredOn: "2026-10-16", condition: "short" }),
     ).rejects.toThrow(ValidationError);
     expect((await getLrById(co, id))!.deliveredAt).toBeNull();
+  });
+
+  it("accepts any delivery date — future, or before the LR date (the form only warns)", async () => {
+    const co = acmId();
+    const id = lrId("19019");
+    const pod = await createPod(co, { lrId: id, deliveredOn: "2999-01-01" });
+    expect((await getLrById(co, id))!.deliveredAt).toBe("2999-01-01T00:00:00.000Z");
+    const earlier = await updatePod(co, pod.id, pod.version, { deliveredOn: "2020-01-01" });
+    expect(earlier.version).toBe(pod.version + 1);
+    expect((await getLrById(co, id))!.deliveredAt).toBe("2020-01-01T00:00:00.000Z");
   });
 
   it("delivery sets Delivered; the signed copy sets POD received", async () => {

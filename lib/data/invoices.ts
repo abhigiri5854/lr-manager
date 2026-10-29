@@ -42,6 +42,7 @@ import {
 } from "./_store";
 import * as dbi from "./db/invoices";
 import {
+  applyFinalInvoiceDates,
   applyInvoicePatch,
   assertImportedHasNo,
   INVOICE_NO_TOO_LONG,
@@ -92,7 +93,8 @@ function assertUniqueNo(
       x.invoiceNo === inv.invoiceNo &&
       x.sellerPartyId === inv.sellerPartyId &&
       x.id !== exceptId &&
-      financialYear(invoiceDay(x.invoiceAt)) === fy,
+      // A finalised invoice's number stays in its FY even after its date moves.
+      (x.numberFy ?? financialYear(invoiceDay(x.invoiceAt))) === fy,
   );
   if (clash) fail("invoiceNo", `Invoice ${inv.invoiceNo} is already used in FY ${fy}`);
 }
@@ -217,7 +219,10 @@ export async function createTaxInvoice(
   return insertRecord("tax_invoices", db.taxInvoices, invoice);
 }
 
-/** Draft edits only. Own drafts never take a number here; imported ones may correct theirs. */
+/**
+ * Draft edits. Own drafts never take a number here; imported ones may correct theirs. A
+ * finalised invoice accepts date changes only (see applyFinalInvoiceDates).
+ */
 export async function updateTaxInvoice(
   companyId: string,
   id: string,
@@ -235,6 +240,8 @@ export async function updateTaxInvoice(
     id,
     expectedVersion,
     (current) => {
+      // Finalised: only the dates change; lines, totals and the number stay as issued.
+      if (current.status === "final") return applyFinalInvoiceDates(current, p);
       const { next, typed } = applyInvoicePatch(current, p);
       assertUniqueNo(companyId, next, id);
       const ctx = ctxFor(companyId);
@@ -289,6 +296,7 @@ export async function finaliseTaxInvoice(
       return {
         ...current,
         invoiceNo,
+        numberFy: financialYear(invoiceDay(current.invoiceAt)),
         status: "final" as const,
         snapshot: {
           seller: current.sellerPartyId ? party(current.sellerPartyId) : companySnapshot(co),

@@ -12,7 +12,7 @@ import {
 import { saveImportedInvoice } from "@/lib/data/import";
 import { getActiveCompanyId } from "@/lib/data/session";
 import type { PendingRecords } from "@/lib/import/invoice-prefill";
-import type { TaxInvoiceInput } from "@/lib/validators/invoice";
+import type { TaxInvoiceInput, TaxInvoicePatch } from "@/lib/validators/invoice";
 
 type Saved = { ok: true; id: string; version: number } | ActionFailure;
 
@@ -27,6 +27,27 @@ export async function saveInvoiceAction(args: {
     const inv = args.id
       ? await updateTaxInvoice(companyId, args.id, args.expectedVersion ?? -1, args.input)
       : await createTaxInvoice(companyId, args.input);
+    refresh();
+    return { ok: true, id: inv.id, version: inv.version };
+  } catch (e) {
+    return toActionFailure(e);
+  }
+}
+
+/** A finalised invoice: change only its dates (the number and amounts stay as issued). */
+export async function saveInvoiceDatesAction(args: {
+  id: string;
+  expectedVersion: number;
+  dates: Pick<TaxInvoicePatch, "invoiceAt" | "customerRefDate" | "soDate">;
+}): Promise<Saved> {
+  const companyId = await getActiveCompanyId();
+  try {
+    const { invoiceAt, customerRefDate, soDate } = args.dates;
+    const inv = await updateTaxInvoice(companyId, args.id, args.expectedVersion, {
+      invoiceAt,
+      customerRefDate,
+      soDate,
+    });
     refresh();
     return { ok: true, id: inv.id, version: inv.version };
   } catch (e) {

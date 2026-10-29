@@ -41,7 +41,14 @@ import {
   type ListParams,
 } from "./_store";
 import * as dbl from "./db/lrs";
-import { applyPatch, buildLr, normaliseNested, type SaveLrOptions } from "./lr-patch";
+import {
+  applyPatch,
+  buildLr,
+  lockedLrDates,
+  lockedOnBill,
+  normaliseNested,
+  type SaveLrOptions,
+} from "./lr-patch";
 import { assertCan } from "./session";
 import { onDatabase } from "./source";
 
@@ -92,10 +99,6 @@ function snapshotFor(lr: Lr): Lr["snapshot"] {
   };
 }
 
-function assertNotOnFinalBill(companyId: string, lrId: string) {
-  const bill = billForLr(companyId, lrId);
-  if (bill?.status === "final") fail("", `LR is on freight bill ${bill.billNo} and is locked`);
-}
 
 /** Filters shared by the register page and its Excel export, newest first. */
 function filterLrs(companyId: string, params: LrListParams): LrView[] {
@@ -337,7 +340,8 @@ export async function updateLr(
   const p = parseInput(lrPatchSchema, patch);
   const nested = normaliseNested(p);
   if (onDatabase()) return dbl.updateLr(companyId, id, expectedVersion, p, nested, options);
-  assertNotOnFinalBill(companyId, id);
+  const bill = billForLr(companyId, id);
+  const lockedBy = bill?.status === "final" ? bill : null;
   assertLrRefs(companyId, p);
   const saved = updateRecord(
     "lrs",
@@ -345,8 +349,11 @@ export async function updateLr(
     companyId,
     id,
     expectedVersion,
-    (current) =>
-      applyPatch(current, p, nested, options, (lr) => snapshotFor(lr)!, now()),
+    (current) => {
+      const next = applyPatch(current, p, nested, options, (lr) => snapshotFor(lr)!, now());
+      if (!lockedBy) return next;
+      return lockedLrDates(current, next) ?? fail("", lockedOnBill(lockedBy.billNo));
+    },
     "LR",
   );
   return toLrView(saved);

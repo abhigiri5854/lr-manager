@@ -339,6 +339,8 @@ export type TaxInvoice = BaseRecord & {
   invoiceNo: string | null;
   invoiceAt: IsoDateTime;
   status: "draft" | "final";
+  /** FY the number belongs to (set on Finalise). Moving the date later never changes it. */
+  numberFy?: string | null;
   /** Null = this company is the seller. */
   sellerPartyId: Uuid | null;
   billToId: Uuid;
@@ -419,6 +421,8 @@ export type FreightBill = BaseRecord & {
   /** Null until finalised; allocated only on finalise (no gaps). */
   billNo: string | null;
   billDate: IsoDate;
+  /** FY the number belongs to (set on Finalise). Moving the date later never changes it. */
+  numberFy?: string | null;
   partyId: Uuid;
   gstMode: FreightGstMode;
   /** Used under forward charge; tax is 0 under reverse charge. */

@@ -12,6 +12,8 @@ type DateTimeFieldProps = {
   value: string;
   onChange: (value: string) => void;
   error?: ReactNode;
+  /** Non-blocking amber note (e.g. a future date); hidden while there's an error. */
+  warning?: ReactNode;
   disabled?: boolean;
   className?: string;
 };
@@ -22,6 +24,7 @@ export function DateTimeField({
   value,
   onChange,
   error,
+  warning,
   disabled,
   className,
 }: DateTimeFieldProps) {
@@ -90,7 +93,16 @@ export function DateTimeField({
           className="w-24 shrink-0"
         />
       </div>
-      {message && <div className="mt-1.5 text-[13px] text-danger">{message}</div>}
+      {message ? (
+        <div className="mt-1.5 text-[13px] text-danger">{message}</div>
+      ) : (
+        warning && (
+          <div className="mt-1.5 text-[13px] leading-normal text-warning">
+            <span aria-hidden>⚠ </span>
+            {warning}
+          </div>
+        )
+      )}
     </fieldset>
   );
 }

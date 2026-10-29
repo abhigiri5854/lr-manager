@@ -205,7 +205,6 @@ export async function createPod(
     if (lr.cancelled_at) fail("lrId", "LR not found in this company");
     if (!lr.booked_at) fail("lrId", "Book the LR before recording delivery");
     if (existing) fail("lrId", "This LR already has a POD — edit it instead");
-    if (lr.lr_date && v.deliveredOn < lr.lr_date) fail("deliveredOn", "Delivered before the LR date");
     assertDeliveryRules(v.deliveredOn, v.condition ?? "good", v.remarks ?? null);
 
     const delivery = setDelivered(tx, companyId, v.lrId, deliveredAtFrom(v.deliveredOn), lr as never);
@@ -248,9 +247,6 @@ export async function updatePod(
     if (!cur.lr) throw new ForbiddenError("Drivers can only record POD for their own trips.");
     if (cur.cancelled_at) fail("", "This POD is cancelled and can't be changed");
     if (cur.version !== expectedVersion) throw new ConflictError();
-    if (deliveredOn && cur.lr.lr_date && deliveredOn < cur.lr.lr_date) {
-      fail("deliveredOn", "Delivered before the LR date");
-    }
     assertDeliveryRules(
       deliveredOn,
       fields.condition ?? cur.condition,

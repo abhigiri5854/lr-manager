@@ -99,6 +99,18 @@ describe("tax invoices on the database", () => {
     await expect(
       invoices.updateTaxInvoice(t.companyId, draft.id, final.version, { soNo: "X" }),
     ).rejects.toThrow(/Finalised invoices can't be edited/);
+    // Dates stay editable; moving into another FY keeps the number (and its FY) and the totals.
+    const redated = await invoices.updateTaxInvoice(t.companyId, draft.id, final.version, {
+      invoiceAt: "2027-04-02T06:00:00.000Z",
+      soDate: "2027-04-01",
+    });
+    expect(redated).toMatchObject({
+      invoiceNo: final.invoiceNo,
+      invoiceAt: "2027-04-02T06:00:00.000Z",
+      soDate: "2027-04-01",
+      numberFy: final.numberFy,
+    });
+    expect(redated.totals).toEqual(final.totals);
     expect((await invoices.peekNextInvoiceNo(t.companyId, "2026-10-14")).counter).toBe(peek.counter + 1);
 
     const cancelled = await invoices.cancelTaxInvoice(t.companyId, draft.id, "Wrong buyer");
@@ -198,8 +210,23 @@ describe("freight bills and payments on the database", () => {
     expect(final.duePaise).toBe(8000_00);
     expect((await lrs.getLrById(t.companyId, lr1.id))!.status).toBe("Billed");
     await expect(
-      bills.updateFreightBill(t.companyId, draft.id, final.version, { billDate: "2026-10-28" }),
+      bills.updateFreightBill(t.companyId, draft.id, final.version, { gstMode: "forward_charge" }),
     ).rejects.toThrow(/Finalised bills can't be edited/);
+    // The date can still move, even into another FY; the number keeps its FY and amounts stay.
+    const moved = await bills.updateFreightBill(t.companyId, draft.id, final.version, {
+      billDate: "2027-04-02",
+    });
+    expect(moved).toMatchObject({
+      billNo: final.billNo,
+      billDate: "2027-04-02",
+      numberFy: final.numberFy,
+      version: final.version + 1,
+    });
+    expect(moved.totals).toEqual(final.totals);
+    expect((await lrs.getLrById(t.companyId, lr1.id))!.billedAt).toBe("2027-04-02");
+    const [billAudit] = await sql`select changes from audit_log
+      where record_id = ${draft.id} order by created_at desc limit 1`;
+    expect(billAudit.changes).toContainEqual({ field: "billDate", old: "2026-10-27", new: "2027-04-02" });
 
     const pay = (amountPaise: number, reference: string) => ({
       partyId: p,

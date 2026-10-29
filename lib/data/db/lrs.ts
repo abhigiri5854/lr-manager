@@ -10,7 +10,13 @@ import { normaliseVehicleNo } from "@/lib/validators/common";
 import { lrBookingErrors } from "@/lib/validators/lr";
 import { assertRules, fail, now, today } from "../_store";
 import { ConflictError, NotFoundError } from "../errors";
-import { applyPatch, type ParsedPatch, type SaveLrOptions } from "../lr-patch";
+import {
+  applyPatch,
+  lockedLrDates,
+  lockedOnBill,
+  type ParsedPatch,
+  type SaveLrOptions,
+} from "../lr-patch";
 import type { ConsignorDefaults, LrListParams, LrRef } from "../lrs";
 import { contains, paging, withUser, withUserRead, type Tx } from "./conn";
 import { uuidList } from "./parties";
@@ -518,15 +524,13 @@ export async function updateLr(
       [p.consignorId, p.consigneeId, p.billedToId],
       refChecks(tx, companyId, { ...p, items: lines, lrInvoices: invoices }),
     );
-    if (cur.bill?.status === "final") {
-      fail("", `LR is on freight bill ${cur.bill.bill_no} and is locked`);
-    }
+    const lockedBy = cur.bill?.status === "final" ? (cur.bill.bill_no as string | null) : undefined;
     assertNoProblems(problems);
     if (cur.cancelled_at) fail("", "This lr is cancelled and can't be changed");
     if (cur.version !== expectedVersion) throw new ConflictError();
 
     const before = toLr(cur);
-    const next = applyPatch(
+    const patched = applyPatch(
       before,
       p,
       { items: lines, lrInvoices: invoices },
@@ -534,6 +538,11 @@ export async function updateLr(
       (lr) => snapshotFrom(cur.company_row, parties, lr),
       now(),
     );
+    // On a final freight bill only the dates may change.
+    const next =
+      lockedBy === undefined
+        ? patched
+        : (lockedLrDates(before, patched) ?? fail("", lockedOnBill(lockedBy)));
     const itemsChanged = JSON.stringify(next.items) !== JSON.stringify(before.items);
     const invoicesChanged = JSON.stringify(next.lrInvoices) !== JSON.stringify(before.lrInvoices);
     const set: Row = lrColumns(tx, next);

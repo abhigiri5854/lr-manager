@@ -8,8 +8,8 @@ import type { FreightBill, FreightBillView, LrView, Page, Payment } from "@/lib/
 import type { freightBillFields, freightBillPatchSchema } from "@/lib/validators/bill";
 import { fail, newId, now } from "../_store";
 import {
+  applyFinalBillDate,
   assertBillableLrs,
-  BILL_FINAL,
   BILL_HAS_PAYMENTS,
   checkAllocations,
   priceBill,
@@ -274,7 +274,19 @@ export async function updateFreightBill(
     if (p.lines) assertBillableLrs(p.lines, lrFor, id);
     assertBillEditable(cur, expectedVersion);
     const before = toFreightBill(cur);
-    if (before.status === "final") fail("", BILL_FINAL);
+    if (before.status === "final") {
+      // Only the date changes: no re-pricing, and bill_fy (the number's FY) stays put. The
+      // g_lr_stamps trigger moves its LRs' "billed" date along with it.
+      const after = applyFinalBillDate(before, p);
+      const [updated] = await tx`
+        update freight_bills set bill_date = ${after.billDate}
+         where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}
+     returning *`;
+      if (!updated) throw new ConflictError();
+      const row = { ...cur, ...updated };
+      audit(tx, companyId, "freight_bills", id, "update", before, toFreightBill(row));
+      return toBillView(row);
+    }
 
     const next = { ...before, ...p, lines: before.lines };
     const party = parties.find((x) => x.id === next.partyId);

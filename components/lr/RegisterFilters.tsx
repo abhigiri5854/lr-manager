@@ -127,7 +127,6 @@ export function RegisterFilters({
               hideLabel
               name="from"
               value={filters.from}
-              max={filters.to || undefined}
               onChange={(from) => changeDate("from", from)}
               disabled={disabled}
               className="min-w-36 flex-1"
@@ -140,7 +139,11 @@ export function RegisterFilters({
               hideLabel
               name="to"
               value={filters.to}
-              min={filters.from || undefined}
+              warning={
+                filters.from && filters.to && filters.to < filters.from
+                  ? "Before the from date — nothing will match"
+                  : undefined
+              }
               onChange={(to) => changeDate("to", to)}
               disabled={disabled}
               className="min-w-36 flex-1"

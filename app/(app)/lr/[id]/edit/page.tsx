@@ -59,6 +59,11 @@ async function EditLr({ params, searchParams }: Pick<Props, "params" | "searchPa
           ? `This LR was cancelled${lr.cancelReason ? ` (${lr.cancelReason})` : ""} and can't be changed.`
           : null
       }
+      datesOnlyReason={
+        lr.billedAt
+          ? "This LR is on a finalised freight bill — only its dates can change. Other fields are locked."
+          : null
+      }
     />
   );
 }

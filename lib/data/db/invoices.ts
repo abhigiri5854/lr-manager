@@ -10,6 +10,7 @@ import { formatInvoiceNo, type taxInvoiceFields } from "@/lib/validators/invoice
 import { fail, newId, now } from "../_store";
 import { ConflictError, NotFoundError } from "../errors";
 import {
+  applyFinalInvoiceDates,
   applyInvoicePatch,
   assertImportedHasNo,
   INVOICE_NO_TOO_LONG,
@@ -381,6 +382,22 @@ export async function updateTaxInvoice(
     assertNoProblems(problems);
     assertEditable(cur, expectedVersion);
     const before = toTaxInvoice(cur);
+    if (before.status === "final") {
+      // Only the dates change: no re-pricing, and invoice_fy (the number's FY) stays put.
+      const after = applyFinalInvoiceDates(before, p);
+      const [updated] = await tx`
+        update tax_invoices set ${tx({
+          invoice_at: after.invoiceAt,
+          customer_ref_date: after.customerRefDate,
+          so_date: after.soDate,
+        })}
+         where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}
+     returning *`;
+      if (!updated) throw new ConflictError();
+      const out = toTaxInvoice({ ...updated, lines: before.lines });
+      audit(tx, companyId, "tax_invoices", id, "update", before, out);
+      return out;
+    }
     const { next, typed } = applyInvoicePatch(before, p);
     const ctx = ctxFrom(company, parties);
     next.placeOfSupplyStateCode = placeOfSupply(ctx, next, typed);

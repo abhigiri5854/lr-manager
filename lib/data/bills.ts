@@ -37,8 +37,8 @@ import {
   authorStamp,
 } from "./_store";
 import {
+  applyFinalBillDate,
   assertBillableLrs,
-  BILL_FINAL,
   BILL_HAS_PAYMENTS,
   checkAllocations,
   formatBillNo,
@@ -183,7 +183,7 @@ export async function updateFreightBill(
     id,
     expectedVersion,
     (current) => {
-      if (current.status === "final") fail("", BILL_FINAL);
+      if (current.status === "final") return applyFinalBillDate(current, p);
       const next = { ...current, ...p, lines: current.lines };
       return {
         ...next,
@@ -219,6 +219,7 @@ export async function finaliseFreightBill(
         ...current,
         status: "final" as const,
         billNo: formatBillNo(company.freightBillPrefix, no),
+        numberFy: financialYear(current.billDate),
         snapshot: { company: companySnapshot(company), party: partySnapshot(party) },
       };
     },

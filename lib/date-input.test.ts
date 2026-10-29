@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   addMonths,
-  clampDate,
   formatDateTyping,
   formatTimeTyping,
   isoToDisplay,
@@ -116,10 +115,5 @@ describe("calendar maths", () => {
       "2026-10-04",
     ]);
     expect(weeks.flat().filter(Boolean)).toHaveLength(31);
-  });
-  it("clamps into min and max", () => {
-    expect(clampDate("2026-10-01", "2026-10-10", "2026-10-20")).toBe("2026-10-10");
-    expect(clampDate("2026-10-30", "2026-10-10", "2026-10-20")).toBe("2026-10-20");
-    expect(clampDate("2026-10-15", "2026-10-10", "2026-10-20")).toBe("2026-10-15");
   });
 });

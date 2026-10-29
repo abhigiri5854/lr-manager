@@ -28,6 +28,8 @@ export type ShellProps = {
   aiFlag?: AiFlag;
   /** Explains the AI flag, shown under the control in amber. */
   aiNote?: ReactNode;
+  /** Non-blocking note in amber (e.g. "This date is in the future"); hidden while there's an error. */
+  warning?: ReactNode;
   className?: string;
 };
 
@@ -54,6 +56,7 @@ export function Shell({
   error,
   aiFlag,
   aiNote,
+  warning,
   className,
   controlId,
   hintId,
@@ -79,25 +82,36 @@ export function Shell({
           {error}
         </div>
       ) : (
-        aiFlag &&
-        aiNote && (
-          <div id={msgId} className="mt-2 text-[13px] leading-normal text-warning">
-            {aiNote}
-          </div>
-        )
+        <>
+          {aiFlag && aiNote && (
+            <div id={msgId} className="mt-2 text-[13px] leading-normal text-warning">
+              {aiNote}
+            </div>
+          )}
+          {warning && (
+            <div id={`${msgId}-warn`} className="mt-1.5 text-[13px] leading-normal text-warning">
+              <span aria-hidden>⚠ </span>
+              {warning}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
 export function describedBy(p: ShellProps, hintId: string, msgId: string) {
-  const ids = [p.hint && !p.error && hintId, (p.error || (p.aiFlag && p.aiNote)) && msgId];
+  const ids = [
+    p.hint && !p.error && hintId,
+    (p.error || (p.aiFlag && p.aiNote)) && msgId,
+    p.warning && !p.error && `${msgId}-warn`,
+  ];
   return ids.filter(Boolean).join(" ") || undefined;
 }
 
 function splitShellProps<T extends ShellProps>(props: T) {
-  const { label, hideLabel, hint, error, aiFlag, aiNote, className, ...rest } = props;
-  return { shell: { label, hideLabel, hint, error, aiFlag, aiNote, className }, rest };
+  const { label, hideLabel, hint, error, aiFlag, aiNote, warning, className, ...rest } = props;
+  return { shell: { label, hideLabel, hint, error, aiFlag, aiNote, warning, className }, rest };
 }
 
 /** Text input with label. */

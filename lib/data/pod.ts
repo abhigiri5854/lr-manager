@@ -35,14 +35,12 @@ export type PodPatch = Partial<Omit<PodInput, "lrId">>;
 /** "2026-10-20" → stored on Lr.deliveredAt as that UTC date. */
 export const deliveredAtFrom = (date: string) => `${date}T00:00:00.000Z`;
 
-/** Delivery can't be in the future; Short / Damaged need a note from the consignee. */
+/** Short / Damaged need a note from the consignee. Any delivery date is accepted (the form warns). */
 export function assertDeliveryRules(
   deliveredOn: string | undefined,
   condition: Pod["condition"],
   remarks: string | null,
 ) {
-  if (deliveredOn && deliveredOn > todayInIndia())
-    fail("deliveredOn", "Delivery date can't be in the future");
   if (condition !== "good" && !remarks?.trim()) {
     fail("remarks", `Add remarks — what was ${condition === "short" ? "short" : "damaged"}?`);
   }
@@ -201,7 +199,6 @@ export async function createPod(companyId: string, input: PodInput): Promise<Pod
   if (scoped(db.pods, companyId).some((p) => p.lrId === v.lrId)) {
     fail("lrId", "This LR already has a POD — edit it instead");
   }
-  if (lr.lrDate && v.deliveredOn < lr.lrDate) fail("deliveredOn", "Delivered before the LR date");
   assertDeliveryRules(v.deliveredOn, v.condition ?? "good", v.remarks ?? null);
 
   setLrDelivered(companyId, v.lrId, deliveredAtFrom(v.deliveredOn));
@@ -243,10 +240,6 @@ export async function updatePod(
   await assertPodAccess(companyId, findById(db.lrs, companyId, existing.lrId)!);
   if (existing.cancelledAt) fail("", "This POD is cancelled and can't be changed");
   if (existing.version !== expectedVersion) throw new ConflictError();
-  const lr = findById(db.lrs, companyId, existing.lrId);
-  if (deliveredOn && lr?.lrDate && deliveredOn < lr.lrDate) {
-    fail("deliveredOn", "Delivered before the LR date");
-  }
   assertDeliveryRules(
     deliveredOn,
     fields.condition ?? existing.condition,

@@ -85,6 +85,20 @@ describe("own tax invoices", () => {
     await expect(updateTaxInvoice(acmId(), fa.id, fa.version, { soNo: "X" })).rejects.toThrow(
       "Finalised invoices can't be edited",
     );
+    // Its dates stay editable — any date, even into the next FY — and the number keeps its FY.
+    const redated = await updateTaxInvoice(acmId(), fa.id, fa.version, {
+      invoiceAt: "2027-04-02T06:00:00.000Z",
+      soDate: "2030-01-01",
+    });
+    expect(redated).toMatchObject({
+      invoiceNo: "ACM/TI/001",
+      invoiceAt: "2027-04-02T06:00:00.000Z",
+      soDate: "2030-01-01",
+      numberFy: "2026-27",
+      version: fa.version + 1,
+    });
+    expect(redated.totals).toEqual(fa.totals);
+    expect(redated.lines).toEqual(fa.lines);
 
     // April starts a new financial year at 001.
     const next = await draft({ invoiceAt: "2027-04-02T06:00:00.000Z" });

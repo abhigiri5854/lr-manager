@@ -12,6 +12,7 @@ import { Field, Select, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useCan, useRole } from "@/components/ui/Permissions";
 import { cx } from "@/lib/cx";
+import { dateWarning } from "@/lib/date-warnings";
 import { formatDate, formatRupeesShort } from "@/lib/format";
 import { deniedMessage } from "@/lib/permissions";
 import { formatFileSize, prepareUpload } from "@/lib/image-upload";
@@ -153,8 +154,6 @@ export function PodForm({
   function validate(): Errors {
     const e: Errors = {};
     if (!deliveredOn) e.deliveredOn = "Enter the delivery date";
-    else if (deliveredOn > today) e.deliveredOn = "Delivery date can't be in the future";
-    else if (lr.lrDate && deliveredOn < lr.lrDate) e.deliveredOn = "Delivered before the LR date";
     if (phone.trim() && !isValidMobile(normaliseMobile(phone))) {
       e.receiverPhone = "Enter a 10-digit mobile number";
     }
@@ -304,10 +303,12 @@ export function PodForm({
               <DateField
                 label="Delivered on"
                 value={deliveredOn}
-                min={lr.lrDate ?? undefined}
-                max={today}
                 onChange={setDeliveredOn}
                 error={errors.deliveredOn}
+                warning={dateWarning(deliveredOn, {
+                  today,
+                  notBefore: { date: lr.lrDate, label: "LR date" },
+                })}
                 disabled={disabled}
                 required
               />

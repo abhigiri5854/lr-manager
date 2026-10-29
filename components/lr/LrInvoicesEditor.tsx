@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DateField } from "@/components/ui/DateField";
 import { DateTimeField } from "@/components/ui/DateTimeField";
 import { Field } from "@/components/ui/Field";
+import { dateWarning } from "@/lib/date-warnings";
 import { formatRupees } from "@/lib/format";
 import {
   emptyInvoiceRow,
@@ -29,6 +30,7 @@ export function LrInvoicesEditor({
   duplicates,
   onInvoiceNoBlur,
   onDismissDuplicate,
+  today,
 }: {
   rows: LrInvoiceRow[];
   onChange: (rows: LrInvoiceRow[]) => void;
@@ -37,6 +39,8 @@ export function LrInvoicesEditor({
   duplicates: InvoiceDuplicates;
   onInvoiceNoBlur: (row: LrInvoiceRow) => void;
   onDismissDuplicate: (rowKey: string) => void;
+  /** Today in India, for the amber note on odd invoice dates. */
+  today: string;
 }) {
   const update = (key: string, patch: Partial<LrInvoiceRow>) =>
     onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -94,6 +98,7 @@ export function LrInvoicesEditor({
                 value={r.invoiceDate}
                 onChange={(invoiceDate) => update(r.key, { invoiceDate })}
                 error={err("invoiceDate")}
+                warning={dateWarning(r.invoiceDate, { today })}
               />
               <Field
                 label="Value (₹)"

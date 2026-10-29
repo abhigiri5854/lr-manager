@@ -1,5 +1,6 @@
 // Tax invoice rules shared by the mock store and the database (seller state, place of supply,
 // line tax and totals). Pure: the caller supplies the company and the parties it needs.
+import { financialYear } from "@/lib/fy";
 import { partyState } from "@/lib/gst";
 import { computeInvoiceTax } from "@/lib/tax";
 import type { Company, Party, TaxInvoice, TaxInvoiceLine } from "@/lib/types";
@@ -103,6 +104,27 @@ export function applyInvoicePatch(
       ? current.placeOfSupplyStateCode
       : (placeOfSupplyStateCode ?? null);
   return { next, typed };
+}
+
+/** The only fields a finalised invoice still lets you change. */
+export const INVOICE_DATE_FIELDS = ["invoiceAt", "customerRefDate", "soDate"] as const;
+
+/**
+ * A finalised invoice with new dates. Anything else in the patch is refused. Lines, totals and
+ * the snapshot stay exactly as finalised (no re-pricing), and the number keeps its FY even when
+ * the date moves to another one (the form warns "Number belongs to FY …").
+ */
+export function applyFinalInvoiceDates(current: TaxInvoice, p: ParsedInvoicePatch): TaxInvoice {
+  const dates: readonly string[] = INVOICE_DATE_FIELDS;
+  const other = Object.entries(p).some(([k, v]) => v !== undefined && !dates.includes(k));
+  if (other) fail("", "Finalised invoices can't be edited — only the dates can change");
+  return {
+    ...current,
+    numberFy: current.numberFy ?? financialYear(invoiceDay(current.invoiceAt)),
+    invoiceAt: p.invoiceAt ?? current.invoiceAt,
+    customerRefDate: p.customerRefDate === undefined ? current.customerRefDate : p.customerRefDate,
+    soDate: p.soDate === undefined ? current.soDate : p.soDate,
+  };
 }
 
 /** Imported invoices carry the seller's own number. */

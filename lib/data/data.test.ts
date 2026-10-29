@@ -9,6 +9,7 @@ import {
   finaliseFreightBill,
   getFreightBillById,
   listUnbilledLrs,
+  updateFreightBill,
 } from "./bills";
 import { getCompany, listCompanies, updateCompany } from "./companies";
 import { ConflictError, ValidationError } from "./errors";
@@ -201,6 +202,28 @@ describe("LR → POD → bill → paid", () => {
     const lr = (await getLrById(co, id))!;
     await expect(updateLr(co, id, lr.version, { remarks: "x" })).rejects.toThrow(/locked/);
     await expect(cancelLr(co, id, { reason: "Booked twice" })).rejects.toThrow(ValidationError);
+    // Dates stay editable on a locked LR (any date, even in the future).
+    const redated = await updateLr(co, id, lr.version, { lrDate: "2027-01-05" });
+    expect(redated).toMatchObject({ lrDate: "2027-01-05", version: lr.version + 1 });
+    expect(redated.remarks).toBe(lr.remarks);
+
+    // A final bill's date can move, even into another FY: same number, same amounts.
+    await expect(
+      updateFreightBill(co, final.id, final.version, { gstMode: "forward_charge" }),
+    ).rejects.toThrow(/only the bill date can change/);
+    const moved = await updateFreightBill(co, final.id, final.version, { billDate: "2027-04-02" });
+    expect(moved).toMatchObject({
+      billNo: "ACM/FB/26-27/001",
+      billDate: "2027-04-02",
+      numberFy: "2026-27",
+    });
+    expect(moved.totals).toEqual(final.totals);
+    expect((await getLrById(co, id))!.billedAt).toBe("2027-04-02");
+    expect(db.audit.at(-1)?.changes).toContainEqual({
+      field: "billDate",
+      old: "2026-10-27",
+      new: "2027-04-02",
+    });
 
     await expect(
       createPayment(co, {

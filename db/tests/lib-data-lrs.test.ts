@@ -298,19 +298,20 @@ describe("POD on the database", () => {
     expect(now.deliveredAt).toBeNull();
   });
 
-  it("short / damaged need remarks; delivery can't be in the future or before the LR date", async () => {
+  it("short / damaged need remarks; any delivery date is accepted", async () => {
     const t = await fx.team();
     signIn(t.staff, t.companyId);
     const lr = await dispatched(t);
     await expect(
       pod.createPod(t.companyId, { lrId: lr.id, deliveredOn: "2026-10-20", condition: "short" }),
     ).rejects.toThrow(/Add remarks/);
-    await expect(
-      pod.createPod(t.companyId, { lrId: lr.id, deliveredOn: "2999-01-01" }),
-    ).rejects.toThrow(/future/);
-    await expect(
-      pod.createPod(t.companyId, { lrId: lr.id, deliveredOn: "2026-10-01" }),
-    ).rejects.toThrow(/before the LR date/);
+    // Before the LR date (and in the future) is only a warning on the form.
+    const early = await pod.createPod(t.companyId, { lrId: lr.id, deliveredOn: "2026-10-01" });
+    const later = await pod.updatePod(t.companyId, early.id, early.version, {
+      deliveredOn: "2999-01-01",
+    });
+    expect((await lrs.getLrById(t.companyId, lr.id))!.deliveredAt).toBe("2999-01-01T00:00:00.000Z");
+    expect(later.version).toBe(early.version + 1);
   });
 
   it("a driver records POD only on their own trip", async () => {

@@ -1,5 +1,6 @@
 // Freight bill rules shared by the mock store and the database. Pure.
 import { formatPaise } from "@/lib/format";
+import { financialYear } from "@/lib/fy";
 import { computeFreightGst } from "@/lib/tax";
 import type { FreightBill, FreightBillLine } from "@/lib/types";
 import {
@@ -76,7 +77,25 @@ export function assertBillableLrs(
   });
 }
 
-export const BILL_FINAL = "Finalised bills can't be edited — cancel and re-issue";
+export const BILL_FINAL =
+  "Finalised bills can't be edited — only the bill date can change; cancel and re-issue for the rest";
+
+/**
+ * A finalised bill with a new date. Anything else in the patch is refused; lines and totals stay
+ * as finalised, and the number keeps its FY even when the date moves to another one.
+ */
+export function applyFinalBillDate(
+  current: FreightBill,
+  p: Partial<ReturnType<typeof freightBillFields.parse>>,
+): FreightBill {
+  const other = Object.entries(p).some(([k, v]) => v !== undefined && k !== "billDate");
+  if (other) fail("", BILL_FINAL);
+  return {
+    ...current,
+    numberFy: current.numberFy ?? financialYear(current.billDate),
+    billDate: p.billDate ?? current.billDate,
+  };
+}
 export const BILL_HAS_PAYMENTS =
   "Payments are recorded against this bill — cancel or re-allocate them first";
 

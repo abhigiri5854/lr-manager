@@ -87,6 +87,68 @@ export function buildLr(companyId: string, v: ParsedLr, t: string): Lr {
   };
 }
 
+const weight = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+
+/** Everything on an LR except its dates, in a form that compares equal across mock / DB. */
+function withoutDates(lr: Lr) {
+  return {
+    fields: [
+      lr.fromPlace,
+      lr.toPlace,
+      lr.risk,
+      lr.consignorId,
+      lr.consigneeId,
+      lr.billedToId,
+      lr.gstPaidBy,
+      lr.paymentMode,
+      lr.chargedAs,
+      lr.ratePaise,
+      lr.truckId,
+      lr.driverMobile,
+      lr.remarks,
+    ].map((v) => v ?? null),
+    charges: (Object.keys(EMPTY_CHARGES) as (keyof LrCharges)[]).map((k) => lr.charges[k] ?? null),
+    items: lr.items.map((i) => [
+      i.itemId ?? null,
+      i.description,
+      i.packages,
+      weight(i.actualWeight),
+      weight(i.chargedWeight),
+      i.size ?? null,
+    ]),
+    invoices: lr.lrInvoices.map((i) => [
+      i.id,
+      i.invoiceNo,
+      i.valuePaise ?? null,
+      i.ewayBillNo ?? null,
+      i.taxInvoiceId ?? null,
+    ]),
+  };
+}
+
+/**
+ * An LR on a finalised freight bill is locked except for its dates (LR date, goods invoice dates,
+ * e-way expiry). Returns `current` with only those dates taken from `next`, or null when
+ * anything else was changed.
+ */
+export function lockedLrDates(current: Lr, next: Lr): Lr | null {
+  if (JSON.stringify(withoutDates(current)) !== JSON.stringify(withoutDates(next))) return null;
+  const dated: Lr = {
+    ...current,
+    lrDate: next.lrDate,
+    lrInvoices: current.lrInvoices.map((inv, i) => ({
+      ...inv,
+      invoiceDate: next.lrInvoices[i].invoiceDate,
+      ewayExpiresAt: next.lrInvoices[i].ewayExpiresAt,
+    })),
+  };
+  if (dated.bookedAt) assertRules(lrBookingErrors(dated));
+  return dated;
+}
+
+export const lockedOnBill = (billNo: string | null) =>
+  `LR is on freight bill ${billNo ?? ""} and is locked — only its dates can change`;
+
 /**
  * The LR after an edit. A booked LR (or one being booked) must still pass the booking rules and
  * keeps its snapshot, except for a party that was swapped for another one (`fresh` builds the
