@@ -202,7 +202,7 @@ export function invoicePrefill(
   return {
     initial: {
       invoiceNo,
-      invoiceAt: isoToIstInput(inv.invoiceAt),
+      invoiceAt: inv.invoiceAt ? isoToIstInput(inv.invoiceAt) : "",
       customerRef: inv.customerRef ?? "",
       customerRefDate: inv.customerRefDate ?? "",
       soNo: inv.soNo ?? "",

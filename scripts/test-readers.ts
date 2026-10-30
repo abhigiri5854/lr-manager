@@ -28,7 +28,8 @@ const rupees = (paise: number) => paise / 100;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** dd-mm-yyyy in IST, as the app displays it. */
-function ddmmyyyy(iso: string): string | null {
+function ddmmyyyy(iso: string | null | undefined): string | null {
+  if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   const p = new Intl.DateTimeFormat("en-GB", {
@@ -41,7 +42,14 @@ function ddmmyyyy(iso: string): string | null {
   return `${get("day")}-${get("month")}-${get("year")}`;
 }
 
-function flatten(inv: ReadInvoice): { head: Flat; items: Flat[] } {
+/** yyyy-mm-dd → dd-mm-yyyy. */
+const dayToDdmmyyyy = (day: string | null | undefined) =>
+  day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day.split("-").reverse().join("-") : null;
+
+const paiseOrNull = (v: number | null | undefined) => (typeof v === "number" ? rupees(v) : null);
+
+/** The reader's invoice, under the same field names the expected files use. */
+function flatten(inv: ReadInvoice): { head: Flat; items: Flat[]; lines: Flat[] } {
   const items = inv.lines.map((l) => {
     const net = Number(l.qty) * rupees(l.ratePaise) - rupees(l.discountPaise);
     return {
@@ -55,8 +63,15 @@ function flatten(inv: ReadInvoice): { head: Flat; items: Flat[] } {
       gst: r2((net * l.gstRateBp) / 10000),
     } satisfies Flat;
   });
-  const taxable = r2(items.reduce((s, i) => s + Number(i.amount), 0));
-  const gstTotal = r2(items.reduce((s, i) => s + Number(i.gst), 0));
+  // Printed totals when the reader got them, else computed from the lines.
+  const pr = inv.printed ?? {};
+  const computedTaxable = r2(items.reduce((s, i) => s + Number(i.amount), 0));
+  const computedGst = r2(items.reduce((s, i) => s + Number(i.gst), 0));
+  const taxable = pr.taxablePaise !== undefined ? rupees(pr.taxablePaise) : computedTaxable;
+  const gstTotal =
+    pr.sgstPaise !== undefined || pr.cgstPaise !== undefined || pr.igstPaise !== undefined
+      ? rupees((pr.sgstPaise ?? 0) + (pr.cgstPaise ?? 0) + (pr.igstPaise ?? 0))
+      : computedGst;
   const head: Flat = {
     invoiceNo: inv.invoiceNo,
     invoiceDate: ddmmyyyy(inv.invoiceAt),
@@ -66,16 +81,47 @@ function flatten(inv: ReadInvoice): { head: Flat; items: Flat[] } {
     buyerGstin: inv.billTo.gstin,
     shipToName: inv.shipTo?.name ?? null,
     shipToGstin: inv.shipTo?.gstin ?? null,
-    placeOfSupply: inv.billTo.stateCode,
+    placeOfSupply: inv.placeOfSupply ?? inv.billTo.stateCode,
     vehicleNo: inv.vehicleNo,
     transporter: inv.transporterName,
     ewayBillNo: inv.ewayBillNo,
     irn: inv.irn ?? null,
+    ackNo: inv.ackNo ?? null,
+    sac: inv.sac ?? null,
+    route: inv.route ?? null,
+    fromPlace: inv.fromPlace ?? null,
+    toPlace: inv.toPlace ?? null,
+    destination: inv.destination ?? null,
+    lrNo: inv.lrNo ?? null,
+    lrDate: dayToDdmmyyyy(inv.lrDate),
+    otherReference: inv.otherReference ?? null,
+    gstRate: inv.gstRateBp != null ? inv.gstRateBp / 100 : null,
     taxable,
     gstTotal,
-    total: r2(taxable + gstTotal),
+    igst: paiseOrNull(pr.igstPaise),
+    cgst: paiseOrNull(pr.cgstPaise),
+    sgst: paiseOrNull(pr.sgstPaise),
+    roundOff: paiseOrNull(inv.roundOffPaise),
+    total: pr.totalPaise !== undefined ? rupees(pr.totalPaise) : r2(taxable + gstTotal),
   };
-  return { head, items };
+  const lines = (inv.freightLines ?? []).map(
+    (f) =>
+      ({
+        date: dayToDdmmyyyy(f.date),
+        lrNo: f.lrNo,
+        vehicleNo: f.vehicleNo,
+        customer: f.customer,
+        from: f.from,
+        to: f.to,
+        vehicleType: f.vehicleType,
+        freight: paiseOrNull(f.freightPaise),
+        loading: paiseOrNull(f.loadingPaise),
+        unloading: paiseOrNull(f.unloadingPaise),
+        detention: paiseOrNull(f.detentionPaise),
+        amount: paiseOrNull(f.amountPaise),
+      }) satisfies Flat,
+  );
+  return { head, items, lines };
 }
 
 const norm = (v: unknown) =>
@@ -87,6 +133,8 @@ const norm = (v: unknown) =>
 function same(field: string, exp: unknown, act: unknown): boolean {
   if (exp === null || exp === undefined) return act === null || act === undefined || act === "";
   if (typeof exp === "number") {
+    // A printed 0 (e.g. igst on an intra-state bill) is also "nothing printed".
+    if (exp === 0 && (act === null || act === undefined)) return true;
     if (typeof act !== "number") return false;
     const tol = field === "total" ? TOTAL_TOLERANCE : MONEY_TOLERANCE;
     return Math.abs(exp - act) <= tol;
@@ -94,47 +142,32 @@ function same(field: string, exp: unknown, act: unknown): boolean {
   return norm(exp) === norm(act);
 }
 
+const NOT_READ = "(not read)";
+
 function compare(expected: Record<string, unknown>, doc: DocumentReadResult): Check[] {
   const checks: Check[] = [];
   const add = (field: string, exp: unknown, act: unknown) =>
     checks.push({ field, expected: exp, actual: act, ok: same(field, exp, act) });
 
-  const flat = doc.invoice ? flatten(doc.invoice) : { head: {} as Flat, items: [] as Flat[] };
-  // A rule: fields the reader has no slot for (route, sac, igst, ...) count as not read.
+  const flat = doc.invoice
+    ? flatten(doc.invoice)
+    : { head: {} as Flat, items: [] as Flat[], lines: [] as Flat[] };
   for (const [key, exp] of Object.entries(expected)) {
     if (IGNORED.has(key) || key === "items" || key === "lines") continue;
-    if (key === "gstTotal" || key === "taxable" || key === "total" || key in flat.head) {
-      add(key, exp, flat.head[key] ?? null);
-    } else if (key === "igst" || key === "cgst" || key === "sgst") {
-      // Tax split: compare the sum only once, under "gst".
-      continue;
-    } else {
-      add(key, exp, "(no slot in reader)");
-    }
-  }
-  const split = ["igst", "cgst", "sgst"].filter((k) => typeof expected[k] === "number");
-  if (split.length) {
-    const sum = split.reduce((s, k) => s + (expected[k] as number), 0);
-    checks.push({
-      field: "gst (cgst+sgst+igst)",
-      expected: r2(sum),
-      actual: flat.head.gstTotal ?? null,
-      ok: same("gst", r2(sum), flat.head.gstTotal ?? null),
-    });
+    add(key, exp, key in flat.head ? (flat.head[key] ?? null) : NOT_READ);
   }
 
-  const expItems = (expected.items ?? expected.lines) as Record<string, unknown>[] | undefined;
-  if (Array.isArray(expItems)) {
-    add("items.count", expItems.length, flat.items.length);
-    expItems.forEach((e, i) => {
-      const a = flat.items[i];
+  for (const [group, rows] of [
+    ["items", flat.items],
+    ["lines", flat.lines],
+  ] as const) {
+    const exp = expected[group];
+    if (!Array.isArray(exp)) continue;
+    add(`${group}.count`, exp.length, rows.length);
+    (exp as Record<string, unknown>[]).forEach((e, i) => {
       for (const [k, v] of Object.entries(e)) {
-        // Freight-bill lines (date, lrNo, from, to ...) have no slot; their amount does.
-        const known = k in (a ?? flat.items[0] ?? { amount: 0, description: 0 });
-        if (!known && expected.lines) {
-          if (k !== "amount") continue;
-        }
-        add(`items.${i + 1}.${k}`, v, known ? (a?.[k] ?? null) : "(no slot in reader)");
+        const row = rows[i];
+        add(`${group}.${i + 1}.${k}`, v, row ? (row[k] ?? null) : NOT_READ);
       }
     });
   }

@@ -1,6 +1,6 @@
 // What the three readers (QR, PDF text, Gemini) each try to fill in, before it is turned into the
 // ReadInvoice shape. Pure: merging and checking live in `finish-invoice.ts`.
-import type { ReadSource } from "./types";
+import type { ReadFreightLine, ReadSource } from "./types";
 
 export type DraftLine = {
   description: string;
@@ -12,6 +12,8 @@ export type DraftLine = {
   /** 1800 = 18%; null when the document doesn't show it. */
   gstRateBp: number | null;
 };
+
+export type DraftFreightLine = ReadFreightLine;
 
 export type Draft = {
   invoiceNo?: string;
@@ -28,6 +30,23 @@ export type Draft = {
   /** From the e-invoice QR: how many items and the main HSN. */
   itemCount?: number;
   mainHsn?: string;
+  shipToName?: string;
+  shipToGstin?: string;
+  transporter?: string;
+  ackNo?: string;
+  sac?: string;
+  placeOfSupply?: string;
+  otherReference?: string;
+  route?: string;
+  fromPlace?: string;
+  toPlace?: string;
+  destination?: string;
+  lrNo?: string;
+  /** yyyy-mm-dd */
+  lrDate?: string;
+  /** Signed. */
+  roundOffPaise?: number;
+  freightLines?: DraftFreightLine[];
   taxablePaise?: number;
   sgstPaise?: number;
   cgstPaise?: number;
@@ -36,7 +55,7 @@ export type Draft = {
   lines: DraftLine[];
 };
 
-export type DraftKey = keyof Omit<Draft, "lines"> | "lines";
+export type DraftKey = keyof Omit<Draft, "lines" | "freightLines"> | "lines" | "freightLines";
 
 /** Which reader supplied each field (first reader to supply it wins). */
 export type DraftSources = Partial<Record<DraftKey, ReadSource>>;
@@ -58,6 +77,13 @@ export function mergeDraft(
       }
       continue;
     }
+    if (key === "freightLines") {
+      if (!draft.freightLines?.length && extra.freightLines?.length) {
+        draft.freightLines = extra.freightLines;
+        out.freightLines = source;
+      }
+      continue;
+    }
     if (draft[key] === undefined && extra[key] !== undefined) {
       (draft as Record<string, unknown>)[key] = extra[key];
       out[key] = source;
@@ -74,10 +100,12 @@ export function missingFields(d: Draft): string[] {
   const missing: string[] = [];
   if (!d.invoiceNo) missing.push("invoiceNo");
   if (!d.invoiceDate) missing.push("invoiceDate");
+  if (!d.sellerName) missing.push("sellerName");
+  if (!d.buyerName) missing.push("buyerName");
   if (!d.sellerGstin) missing.push("sellerGstin");
   if (!d.buyerGstin) missing.push("buyerGstin");
   if (d.totalPaise === undefined) missing.push("totalPaise");
-  if (!d.lines.length) missing.push("lines");
-  else if (d.lines.some((l) => !l.hsn)) missing.push("lines.hsn");
+  if (!d.lines.length && !d.freightLines?.length) missing.push("lines");
+  else if (d.lines.some((l) => !l.hsn) && !d.freightLines?.length) missing.push("lines.hsn");
   return missing;
 }

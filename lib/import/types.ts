@@ -59,10 +59,36 @@ export type ReadInvoiceLine = {
   gstRateBp: number;
 };
 
+/** One LR row of a freight bill (a table of consignments billed together). Rupees as paise. */
+export type ReadFreightLine = {
+  /** yyyy-mm-dd */
+  date: string | null;
+  lrNo: string | null;
+  vehicleNo: string | null;
+  customer: string | null;
+  from: string | null;
+  to: string | null;
+  vehicleType: string | null;
+  freightPaise: number | null;
+  loadingPaise: number | null;
+  unloadingPaise: number | null;
+  detentionPaise: number | null;
+  amountPaise: number | null;
+};
+
+/** Totals as printed on the document (not recomputed from the lines). */
+export type ReadPrinted = {
+  taxablePaise?: number;
+  sgstPaise?: number;
+  cgstPaise?: number;
+  igstPaise?: number;
+  totalPaise?: number;
+};
+
 export type ReadInvoice = {
   invoiceNo: string;
-  /** ISO timestamp. */
-  invoiceAt: string;
+  /** ISO timestamp; null when the document's date couldn't be read (never defaulted to today). */
+  invoiceAt: string | null;
   seller: ReadParty;
   billTo: ReadParty;
   shipTo: ReadParty | null;
@@ -84,6 +110,24 @@ export type ReadInvoice = {
   /** The signed QR text (JWT) as printed, so the tax invoice PDF can print the same QR. */
   qrPayload?: string | null;
   lines: ReadInvoiceLine[];
+  // ----- extra fields, set by the real reader when printed -----
+  /** Invoice-level GST rate when every line has the same one (1800 = 18%). */
+  gstRateBp?: number | null;
+  route?: string | null;
+  fromPlace?: string | null;
+  toPlace?: string | null;
+  destination?: string | null;
+  lrNo?: string | null;
+  /** yyyy-mm-dd */
+  lrDate?: string | null;
+  ackNo?: string | null;
+  sac?: string | null;
+  placeOfSupply?: string | null;
+  otherReference?: string | null;
+  /** Signed, can be negative. */
+  roundOffPaise?: number | null;
+  printed?: ReadPrinted;
+  freightLines?: ReadFreightLine[];
 };
 
 export type ReadLr = {

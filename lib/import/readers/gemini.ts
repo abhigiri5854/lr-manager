@@ -6,7 +6,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 import type { Draft } from "../draft";
-import { textDateToIso } from "../text-parser";
+import { normaliseUom, textDateToIso } from "../text-parser";
 import type { ImportCorrection } from "../types";
 import { GEMINI_MODEL } from "./gemini-models";
 
@@ -18,7 +18,15 @@ export const geminiEnabled = (): boolean =>
 const PROMPT =
   "Read this Indian GST tax invoice. Return JSON only. Copy values exactly as printed; " +
   "use null for anything not visible. Amounts in rupees as plain numbers. Date as yyyy-mm-dd. " +
-  "GSTIN is 15 characters. One entry in lines per item row. " +
+  "GSTIN is 15 characters: copy it exactly as printed, even if it looks wrong. " +
+  "One entry in lines per item row. uom as printed (KGS, MT, TON, NOS ...). " +
+  "Names are the company names printed, never a label such as Seller or Buyer and never a GSTIN. " +
+  "route is the printed route (e.g. Jamshedpur - Patna); fromPlace/toPlace its two ends. " +
+  "shipTo* is the consignee / ship-to party when different from the buyer. " +
+  "roundOff is signed. For a freight bill / transport invoice that lists consignments (LRs) in a " +
+  "table, put EVERY table row in freightLines, in order, none skipped (date, lrNo, vehicleNo, " +
+  "customer, from, to, vehicleType, freight, loading, unloading, detention, amount; 0 when blank). " +
+  "Pages marked Original/Duplicate/Triplicate are the same invoice: read it once. " +
   "Read only what is printed in the attached picture. If it is blank, unreadable or not an invoice, " +
   "return null fields and an empty lines array. Never invent, complete or substitute example data.";
 
@@ -36,6 +44,21 @@ const RESPONSE_SCHEMA = {
     buyerGstin: nullableString,
     vehicleNo: nullableString,
     ewayBillNo: nullableString,
+    shipToName: nullableString,
+    shipToGstin: nullableString,
+    transporter: nullableString,
+    irn: nullableString,
+    ackNo: nullableString,
+    sac: nullableString,
+    placeOfSupply: nullableString,
+    otherReference: nullableString,
+    route: nullableString,
+    fromPlace: nullableString,
+    toPlace: nullableString,
+    destination: nullableString,
+    lrNo: nullableString,
+    lrDate: nullableString,
+    roundOff: nullableNumber,
     taxable: nullableNumber,
     sgst: nullableNumber,
     cgst: nullableNumber,
@@ -56,6 +79,26 @@ const RESPONSE_SCHEMA = {
         required: ["description", "qty", "rate"],
       },
     },
+    freightLines: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          date: nullableString,
+          lrNo: nullableString,
+          vehicleNo: nullableString,
+          customer: nullableString,
+          from: nullableString,
+          to: nullableString,
+          vehicleType: nullableString,
+          freight: nullableNumber,
+          loading: nullableNumber,
+          unloading: nullableNumber,
+          detention: nullableNumber,
+          amount: nullableNumber,
+        },
+      },
+    },
   },
   required: ["lines"],
 };
@@ -69,6 +112,21 @@ const reply = z.object({
   buyerGstin: z.string().nullish(),
   vehicleNo: z.string().nullish(),
   ewayBillNo: z.string().nullish(),
+  shipToName: z.string().nullish(),
+  shipToGstin: z.string().nullish(),
+  transporter: z.string().nullish(),
+  irn: z.string().nullish(),
+  ackNo: z.string().nullish(),
+  sac: z.string().nullish(),
+  placeOfSupply: z.string().nullish(),
+  otherReference: z.string().nullish(),
+  route: z.string().nullish(),
+  fromPlace: z.string().nullish(),
+  toPlace: z.string().nullish(),
+  destination: z.string().nullish(),
+  lrNo: z.string().nullish(),
+  lrDate: z.string().nullish(),
+  roundOff: z.number().nullish(),
   taxable: z.number().nullish(),
   sgst: z.number().nullish(),
   cgst: z.number().nullish(),
@@ -84,6 +142,24 @@ const reply = z.object({
       gstRatePercent: z.number().nullish(),
     }),
   ),
+  freightLines: z
+    .array(
+      z.object({
+        date: z.string().nullish(),
+        lrNo: z.string().nullish(),
+        vehicleNo: z.string().nullish(),
+        customer: z.string().nullish(),
+        from: z.string().nullish(),
+        to: z.string().nullish(),
+        vehicleType: z.string().nullish(),
+        freight: z.number().nullish(),
+        loading: z.number().nullish(),
+        unloading: z.number().nullish(),
+        detention: z.number().nullish(),
+        amount: z.number().nullish(),
+      }),
+    )
+    .nullish(),
 });
 
 const paise = (rupees: number | null | undefined) =>
@@ -96,7 +172,7 @@ function toDraft(r: z.infer<typeof reply>): Draft {
     lines: r.lines.map((l) => ({
       description: l.description.trim(),
       hsn: l.hsn?.replace(/\D/g, "") || null,
-      uom: l.uom?.trim().toUpperCase() || null,
+      uom: normaliseUom(l.uom),
       qty: String(l.qty),
       ratePaise: Math.round(l.rate * 100),
       gstRateBp: typeof l.gstRatePercent === "number" ? Math.round(l.gstRatePercent * 100) : null,
@@ -117,7 +193,43 @@ function toDraft(r: z.infer<typeof reply>): Draft {
   set("sgstPaise", paise(r.sgst));
   set("cgstPaise", paise(r.cgst));
   set("igstPaise", paise(r.igst));
-  set("totalPaise", paise(r.total));
+  // 0 is a missed column, not a printed total.
+  set("totalPaise", r.total ? paise(r.total) : undefined);
+  const txt = (v: string | null | undefined) => v?.trim() || undefined;
+  set("shipToName", txt(r.shipToName));
+  set("shipToGstin", txt(r.shipToGstin));
+  set("transporter", txt(r.transporter));
+  set("irn", txt(r.irn)?.toLowerCase());
+  set("ackNo", r.ackNo?.replace(/\D/g, ""));
+  set("sac", r.sac?.replace(/\D/g, ""));
+  set("placeOfSupply", txt(r.placeOfSupply));
+  set("otherReference", txt(r.otherReference));
+  set("route", txt(r.route));
+  set("fromPlace", txt(r.fromPlace));
+  set("toPlace", txt(r.toPlace));
+  set("destination", txt(r.destination));
+  set("lrNo", txt(r.lrNo));
+  set("lrDate", r.lrDate ? (textDateToIso(r.lrDate) ?? undefined) : undefined);
+  if (typeof r.roundOff === "number" && Number.isFinite(r.roundOff) && r.roundOff !== 0)
+    draft.roundOffPaise = Math.round(r.roundOff * 100);
+  if (r.freightLines?.length) {
+    const p = (v: number | null | undefined) =>
+      typeof v === "number" && Number.isFinite(v) ? Math.round(v * 100) : null;
+    draft.freightLines = r.freightLines.map((f) => ({
+      date: f.date ? textDateToIso(f.date) : null,
+      lrNo: txt(f.lrNo) ?? null,
+      vehicleNo: txt(f.vehicleNo) ?? null,
+      customer: txt(f.customer) ?? null,
+      from: txt(f.from) ?? null,
+      to: txt(f.to) ?? null,
+      vehicleType: txt(f.vehicleType) ?? null,
+      freightPaise: p(f.freight),
+      loadingPaise: p(f.loading),
+      unloadingPaise: p(f.unloading),
+      detentionPaise: p(f.detention),
+      amountPaise: p(f.amount),
+    }));
+  }
   return draft;
 }
 
@@ -146,6 +258,32 @@ export function correctionHints(corrections: ImportCorrection[]): string {
   );
 }
 
+/** Output budget: a freight bill with 30+ LR rows plus the header is far over the default. */
+const MAX_OUTPUT_TOKENS = 32768;
+/** Waits before each retry after a 503 / 429 (so up to 3 calls in all). */
+const BACKOFF_MS = [2000, 5000];
+
+/** A temporary Google-side failure: overloaded (503) or rate limited (429). */
+export function isTransientGeminiError(e: unknown): boolean {
+  const o = e as { status?: unknown; code?: unknown } | null;
+  const status = o?.status ?? o?.code;
+  if (status === 503 || status === 429) return true;
+  const msg = e instanceof Error ? e.message : String(e);
+  return /\b(503|429)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded/i.test(msg);
+}
+
+async function withBackoff<T>(call: () => Promise<T>, model: string): Promise<T> {
+  for (let retry = 0; ; retry++) {
+    try {
+      return await call();
+    } catch (e) {
+      if (!isTransientGeminiError(e) || retry >= BACKOFF_MS.length) throw e;
+      console.warn("[import] gemini busy, retrying", { model, retry: retry + 1 });
+      await new Promise((r) => setTimeout(r, BACKOFF_MS[retry]));
+    }
+  }
+}
+
 /**
  * @param images JPEGs, already compressed to 1600 px (lib/import/readers/image.ts) — one per page, at most two.
  * @param model which Gemini model reads it (default: the cheap first-read model)
@@ -165,17 +303,22 @@ export async function readWithGemini(
     { text: PROMPT + correctionHints(corrections) },
   ];
 
-  // One retry, and only for an answer that isn't valid JSON for the schema (never for API errors).
+  // One more try for an answer that isn't valid JSON for the schema; 503 / 429 are retried in withBackoff.
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const res = await ai.models.generateContent({
+    const res = await withBackoff(
+      () =>
+        ai.models.generateContent({
+          model,
+          contents: [{ role: "user", parts }],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: RESPONSE_SCHEMA,
+            temperature: 0,
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
+          },
+        }),
       model,
-      contents: [{ role: "user", parts }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        temperature: 0,
-      },
-    });
+    );
     const u = res.usageMetadata;
     console.info("[import] gemini", {
       model,

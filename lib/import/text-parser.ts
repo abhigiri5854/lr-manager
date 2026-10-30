@@ -2,12 +2,11 @@
 // it can find with plain patterns and leaves the rest out. Nothing here is trusted on its own —
 // finish-invoice.ts checks GSTIN checksums and reconciles item rows against the printed totals.
 // Pure: no I/O, unit-testable.
-import { gstinError, normaliseGstin, normaliseVehicleNo, isValidVehicleNo } from "@/lib/validators/common";
+import { normaliseGstin, normaliseVehicleNo, isValidVehicleNo } from "@/lib/validators/common";
 import type { Draft, DraftLine } from "./draft";
 
 const GSTIN_RE = /\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z][A-Z0-9][A-Z0-9]\b/g;
 const AMOUNT_RE = /\d[\d,]*\.\d{1,2}\b/g;
-const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
 /** "1,84,902.58" → 18490258 paise. */
 export function amountToPaise(text: string): number | null {
@@ -15,15 +14,40 @@ export function amountToPaise(text: string): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
 
-/** dd-mm-yyyy, dd/mm/yyyy, dd.mm.yyyy or dd-Mon-yyyy → yyyy-mm-dd. */
+const MONTH_FULL = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+/**
+ * dd-mm-yyyy, dd/mm/yyyy, dd.mm.yyyy, dd-Mon-yyyy, dd-Mon-yy or "18 September 2026" → yyyy-mm-dd.
+ * null when it isn't a real date; callers must not substitute today.
+ */
 export function textDateToIso(text: string): string | null {
-  const m = text.match(/\b(\d{1,2})[-/. ]([A-Za-z]{3,9}|\d{1,2})[-/. ](\d{4}|\d{2})\b/);
+  const m = text.match(/\b(\d{1,2})(?:st|nd|rd|th)?[-/.,\s]+([A-Za-z]{3,9}|\d{1,2})\.?[-/.,\s]+(\d{4}|\d{2})\b/);
   if (!m) return null;
-  const month = /^\d+$/.test(m[2]) ? Number(m[2]) : MONTHS.indexOf(m[2].slice(0, 3).toLowerCase()) + 1;
+  let month: number;
+  if (/^\d+$/.test(m[2])) month = Number(m[2]);
+  else {
+    const name = m[2].toLowerCase();
+    const i = MONTH_FULL.findIndex((f) => f.startsWith(name) && name.length >= 3);
+    month = i + 1;
+  }
   const day = Number(m[1]);
   const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (month < 1 || month > 12 || day < 1 || year < 1990 || year > 2100) return null;
+  if (day > new Date(Date.UTC(year, month, 0)).getUTCDate()) return null;
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** "KGS" → "kg", "MT" / "TON" / "TONNES" → "ton"; any other unit is only upper-cased. */
+export function normaliseUom(text: string | null | undefined): string | null {
+  const u = text?.trim();
+  if (!u) return null;
+  const k = u.toLowerCase().replace(/[.\s]/g, "");
+  if (["kg", "kgs", "kilogram", "kilograms", "kilo"].includes(k)) return "kg";
+  if (["mt", "mts", "ton", "tons", "tonne", "tonnes", "tn"].includes(k)) return "ton";
+  return u.toUpperCase();
 }
 
 const lastAmount = (line: string): number | null => {
@@ -41,7 +65,7 @@ function labelled(lines: string[], label: RegExp): number | undefined {
   return undefined;
 }
 
-function findInvoiceNo(text: string): string | undefined {
+export function findInvoiceNo(text: string): string | undefined {
   const m = text.match(
     /(?:tax\s+)?invoice\s*(?:no\.?|number|#)\s*[:\-.]?\s*([A-Z0-9][A-Z0-9/\-]{2,24})/i,
   );
@@ -50,16 +74,23 @@ function findInvoiceNo(text: string): string | undefined {
 }
 
 function findInvoiceDate(text: string): string | undefined {
-  const m = text.match(/(?:invoice\s*)?date(?:d)?\s*[:\-]?\s*([^\n]{0,24})/i);
-  return (m && textDateToIso(m[1])) || undefined;
+  // The first "date" label whose value reads as a date ("Due date" and "Date of supply" come later or fail).
+  for (const m of text.matchAll(/(?<!due\s)(?:invoice\s*|bill\s*)?date(?:d)?\s*[:\-]?\s*([^\n]{0,28})/gi)) {
+    const iso = textDateToIso(m[1]);
+    if (iso) return iso;
+  }
+  return undefined;
 }
 
-/** First valid-looking GSTIN is the seller; the first after a buyer label is the buyer. */
+/**
+ * First GSTIN-shaped value is the seller; the first after a buyer label is the buyer. Values are
+ * kept as printed: the checksum is checked later and only marks the party "check".
+ */
 function findGstins(text: string): Pick<Draft, "sellerGstin" | "buyerGstin"> {
   const found: { gstin: string; at: number }[] = [];
   for (const m of text.matchAll(GSTIN_RE)) {
     const g = normaliseGstin(m[0]);
-    if (gstinError(g) === null && !found.some((f) => f.gstin === g)) found.push({ gstin: g, at: m.index });
+    if (!found.some((f) => f.gstin === g)) found.push({ gstin: g, at: m.index });
   }
   if (!found.length) return {};
   const seller = found[0];
@@ -102,7 +133,7 @@ function findItemRows(lines: string[]): DraftLine[] {
     rows.push({
       description: description.trim(),
       hsn,
-      uom: uom ? uom.toUpperCase() : null,
+      uom: normaliseUom(uom),
       qty,
       ratePaise,
       gstRateBp: total !== undefined ? Math.round(total * 100) : null,
@@ -133,9 +164,11 @@ export function parseInvoiceText(text: string): Draft {
   set("sgstPaise", labelled(lines, /\bsgst\b(?!.*%.*%)/i));
   set("cgstPaise", labelled(lines, /\bcgst\b(?!.*%.*%)/i));
   set("igstPaise", labelled(lines, /\bigst\b(?!.*%.*%)/i));
-  set(
-    "totalPaise",
-    labelled(lines, /(?:grand\s*total|total\s*invoice\s*(?:value|amount)|invoice\s*total|net\s*(?:amount|payable))/i),
+  // A total of 0 is a missed column, not a printed total.
+  const total = labelled(
+    lines,
+    /(?:grand\s*total|total\s*invoice\s*(?:value|amount)|invoice\s*total|net\s*(?:amount|payable))/i,
   );
+  set("totalPaise", total && total > 0 ? total : undefined);
   return draft;
 }

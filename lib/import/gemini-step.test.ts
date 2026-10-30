@@ -20,8 +20,8 @@ describe("draftProblems", () => {
   it("flags totals that don't match the lines", () => {
     expect(draftProblems(draft({ totalPaise: 999900 }))).toEqual(["totals"]);
   });
-  it("flags a GSTIN that fails its checksum, but not an absent one", () => {
-    expect(draftProblems({ lines: [], sellerGstin: "10AABCA7061K1ZX" })).toEqual(["sellerGstin"]);
+  it("does not flag a GSTIN that fails its checksum (kept as printed)", () => {
+    expect(draftProblems({ lines: [], sellerGstin: "10AABCA7061K1ZX" })).toEqual([]);
     expect(draftProblems({ lines: [] })).toEqual([]);
   });
 });
@@ -60,7 +60,6 @@ describe("readWithRetry", () => {
     });
     expect(calls).toBe(2);
     expect(r.draft.totalPaise).toBe(999900);
-    expect(r.draft.sellerGstin).toBeUndefined();
   });
 
   it("doesn't retry for a problem the QR supplied", async () => {

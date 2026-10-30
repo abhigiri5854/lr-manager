@@ -3,6 +3,8 @@
 //   1. e-invoice QR (jsQR)     — local, fields are "sure"
 //   2. PDF text + rules        — local, digital PDFs only
 //   3. Gemini                  — one paid call, only with AI_READER=gemini and GEMINI_API_KEY
+// Fields are merged one by one with QR first, then Gemini, then the text rules (which are only
+// used for what the other two left empty).
 // Everything it returns is checked by finish-invoice.ts and still needs the user to review and Save.
 // Excel / CSV go to the SheetJS reader (excel-reader.ts), with one optional Gemini call for columns
 // it couldn't place.
@@ -25,7 +27,7 @@ const QR_SCALE = 4;
 /** Pages looked at for a QR and for text; Gemini gets at most the first two. */
 const QR_PAGES = 3;
 const TEXT_PAGES = 5;
-const GEMINI_PAGES = 2;
+const GEMINI_PAGES = 4;
 /** Less text than this on a PDF means a scan: skip the rules. */
 const MIN_TEXT_CHARS = 60;
 
@@ -96,7 +98,9 @@ async function readDocument(file: ReaderFile, hints?: DocumentHints) {
     if (qr) take(qrDraft(qr), "qr");
 
     // 2. PDF text. Original/Duplicate/Triplicate copies of a page are one invoice: read the first.
+    //    Kept apart: its fields rank below Gemini's and are merged last.
     let pdfText: string | null = null;
+    let textDraft: Draft | null = null;
     let pageNos = pdf ? Array.from({ length: pdf.pages }, (_, i) => i + 1) : [];
     if (pdf) {
       const texts = await attempt("pdf text", () => pdf.pageTexts(TEXT_PAGES), errors);
@@ -104,16 +108,17 @@ async function readDocument(file: ReaderFile, hints?: DocumentHints) {
         const keep = distinctPages(texts);
         pageNos = [...keep, ...pageNos.filter((n) => n > texts.length)];
         const text = keep.map((n) => texts[n - 1]).join("\n");
-        if (missingFields(draft).length && text.replace(/\s/g, "").length >= MIN_TEXT_CHARS) {
+        if (text.replace(/\s/g, "").length >= MIN_TEXT_CHARS) {
           pdfText = text;
-          take(parseInvoiceText(text), "pdf_text");
+          textDraft = parseInvoiceText(text);
         }
       }
     }
 
     // 3. Gemini, only if something required is still empty: flash-lite first, and gemini-3.5-flash
     //    once more if the answer fails our checks (GSTIN checksum, totals)
-    if (missingFields(draft).length && geminiEnabled()) {
+    const withText = textDraft ? mergeDraft(draft, sources, textDraft, "pdf_text") : { draft };
+    if (missingFields(withText.draft).length && geminiEnabled()) {
       const step = await attempt(
         "gemini",
         async () => {
@@ -126,10 +131,10 @@ async function readDocument(file: ReaderFile, hints?: DocumentHints) {
             : [await compressForAi(file.bytes)];
           // This seller's recent corrections (seller known from the QR / PDF text) go in as hints.
           const corrections =
-            draft.sellerGstin && hints?.correctionsFor
+            withText.draft.sellerGstin && hints?.correctionsFor
               ? ((await attempt(
                   "corrections",
-                  () => hints.correctionsFor!(draft.sellerGstin!, 10),
+                  () => hints.correctionsFor!(withText.draft.sellerGstin!, 10),
                   errors,
                 )) ?? [])
               : [];
@@ -146,6 +151,8 @@ async function readDocument(file: ReaderFile, hints?: DocumentHints) {
         if (step.used) readBy.push("gemini");
       }
     }
+    // Whatever QR and Gemini left empty comes from the text rules.
+    if (textDraft) take(textDraft, "pdf_text");
 
     const result = finishInvoice(draft, sources, readBy, pdf ? pageNos.length : 1);
     // Nothing read and a step threw: show the real error instead of "couldn't read an invoice".
