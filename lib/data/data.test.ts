@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setTestUser } from "@/lib/test-setup";
 import { db, resetStore } from "./_store";
 
 // Tests run outside a Next.js request, where connection() would throw.
@@ -11,7 +12,7 @@ import {
   listUnbilledLrs,
   updateFreightBill,
 } from "./bills";
-import { getCompany, listCompanies, updateCompany } from "./companies";
+import { getCompany, updateCompany } from "./companies";
 import { ConflictError, ValidationError } from "./errors";
 import { getTaxInvoiceById, listLrsForInvoice, listTaxInvoices } from "./invoices";
 import {
@@ -34,6 +35,8 @@ import { findTruckByNumber, listTruckSuggestions, listTrucks } from "./trucks";
 // Sample ids are looked up by business key so the test doesn't import lib/mock.
 const acmId = () => db.companies.find((c) => c.label === "ACM Logistics")!.id;
 const rsId = () => db.companies.find((c) => c.label === "RS Logistics")!.id;
+// A login belongs to one company, so RS data is reached by signing in as the RS owner.
+const asRs = () => setTestUser(db.users.find((u) => u.name === "RS Owner")!.id);
 const lrId = (no: string) => db.lrs.find((l) => l.lrNo === no)!.id;
 const partyId = (name: string) => db.parties.find((p) => p.name === name)!.id;
 
@@ -42,6 +45,7 @@ beforeEach(() => resetStore());
 describe("company scoping", () => {
   it("only returns the asked company's rows", async () => {
     expect((await listLrs(acmId())).total).toBe(2);
+    await asRs();
     expect((await listLrs(rsId())).total).toBe(0);
     // RS has only its own "self" party.
     expect((await listParties(rsId())).rows.map((p) => p.isSelf)).toEqual([true]);
@@ -49,14 +53,12 @@ describe("company scoping", () => {
   });
 
   it("rejects references to another company's records", async () => {
+    await asRs();
     await expect(
       createLr(rsId(), { consignorId: partyId("Ashirvad Pipes Pvt Ltd") }),
     ).rejects.toThrow(ValidationError);
   });
 
-  it("lists both companies for the owner", async () => {
-    expect((await listCompanies()).map((c) => c.label)).toEqual(["ACM Logistics", "RS Logistics"]);
-  });
 });
 
 describe("sample LRs", () => {
@@ -133,6 +135,7 @@ describe("numbering", () => {
   });
 
   it("refuses an LR until the company sets its numbering", async () => {
+    await asRs();
     await expect(createLr(rsId(), {})).rejects.toThrow(/next LR number/);
   });
 
@@ -170,6 +173,7 @@ describe("updates", () => {
 
   it("fills PAN and state from GSTIN for a new party", async () => {
     // (RS's own GSTIN belongs to its self party, so use another valid one.)
+    await asRs();
     const p = await createParty(rsId(), { name: "New Co", gstin: "10AAXFA2859G1ZD" });
     expect(p.pan).toBe("AAXFA2859G");
     expect(p.stateCode).toBe("10");
@@ -269,6 +273,7 @@ describe("New / Edit LR form", () => {
     expect(await peekNextLrNo(acmId(), "2026-10-28")).toBe("19021");
     // A new financial year carries on from the latest series, like allocation does.
     expect(await peekNextLrNo(acmId(), "2027-05-01")).toBe("19021");
+    await asRs();
     expect(await peekNextLrNo(rsId())).toBeNull();
   });
 
@@ -337,6 +342,7 @@ describe("duplicate goods invoices", () => {
   it("finds nothing for a new number, a blank number or another company", async () => {
     expect(await findLrsWithInvoice(acmId(), { invoiceNo: "NEW-1" })).toEqual([]);
     expect(await findLrsWithInvoice(acmId(), { invoiceNo: "  " })).toEqual([]);
+    await asRs();
     expect(await findLrsWithInvoice(rsId(), { invoiceNo: "SQ2604002116" })).toEqual([]);
   });
 

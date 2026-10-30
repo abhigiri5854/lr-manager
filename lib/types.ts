@@ -64,7 +64,9 @@ export type Company = {
   updatedAt: IsoDateTime;
   cancelledAt?: IsoDateTime;
   version: number;
-  /** "ACM Logistics" (company switcher) */
+  /** Login code (letters / digits, unique), typed on the login page */
+  code: string;
+  /** "ACM Logistics" (sidebar "Working as") */
   label: string;
   /** "ACM LOGISTICS" (printed) */
   name: string;

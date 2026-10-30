@@ -98,7 +98,14 @@ const prefix = (max: number) =>
         .regex(/^[A-Z0-9/-]*$/, "Only A-Z, 0-9, / and -"),
     );
 
+/** Login code: letters and digits, 3–10, stored upper-case. */
+export const companyCodeSchema = z
+  .string()
+  .transform((v) => v.replace(/\s+/g, "").toUpperCase())
+  .pipe(z.string().regex(/^[A-Z0-9]{3,10}$/, "3–10 letters or digits, no spaces"));
+
 export const companyFields = z.object({
+  code: companyCodeSchema,
   label: text(60),
   name: text(200),
   city: text(60),
@@ -140,8 +147,9 @@ export const companyFields = z.object({
 export const companyPatchSchema = companyFields.partial();
 export type CompanyPatch = z.input<typeof companyPatchSchema>;
 
-/** "+ Add company": the minimum needed to issue documents. */
+/** "Register a new company" (login page): company details plus the first Owner's login. */
 export const companyCreateSchema = companyFields.pick({
+  code: true,
   name: true,
   label: true,
   city: true,
@@ -149,6 +157,14 @@ export const companyCreateSchema = companyFields.pick({
   pan: true,
 });
 export type CompanyCreateInput = z.input<typeof companyCreateSchema>;
+
+export const registerCompanySchema = companyCreateSchema.extend({
+  ownerName: text(100),
+  ownerMobile: mobileSchema,
+  ownerEmail: optional(z.email("Email looks wrong").transform((v) => v.toLowerCase())),
+  password: z.string().min(8, "At least 8 characters").max(72, "At most 72 characters"),
+});
+export type RegisterCompanyInput = z.input<typeof registerCompanySchema>;
 
 export function companyRuleErrors(c: { gstin: string; pan: string }): RuleError[] {
   return panMatchesGstin(c.pan, c.gstin)

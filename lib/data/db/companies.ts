@@ -1,4 +1,4 @@
-// Companies, number series and "+ Add company" on the database (DATA_SOURCE=db).
+// Companies and number series on the database (DATA_SOURCE=db).
 // Same behaviour as the mock half of ../companies.ts. The self party follows the company by
 // trigger (f_self_party); its change is audited here, as the mock does.
 import { financialYear } from "@/lib/fy";
@@ -6,18 +6,18 @@ import type { Company, Party } from "@/lib/types";
 import type { z } from "zod";
 import {
   companyRuleErrors,
-  type companyCreateSchema,
   type companyPatchSchema,
 } from "@/lib/validators/company";
 import { assertRules, auditChanges, fail, today } from "../_store";
 import { ConflictError, NotFoundError } from "../errors";
 import type { NumberingState } from "../companies";
 import { withCommit, withUser, withUserRead, type Tx } from "./conn";
-import { audit, toCompany, toMembership, toParty, type Row } from "./rows";
+import { audit, toCompany, toParty, type Row } from "./rows";
 import { pathFromUrl } from "./storage";
 import { columns, type Fragment } from "./write";
 
 const COMPANY_COLUMNS: Partial<Record<keyof Company, string>> = {
+  code: "code",
   label: "label",
   name: "name",
   city: "city",
@@ -59,16 +59,6 @@ const COMPANY_SELECT = (tx: Tx, fy: string) =>
 
 const company = (r: Row) => toCompany(r, r.next_lr_no === null ? null : Number(r.next_lr_no));
 
-export async function listCompanies(): Promise<Company[]> {
-  return withUserRead(async (tx) => {
-    const rows = await tx`${COMPANY_SELECT(tx, fyNow())}
-      join memberships m on m.company_id = c.id
-     where m.user_id = auth.uid() and m.cancelled_at is null and c.cancelled_at is null
-     order by m.created_at, m.id`;
-    return rows.map(company);
-  });
-}
-
 export async function getCompany(companyId: string): Promise<Company | null> {
   return withUserRead(async (tx) => {
     const [r] = await tx`${COMPANY_SELECT(tx, fyNow())} where c.id = ${companyId}`;
@@ -96,11 +86,6 @@ export async function getNumbering(companyId: string): Promise<NumberingState> {
       taxInvoice: both("tax_invoice"),
     };
   });
-}
-
-async function assertGstinFree(tx: Tx, gstin: string, exceptId?: string) {
-  const [r] = await tx`select app.company_gstin_taken(${gstin}, ${exceptId ?? null}) as taken`;
-  if (r.taken) fail("gstin", "A company with this GSTIN already exists");
 }
 
 function imagePath(
@@ -155,13 +140,18 @@ export async function updateCompany(
             where ${fields.gstin} is distinct from (select gstin from cur)
               and app.company_gstin_taken(${fields.gstin}, ${companyId})`
       : tx`select null::text as field, null::text as msg where false`;
+    const codeCheck = fields.code
+      ? tx`select 'code'::text as field, 'This company code is already taken'::text as msg
+            where ${fields.code} is distinct from (select code from cur)
+              and app.company_code_taken(${fields.code}, ${companyId})`
+      : tx`select null::text as field, null::text as msg where false`;
     // Our own party before the trigger touches it (sent first, same round trip).
     const [[selfBefore], rows] = await Promise.all([
       tx`select * from parties where company_id = ${companyId} and is_self`,
       tx`
         with cur as (select c.*, app.peek_number(c.id, 'lr', ${fy}) as next_lr_no from companies c
                       where c.id = ${companyId} for update of c),
-             checks as (${gstinCheck}),
+             checks as (${gstinCheck} union all ${codeCheck}),
              upd as (${upd})
         select 'before' as k,
                (select json_agg(json_build_object('field', field, 'msg', msg)) from checks) as problems,
@@ -221,24 +211,3 @@ const selfMirror = (tx: Tx, a: Fragment) => tx`,
   ${a}.name as self_name, nullif(${a}.city, '') as self_place, ${a}.gstin as self_gstin,
   ${a}.pan as self_pan, ${a}.mobile1 as self_phone, nullif(${a}.office, '') as self_address,
   left(${a}.gstin, 2) as self_state_code, app.self_party_pincode(${a}.office) as self_pincode`;
-
-/**
- * "+ Add company": app.create_company makes the company, its Owner membership (the current
- * user), its self party and this FY's number series in one transaction.
- */
-export async function createCompany(v: z.output<typeof companyCreateSchema>): Promise<Company> {
-  return withUser(async (tx) => {
-    await assertGstinFree(tx, v.gstin);
-    const [{ id }] = await tx`select app.create_company(${v.label}, ${v.name}, ${v.city},
-                                                         ${v.gstin}, ${v.pan}) as id`;
-    const [c] = await tx`${COMPANY_SELECT(tx, fyNow())} where c.id = ${id}`;
-    const created = company(c);
-    audit(tx, id, "companies", id, "create", null, created);
-    const [m] =
-      await tx`select * from memberships where company_id = ${id} and user_id = auth.uid()`;
-    audit(tx, id, "memberships", m.id, "create", null, toMembership(m));
-    const [self] = await tx`select * from parties where company_id = ${id} and is_self`;
-    audit(tx, id, "parties", self.id, "create", null, toParty(self));
-    return created;
-  });
-}

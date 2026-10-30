@@ -1,10 +1,8 @@
 import { financialYear } from "@/lib/fy";
-import type { Company, Membership } from "@/lib/types";
+import type { Company } from "@/lib/types";
 import {
-  companyCreateSchema,
   companyPatchSchema,
   companyRuleErrors,
-  type CompanyCreateInput,
   type CompanyPatch,
 } from "@/lib/validators/company";
 import {
@@ -12,34 +10,22 @@ import {
   clone,
   db,
   fail,
-  newId,
   now,
   parseInput,
   peekNumber,
   raiseNumber,
   today,
   writeAudit,
-  authorStamp,
 } from "./_store";
 import { ConflictError, NotFoundError } from "./errors";
 import { syncSelfParty } from "./parties";
 import * as dbc from "./db/companies";
-import { assertCan, getCurrentUserId } from "./session";
+import { assertCan } from "./session";
 import { onDatabase } from "./source";
 
 /** nextLrNo always comes from the number series (single source of truth). */
 function withNextLrNo(c: Company): Company {
   return { ...clone(c), nextLrNo: peekNumber(c.id, "lr", financialYear(today())) };
-}
-
-/** Companies the current user can work as. */
-export async function listCompanies(): Promise<Company[]> {
-  if (onDatabase()) return dbc.listCompanies();
-  const userId = await getCurrentUserId();
-  const ids = new Set(
-    db.memberships.filter((m) => m.userId === userId && !m.cancelledAt).map((m) => m.companyId),
-  );
-  return db.companies.filter((c) => ids.has(c.id) && !c.cancelledAt).map(withNextLrNo);
 }
 
 export async function getCompany(companyId: string): Promise<Company | null> {
@@ -103,6 +89,9 @@ export async function updateCompany(
   };
   assertRules(companyRuleErrors(next));
   if (fields.gstin && fields.gstin !== current.gstin) assertGstinFree(fields.gstin, companyId);
+  if (fields.code && fields.code !== current.code && codeTaken(fields.code, companyId)) {
+    fail("code", "This company code is already taken");
+  }
 
   const fy = financialYear(today());
   const before = peekNumber(companyId, "lr", fy);
@@ -124,77 +113,12 @@ export async function updateCompany(
   return withNextLrNo(next);
 }
 
-function assertGstinFree(gstin: string, exceptId?: string) {
+export function codeTaken(code: string, exceptId?: string): boolean {
+  return db.companies.some((c) => c.code === code && c.id !== exceptId && !c.cancelledAt);
+}
+
+export function assertGstinFree(gstin: string, exceptId?: string) {
   if (db.companies.some((c) => c.gstin === gstin && c.id !== exceptId && !c.cancelledAt)) {
     fail("gstin", "A company with this GSTIN already exists");
   }
-}
-
-/**
- * "+ Add company": creates the company, its self party and its number series for this FY,
- * and makes the current user its Owner. Everything else starts blank or at safe defaults.
- */
-export async function createCompany(input: CompanyCreateInput): Promise<Company> {
-  const userId = await getCurrentUserId();
-  const v = parseInput(companyCreateSchema, input);
-  assertRules(companyRuleErrors(v));
-  if (onDatabase()) return dbc.createCompany(v);
-  assertGstinFree(v.gstin);
-
-  const t = now();
-  const company: Company = {
-    id: newId(),
-    createdAt: t,
-    updatedAt: t,
-    version: 1,
-    ...v,
-    office: "",
-    email: null,
-    website: null,
-    mobile1: null,
-    mobile2: null,
-    udyam: null,
-    bank: null,
-    invoiceTitle: "FREIGHT INVOICE",
-    invoiceNote: null,
-    freightBillPrefix: "",
-    taxInvoicePrefix: "",
-    invoiceRoundOff: true,
-    numberingResetsYearly: true,
-    freightGstRateBp: 500,
-    signatoryName: null,
-    lrPrefix: "",
-    nextLrNo: null,
-    jurisdiction: null,
-    podDays: null,
-    podPenaltyPerDay: null,
-    lrCopies: ["Consignor", "Consignee", "Driver", "Office"],
-    detention: null,
-    lrTerms: null,
-    logoUrl: null,
-    useLogoWatermark: false,
-    signatureUrl: null,
-  };
-  db.companies.push(company);
-  writeAudit(company.id, "companies", company.id, "create", null, company);
-
-  const membership: Membership = {
-    id: newId(),
-    companyId: company.id,
-    userId,
-    role: "owner",
-    createdAt: t,
-    updatedAt: t,
-    version: 1,
-    ...authorStamp(),
-  };
-  db.memberships.push(membership);
-  writeAudit(company.id, "memberships", membership.id, "create", null, membership);
-
-  const fy = financialYear(today());
-  for (const series of ["lr", "freight_bill", "tax_invoice"] as const) {
-    db.numberSeries.push({ companyId: company.id, series, fy, nextValue: 1 });
-  }
-  syncSelfParty(company.id);
-  return withNextLrNo(company);
 }

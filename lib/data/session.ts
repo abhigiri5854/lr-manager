@@ -7,20 +7,19 @@ import type { Role } from "@/lib/types";
 import { normaliseMobile } from "@/lib/validators/common";
 import { db, now, passwordMatches, setAuditActor } from "./_store";
 import { asAnon, asUser, setUserSource } from "./db/conn";
-import { ForbiddenError, NotFoundError } from "./errors";
+import { ForbiddenError } from "./errors";
 import { onDatabase } from "./source";
 
 // Mock login until Supabase Auth: the session cookie holds the user id plus an HMAC so it
-// can't be forged. The company chosen in "Working as" is a second cookie, re-checked against
-// the user's memberships on every read. Everything here waits for the request, so pages that
-// use it render per request.
+// can't be forged. A login belongs to exactly one company (login = company code + mobile / email
+// + password), so there is no company cookie and no switching. Everything here waits for the
+// request, so pages that use it render per request.
 //
 // DATA_SOURCE=db: the user and their memberships come from the database (read as that user,
 // under RLS) and the password is checked by Supabase Auth; the session itself is still this
 // cookie until prompt 20.
 
 export const SESSION_COOKIE = "lrm_session";
-const COMPANY_COOKIE = "lrm_company";
 const WEEK = 60 * 60 * 24 * 7;
 
 // SESSION_SECRET in production; otherwise one random secret per server process (dev restarts
@@ -46,7 +45,7 @@ function readSessionCookie(value: string | undefined): string | null {
   return given.length === expected.length && timingSafeEqual(given, expected) ? userId : null;
 }
 
-/** A user with their active memberships in active companies, oldest first. */
+/** A user with their active membership in an active company (at most one). */
 type Account = {
   user: { id: string; name: string; mobile: string | null; email: string | null };
   memberships: { companyId: string; role: Role }[];
@@ -126,11 +125,11 @@ async function cookieUserId(): Promise<string | null> {
   return readSessionCookie((await cookies()).get(SESSION_COOKIE)?.value);
 }
 
-// lib/data/db/conn.ts runs every query as this user, with the "Working as" company in the claims.
+// lib/data/db/conn.ts runs every query as this user. RLS finds the company from the membership.
 setUserSource(async () => {
   const userId = await cookieUserId();
   if (!userId) return null;
-  return { userId, companyId: (await cookies()).get(COMPANY_COOKIE)?.value ?? null };
+  return { userId, companyId: null };
 });
 
 /** The signed-in user, or null when logged out (no redirect). */
@@ -160,28 +159,10 @@ export async function getCurrentUser() {
   return (await currentAccount()).user;
 }
 
-/** The company chosen in "Working as" (falls back to the user's first company). */
+/** The company this login belongs to. */
 export async function getActiveCompanyId(): Promise<string> {
   const acc = await currentAccount();
-  const chosen = (await cookies()).get(COMPANY_COOKIE)?.value;
-  if (chosen && acc.memberships.some((m) => m.companyId === chosen)) return chosen;
   return acc.memberships[0].companyId;
-}
-
-/** Switches "Working as". Only from a server action (it sets a cookie). */
-export async function setActiveCompany(companyId: string): Promise<void> {
-  const userId = await getCurrentUserId();
-  // Fresh: "+ Add company" switches to the company it just created in the same request; the
-  // rest of this request (the refreshed page) then sees the new membership too.
-  const acc = (onDatabase() ? await loadDbAccount(userId) : mockAccount(userId))!;
-  if (onDatabase()) (await requestMemo().catch(() => null))?.set(userId, Promise.resolve(acc));
-  if (!acc.memberships.some((m) => m.companyId === companyId)) throw new NotFoundError("Company");
-  (await cookies()).set(COMPANY_COOKIE, companyId, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
 }
 
 /** The current user's role in a company, or null when they aren't a member. */
@@ -204,7 +185,7 @@ export async function assertCan(companyId: string, ...actions: Action[]): Promis
 
 // ---------- log in / out ----------
 
-export const LOGIN_FAILED = "Mobile number / email or password is wrong.";
+export const LOGIN_FAILED = "Wrong company code, ID or password";
 
 type LoginResult = { ok: true; home: "/" | "/driver" } | { ok: false; message: string };
 
@@ -212,20 +193,23 @@ type LoginResult = { ok: true; home: "/" | "/driver" } | { ok: false; message: s
  * Checks the mobile number (or email) and password, then sets the session cookie.
  * Returns where to go: drivers to My trips, everyone else to the Dashboard.
  */
-export async function logIn(identifier: string, password: string): Promise<LoginResult> {
+export async function logIn(
+  companyCode: string,
+  identifier: string,
+  password: string,
+): Promise<LoginResult> {
   await connection();
+  const code = companyCode.trim().toUpperCase();
   const id = identifier.trim();
   const mobile = normaliseMobile(id);
   const key = /^\d{10}$/.test(mobile) ? mobile : id;
   const userId = onDatabase()
-    ? await dbCheckPassword(key, password)
-    : mockCheckPassword(id, mobile, password);
-  // Same message whether the user or the password is wrong.
+    ? await dbCheckPassword(code, key, password)
+    : mockCheckPassword(code, id, mobile, password);
+  // Same message whether the company code, the user or the password is wrong.
   if (!userId) return { ok: false, message: LOGIN_FAILED };
   const acc = await account(userId);
-  if (!acc || acc.memberships.length === 0) {
-    return { ok: false, message: "This login isn't linked to any company. Ask your Owner." };
-  }
+  if (!acc || acc.memberships.length === 0) return { ok: false, message: LOGIN_FAILED };
 
   (await cookies()).set(SESSION_COOKIE, sessionCookieValue(userId), {
     httpOnly: true,
@@ -244,10 +228,18 @@ export async function logIn(identifier: string, password: string): Promise<Login
   return { ok: true, home: roles.every((r) => r === "driver") ? "/driver" : "/" };
 }
 
-function mockCheckPassword(id: string, mobile: string, password: string): string | null {
+function mockCheckPassword(
+  code: string,
+  id: string,
+  mobile: string,
+  password: string,
+): string | null {
+  const company = code ? db.companies.find((c) => c.code === code && !c.cancelledAt) : undefined;
+  if (!company) return null;
   const user = db.users.find(
     (u) =>
       !u.cancelledAt &&
+      db.memberships.some((m) => m.userId === u.id && m.companyId === company.id && !m.cancelledAt) &&
       ((u.mobile !== null && /^\d{10}$/.test(mobile) && u.mobile === mobile) ||
         (u.email !== null && u.email.toLowerCase() === id.toLowerCase())),
   );
@@ -256,9 +248,13 @@ function mockCheckPassword(id: string, mobile: string, password: string): string
 }
 
 /** Finds the login in the database (as anon), then lets Supabase Auth check the password. */
-async function dbCheckPassword(identifier: string, password: string): Promise<string | null> {
+async function dbCheckPassword(
+  code: string,
+  identifier: string,
+  password: string,
+): Promise<string | null> {
   const [found] = await asAnon(
-    (tx) => tx`select user_id, auth_email from app.login_lookup(${identifier})`,
+    (tx) => tx`select user_id, auth_email from app.login_lookup(${code}, ${identifier})`,
   );
   if (!found?.auth_email || !password) return null;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -278,10 +274,9 @@ async function dbCheckPassword(identifier: string, password: string): Promise<st
 export async function logOut(): Promise<void> {
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
-  jar.delete(COMPANY_COOKIE);
 }
 
-/** The signed-in user's role in the "Working as" company. */
+/** The signed-in user's role in their company. */
 export async function getActiveRole(): Promise<Role | null> {
   return getRole(await getActiveCompanyId());
 }

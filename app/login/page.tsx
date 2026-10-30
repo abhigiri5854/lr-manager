@@ -23,8 +23,7 @@ export default function LoginPage() {
           LR <span className="text-primary">Manager</span>
         </h1>
         <p className="m-0 text-sm text-muted">
-          Log in with your mobile number. Owners and staff land on the Dashboard; drivers on My
-          trips.
+          Log in with your company code and mobile number or email.
         </p>
         <Suspense>
           <LoginForm />

@@ -131,9 +131,7 @@ describe("every lib/data write checks lib/permissions", () => {
             /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit)\w*)/g,
           ),
         ].map((m) => m[1]),
-      )
-      // Not company-scoped: any user may add a company (they become its Owner) or switch to one.
-      .filter((n) => n !== "createCompany" && n !== "setActiveCompany");
+      );
     expect(found.sort()).toEqual(Object.keys(WRITES).sort());
   });
 
@@ -152,9 +150,8 @@ describe("every lib/data write checks lib/permissions", () => {
   });
 
   it("refuses users who aren't members of the company", async () => {
-    // The sample Owner leaves ACM but stays signed in through RS Logistics.
-    db.memberships.find((m) => m.companyId === acmId() && m.userId === ownerUserId)!.cancelledAt =
-      "2026-10-01T00:00:00.000Z";
+    // The RS owner is signed in, but belongs to RS Logistics only.
+    await setTestUser(db.users.find((u) => u.name === "RS Owner")!.id);
     await expect(lrs.createLr(acmId(), {})).rejects.toThrow("You're not a member of this company.");
   });
 

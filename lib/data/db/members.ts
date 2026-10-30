@@ -95,14 +95,7 @@ export async function listMemberRows(companyId: string): Promise<Omit<MemberRow,
   return withUserRead(async (tx) => {
     const rows = await tx`
       select m.id as membership_id, m.version, m.role, u.id as user_id, u.name, u.mobile, u.email,
-             u.last_login_at,
-             coalesce((select array_agg(c.label order by x.created_at, x.id)
-                         from memberships x
-                         join companies c on c.id = x.company_id and c.cancelled_at is null
-                        where x.user_id = m.user_id and x.cancelled_at is null
-                          and exists (select 1 from memberships me
-                                       where me.user_id = auth.uid() and me.company_id = x.company_id
-                                         and me.cancelled_at is null)), '{}') as companies
+             u.last_login_at
         from memberships m
         join users u on u.id = m.user_id
        where m.company_id = ${companyId} and m.cancelled_at is null`;
@@ -114,14 +107,14 @@ export async function listMemberRows(companyId: string): Promise<Omit<MemberRow,
       mobile: r.mobile,
       email: r.email,
       role: r.role,
-      companies: r.companies,
       lastLoginAt: r.last_login_at,
     }));
   });
 }
 
-/** E-mail Supabase Auth gets for someone invited by mobile only. */
-const placeholderEmail = (mobile: string) => `mobile-${mobile}@example.com`;
+/** Supabase Auth e-mails are globally unique, so every login gets a made-up one; the real mobile
+ * and e-mail live in users (the same person may have a login in each company). */
+const authEmail = (userId: string) => `u-${userId}@lrm.invalid`;
 
 export async function inviteMember(
   companyId: string,
@@ -129,26 +122,22 @@ export async function inviteMember(
   tempPassword: () => string,
 ): Promise<{ membership: Membership; tempPassword: string | null }> {
   return withUser(async (tx) => {
-    const [found] = await tx`select app.find_user(${v.mobile}, ${v.email ?? null}) as id`;
-    let userId = found.id as string | null;
+    const [found] =
+      await tx`select * from app.find_company_user(${companyId}, ${v.mobile}, ${v.email ?? null})`;
+    let userId = (found?.user_id as string | undefined) ?? null;
     let password: string | null = null;
     if (userId) {
-      const [already] = await tx`
-        select u.name from memberships m join users u on u.id = m.user_id
-         where m.company_id = ${companyId} and m.user_id = ${userId} and m.cancelled_at is null`;
-      if (already) {
-        fail(
-          "mobile",
-          `${already.name} is already in this company — use Edit to change their role.`,
-        );
+      if (found.active) {
+        fail("mobile", `${found.name} is already in this company — use Edit to change their role.`);
       }
     } else {
       userId = newId();
       password = tempPassword();
       await ensureAuthUser({
         id: userId,
-        email: v.email ?? placeholderEmail(v.mobile),
-        emailPlaceholder: !v.email,
+        email: authEmail(userId),
+        emailPlaceholder: true,
+        contactEmail: v.email ?? null,
         password,
         name: v.name,
         mobile: v.mobile,
@@ -177,7 +166,7 @@ export async function resetMemberPassword(
     const m = toMembership(await lockRow(tx, "memberships", companyId, membershipId, "Member"));
     if (m.cancelledAt) fail("", "This person is no longer in the company");
     const [ok] = await tx`select app.can_reset_password(${m.userId}) as ok`;
-    if (!ok.ok) fail("", "They also work for a company you don't own — ask that company's Owner.");
+    if (!ok.ok) fail("", "Only an Owner of this company can reset a password.");
     return m.userId;
   });
   const password = tempPassword();

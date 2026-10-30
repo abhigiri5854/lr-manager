@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Smart import test files (real invoices, never commit)
 samples/
+
+# Local dev credentials
+DEV-LOGINS.md

@@ -82,8 +82,6 @@ export type MemberRow = {
   mobile: string | null;
   email: string | null;
   role: Role;
-  /** Labels of the companies this person shares with the viewer, e.g. ["ACM Logistics", "RS Logistics"]. */
-  companies: string[];
   lastLoginAt: IsoDateTime | null;
   isMe: boolean;
 };
@@ -99,9 +97,6 @@ export async function listMemberRows(companyId: string): Promise<MemberRow[]> {
       .map((r) => ({ ...r, isMe: r.userId === me }))
       .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.name.localeCompare(b.name));
   }
-  const active = db.memberships.filter((m) => !m.cancelledAt);
-  const mine = new Set(active.filter((m) => m.userId === me).map((m) => m.companyId));
-  const label = (id: string) => db.companies.find((c) => c.id === id && !c.cancelledAt)?.label;
   return scoped(db.memberships, companyId)
     .map((m) => {
       const u = db.users.find((x) => x.id === m.userId)!;
@@ -113,10 +108,6 @@ export async function listMemberRows(companyId: string): Promise<MemberRow[]> {
         mobile: u.mobile,
         email: u.email,
         role: m.role,
-        companies: active
-          .filter((x) => x.userId === u.id && mine.has(x.companyId))
-          .map((x) => label(x.companyId))
-          .filter((l): l is string => Boolean(l)),
         lastLoginAt: u.lastLoginAt,
         isMe: u.id === me,
       };
@@ -133,9 +124,10 @@ function tempPassword(): string {
 }
 
 /**
- * "+ Invite user": adds a person to this company with an office role. Someone who already has
- * a login (same mobile or email) just gets the new company; a new person gets a login with a
- * one-time password to pass on (until Supabase sends real invites by SMS / email).
+ * "+ Invite user": adds a person to this company with an office role. A login belongs to one
+ * company only, so the person always gets a new login here (the same mobile can have one in
+ * another company) with a one-time password to pass on. Someone already in this company is
+ * refused; someone removed earlier is added back with their old login.
  */
 export async function inviteMember(
   companyId: string,
@@ -145,9 +137,13 @@ export async function inviteMember(
   const v = parseInput(inviteMemberSchema, input);
   if (onDatabase()) return dbm.inviteMember(companyId, v, tempPassword);
   const t = now();
-  let user = db.users.find(
-    (u) => !u.cancelledAt && (u.mobile === v.mobile || (v.email != null && u.email === v.email)),
+  const inThisCompany = db.users.find(
+    (u) =>
+      !u.cancelledAt &&
+      db.memberships.some((m) => m.userId === u.id && m.companyId === companyId) &&
+      (u.mobile === v.mobile || (v.email != null && u.email === v.email)),
   );
+  let user = inThisCompany;
   let password: string | null = null;
   if (user) {
     if (
@@ -188,7 +184,7 @@ export async function inviteMember(
 
 /**
  * Owner sets a new one-time password for a member (mock "Forgot password?"). Only for people
- * whose every company is one the Owner also owns, so nobody can take over another company's login.
+ * of the Owner's own company.
  */
 export async function resetMemberPassword(
   companyId: string,
@@ -198,16 +194,6 @@ export async function resetMemberPassword(
   if (onDatabase()) return dbm.resetMemberPassword(companyId, membershipId, tempPassword);
   const m = getOrThrow(db.memberships, companyId, membershipId, "Member");
   if (m.cancelledAt) fail("", "This person is no longer in the company");
-  const me = await getCurrentUserId();
-  const ownedByMe = new Set(
-    db.memberships
-      .filter((x) => x.userId === me && x.role === "owner" && !x.cancelledAt)
-      .map((x) => x.companyId),
-  );
-  const theirs = db.memberships.filter((x) => x.userId === m.userId && !x.cancelledAt);
-  if (theirs.some((x) => !ownedByMe.has(x.companyId))) {
-    fail("", "They also work for a company you don't own — ask that company's Owner.");
-  }
   const password = tempPassword();
   db.credentials = db.credentials.filter((c) => c.userId !== m.userId);
   db.credentials.push(hashPassword(m.userId, password));

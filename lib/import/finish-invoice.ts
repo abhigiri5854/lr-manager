@@ -183,7 +183,16 @@ export function finishInvoice(
     truck ? `truck ${truck}` : null,
   ].filter(Boolean);
 
-  const found = Boolean(draft.invoiceNo || lines.length || draft.sellerGstin);
+  const found = Boolean(
+    draft.invoiceNo ||
+      lines.length ||
+      draft.sellerGstin ||
+      draft.buyerGstin ||
+      draft.sellerName ||
+      draft.buyerName ||
+      draft.totalPaise !== undefined ||
+      draft.taxablePaise !== undefined,
+  );
   return {
     kind: "document",
     documentType: found ? "tax_invoice" : "unknown",

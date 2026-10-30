@@ -60,6 +60,7 @@ export function toCompany(r: Row, nextLrNo: number | null): Company {
     updatedAt: r.updated_at,
     cancelledAt: opt(r.cancelled_at),
     version: r.version,
+    code: r.code,
     label: r.label,
     name: r.name,
     city: r.city,

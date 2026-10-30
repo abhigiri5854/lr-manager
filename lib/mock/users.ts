@@ -15,6 +15,15 @@ export const mockUsers: User[] = [
     lastLoginAt: null,
   },
   {
+    id: IDS.user.ownerRs,
+    createdAt: t,
+    updatedAt: t,
+    name: "RS Owner",
+    mobile: "9000000001",
+    email: null,
+    lastLoginAt: null,
+  },
+  {
     id: IDS.user.staff,
     createdAt: t,
     updatedAt: t,
@@ -62,7 +71,7 @@ export const mockMemberships: Membership[] = [
   {
     id: IDS.membership.ownerRs,
     companyId: IDS.company.rs,
-    userId: IDS.user.owner,
+    userId: IDS.user.ownerRs,
     role: "owner",
     createdAt: t,
     updatedAt: t,

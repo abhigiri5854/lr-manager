@@ -34,6 +34,8 @@ export type NewAuthUser = {
   mobile?: string | null;
   /** The e-mail is made up (Supabase Auth needs one); users.email stays empty. */
   emailPlaceholder?: boolean;
+  /** The person's real e-mail when the Auth e-mail is a placeholder (kept in users.email). */
+  contactEmail?: string | null;
 };
 
 /** Creates the Auth user with this exact id, or leaves an existing one as it is. */
@@ -49,7 +51,7 @@ export async function ensureAuthUser(u: NewAuthUser): Promise<"created" | "exist
     user_metadata: {
       name: u.name,
       mobile: u.mobile ?? null,
-      ...(u.emailPlaceholder ? { email_placeholder: true } : {}),
+      ...(u.emailPlaceholder ? { email_placeholder: true, email: u.contactEmail ?? null } : {}),
     },
   });
   if (!res.ok) await fail(`create ${u.email}`, res);

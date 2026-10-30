@@ -23,7 +23,6 @@ import { formatGstRate } from "@/lib/gst";
 import type { Company } from "@/lib/types";
 import { FREIGHT_GST_RATES_BP, ifscBankWarning, LR_COPY_OPTIONS } from "@/lib/validators/company";
 import { INVOICE_NO_MAX } from "@/lib/validators/invoice";
-import { AddCompanyButton } from "./AddCompanyDialog";
 import { CompanyImages } from "./CompanyImages";
 import { CompanyPreview, WhereDataAppears } from "./CompanyPreview";
 
@@ -138,9 +137,8 @@ export function CompanyProfileForm({
         }
       />
 
-      <Alert tone="info" className="-mt-1" action={canEdit ? <AddCompanyButton /> : undefined}>
-        Editing <b className="text-primary">{company.label}</b> — the company chosen in “Working
-        as”. Switch there to edit another.
+      <Alert tone="info" className="-mt-1">
+        Editing <b className="text-primary">{company.label}</b> — the company you are logged in to.
       </Alert>
 
       {!canEdit && (
@@ -184,8 +182,15 @@ export function CompanyProfileForm({
               <Grid>
                 <Field label="Company name (printed)" {...bind("name")} />
                 <Field
+                  label="Company code (login)"
+                  hint="Everyone types this to log in. Changing it changes it for all users."
+                  autoCapitalize="characters"
+                  className="[&_input]:font-mono"
+                  {...bind("code")}
+                />
+                <Field
                   label="Short name (Working as)"
-                  hint="Shown in the company switcher"
+                  hint="Shown in the sidebar"
                   {...bind("label")}
                 />
                 <Textarea label="Registered office" {...bind("office")} />

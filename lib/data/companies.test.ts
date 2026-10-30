@@ -4,18 +4,22 @@ import { allocateNumber, db, resetStore } from "./_store";
 
 // Tests run outside a Next.js request, where connection() would throw.
 vi.mock("next/server", () => ({ connection: async () => {} }));
-import { createCompany, getCompany, getNumbering, listCompanies, updateCompany } from "./companies";
+import { getCompany, getNumbering, updateCompany } from "./companies";
+import { registerCompany } from "./register";
 import { ForbiddenError, ValidationError } from "./errors";
 import { listParties } from "./parties";
 import { uploadCompanyImage } from "./uploads";
 
 const acmId = () => db.companies.find((c) => c.label === "ACM Logistics")!.id;
-const ownerId = () => db.memberships.find((m) => m.role === "owner")!.userId;
 
 beforeEach(() => resetStore());
 
 const first14 = "10AABCA7061K1Z";
 const input = {
+  code: "NEWR",
+  ownerName: "New Owner",
+  ownerMobile: "9111111111",
+  password: "longenough1",
   name: "NEW ROADWAYS",
   label: "New Roadways",
   city: "Gaya",
@@ -23,29 +27,30 @@ const input = {
   pan: "AABCA7061K",
 };
 
-describe("createCompany", () => {
-  it("creates the company, self party, number series and Owner membership", async () => {
-    const c = await createCompany(input);
-    expect((await listCompanies()).map((x) => x.id)).toContain(c.id);
-    expect(db.memberships.find((m) => m.companyId === c.id)).toMatchObject({
-      userId: ownerId(),
-      role: "owner",
-    });
-    const self = (await listParties(c.id)).rows.find((p) => p.isSelf);
+describe("registerCompany", () => {
+  it("creates the company, Owner login, self party and number series", async () => {
+    const { companyId } = await registerCompany(input);
+    const c = (await getCompany(companyId))!;
+    expect(c.code).toBe("NEWR");
+    const m = db.memberships.find((x) => x.companyId === companyId)!;
+    expect(m.role).toBe("owner");
+    expect(db.users.find((u) => u.id === m.userId)).toMatchObject({ mobile: "9111111111" });
+    const self = (await listParties(companyId)).rows.find((p) => p.isSelf);
     expect(self).toMatchObject({ name: "NEW ROADWAYS", gstin: c.gstin, stateCode: "10" });
-    const series = db.numberSeries.filter((s) => s.companyId === c.id).map((s) => s.series);
+    const series = db.numberSeries.filter((s) => s.companyId === companyId).map((s) => s.series);
     expect(series.sort()).toEqual(["freight_bill", "lr", "tax_invoice"]);
     expect(c.nextLrNo).toBe(1);
   });
 
-  it("rejects a PAN that doesn't match the GSTIN, and a duplicate GSTIN", async () => {
-    await expect(createCompany({ ...input, pan: "ZZZZZ9999Z" })).rejects.toThrow(
+  it("rejects a PAN that doesn't match, a duplicate GSTIN and a taken code", async () => {
+    await expect(registerCompany({ ...input, pan: "ZZZZZ9999Z" })).rejects.toThrow(
       /PAN doesn't match/,
     );
     const acm = (await getCompany(acmId()))!;
-    await expect(createCompany({ ...input, gstin: acm.gstin, pan: acm.pan })).rejects.toThrow(
-      /already exists/,
-    );
+    await expect(
+      registerCompany({ ...input, gstin: acm.gstin, pan: acm.pan }),
+    ).rejects.toThrow(/already exists/);
+    await expect(registerCompany({ ...input, code: "acm" })).rejects.toThrow(/already taken/);
   });
 });
 

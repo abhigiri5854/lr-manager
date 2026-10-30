@@ -13,6 +13,7 @@ import { formatInvoiceNo } from "@/lib/validators/invoice";
 
 export type CompanyForm = {
   name: string;
+  code: string;
   label: string;
   city: string;
   office: string;
@@ -51,6 +52,7 @@ export type CompanyForm = {
 export function formFromCompany(c: Company): CompanyForm {
   return {
     name: c.name,
+    code: c.code,
     label: c.label,
     city: c.city,
     office: c.office,
@@ -101,6 +103,7 @@ export function patchFromForm(f: CompanyForm): CompanyPatch {
   const penalty = parseRupees(f.podPenalty);
   return {
     name: f.name,
+    code: f.code,
     label: f.label,
     city: f.city,
     office: f.office,

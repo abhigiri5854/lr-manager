@@ -19,13 +19,14 @@ type TextRun = { str?: string; transform?: number[]; hasEOL?: boolean };
 export async function openPdf(bytes: Uint8Array): Promise<PdfFile> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   // pdf.js takes ownership of the buffer it is given, so hand it a copy.
-  const doc: PDFDocumentProxy = await pdfjs.getDocument({
+  // In this pdfjs-dist version destroy() lives on the loading task, not on the document.
+  const task = pdfjs.getDocument({
     data: bytes.slice(),
     useSystemFonts: true,
     disableFontFace: true,
-    isEvalSupported: false,
     verbosity: 0,
-  }).promise;
+  });
+  const doc: PDFDocumentProxy = await task.promise;
 
   async function renderToCanvas(n: number, scale: number) {
     const { createCanvas } = await import("@napi-rs/canvas");
@@ -78,6 +79,6 @@ export async function openPdf(bytes: Uint8Array): Promise<PdfFile> {
       return new Uint8Array(canvas.toBuffer("image/png"));
     },
 
-    close: () => doc.destroy(),
+    close: () => task.destroy(),
   };
 }

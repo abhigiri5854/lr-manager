@@ -130,6 +130,11 @@ export async function asAnon<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   return run("anon", JSON.stringify({ role: "anon" }), null, fn, "read");
 }
 
+/** Company registration (nobody is signed in yet): the server's own role, not a user's. */
+export async function asService<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return run("service_role", JSON.stringify({ role: "service_role" }), null, fn, "write");
+}
+
 /**
  * One reserved connection: `begin` and the RLS context go out as ONE statement (simple protocol,
  * no reply awaited — the connection runs statements in order, so it takes effect before fn's
@@ -140,7 +145,7 @@ export async function asAnon<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
  * - read: the transaction is read only and fn's result is returned without waiting for commit.
  */
 async function run<T>(
-  role: "authenticated" | "anon",
+  role: "authenticated" | "anon" | "service_role",
   claims: string,
   userId: string | null,
   fn: (tx: Tx) => Promise<T>,

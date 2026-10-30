@@ -9,14 +9,15 @@ function safeNext(next: string): string | null {
 }
 
 export async function loginAction(input: {
+  companyCode: string;
   identifier: string;
   password: string;
   next: string;
 }): Promise<{ ok: false; message: string }> {
-  if (!input.identifier.trim() || !input.password) {
-    return { ok: false, message: "Enter your mobile number or email and your password." };
+  if (!input.companyCode.trim() || !input.identifier.trim() || !input.password) {
+    return { ok: false, message: "Enter your company code, mobile number or email, and password." };
   }
-  const r = await logIn(input.identifier, input.password);
+  const r = await logIn(input.companyCode, input.identifier, input.password);
   if (!r.ok) return r;
   redirect(r.home === "/driver" ? "/driver" : (safeNext(input.next) ?? "/"));
 }

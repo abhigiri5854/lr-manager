@@ -10,7 +10,7 @@ import { mergeDraft, missingFields, type Draft, type DraftSources } from "./draf
 import { finishInvoice } from "./finish-invoice";
 import { readExcel } from "./excel-reader";
 import { readWithRetry } from "./gemini-step";
-import { readWithGemini, geminiEnabled } from "./readers/gemini";
+import { readWithGemini, geminiEnabled, groundedInText } from "./readers/gemini";
 import { suggestColumnsWithGemini } from "./readers/gemini-columns";
 import { compressForAi, rawPixels } from "./readers/image";
 import { openPdf, type PdfFile } from "./readers/pdf";
@@ -44,11 +44,17 @@ const qrDraft = (q: EInvoiceQr): Draft => ({
 });
 
 /** Runs a step that may fail on a bad file; a failed step is skipped, not fatal. */
-async function attempt<T>(step: string, run: () => Promise<T>): Promise<T | null> {
+async function attempt<T>(
+  step: string,
+  run: () => Promise<T>,
+  errors?: string[],
+): Promise<T | null> {
   try {
     return await run();
   } catch (e) {
-    console.warn(`[import] ${step} failed:`, e instanceof Error ? e.message : e);
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn(`[import] ${step} failed:`, message);
+    errors?.push(`${step}: ${message}`);
     return null;
   }
 }
@@ -75,6 +81,7 @@ async function readDocument(file: ReaderFile) {
     let draft: Draft = { lines: [] };
     let sources: DraftSources = {};
     const readBy: ReadSource[] = [];
+    const errors: string[] = [];
     const take = (extra: Draft, source: ReadSource) => {
       const merged = mergeDraft(draft, sources, extra, source);
       const added = Object.values(merged.sources).filter((s) => s === source).length;
@@ -84,30 +91,39 @@ async function readDocument(file: ReaderFile) {
     };
 
     // 1. QR
-    const qr = await attempt("qr scan", () => findQr(file, pdf));
+    const qr = await attempt("qr scan", () => findQr(file, pdf), errors);
     if (qr) take(qrDraft(qr), "qr");
 
     // 2. PDF text
+    let pdfText: string | null = null;
     if (pdf && missingFields(draft).length) {
-      const text = await attempt("pdf text", () => pdf.text(TEXT_PAGES));
+      const text = await attempt("pdf text", () => pdf.text(TEXT_PAGES), errors);
       if (text && text.replace(/\s/g, "").length >= MIN_TEXT_CHARS) {
+        pdfText = text;
         take(parseInvoiceText(text), "pdf_text");
       }
     }
 
-    // 3. Gemini, only if something required is still empty: flash-lite first, and gemini-2.5-flash
+    // 3. Gemini, only if something required is still empty: flash-lite first, and gemini-3.5-flash
     //    once more if the answer fails our checks (GSTIN checksum, totals)
     if (missingFields(draft).length && geminiEnabled()) {
-      const step = await attempt("gemini", async () => {
-        const pictures = pdf
-          ? await Promise.all(
-              Array.from({ length: Math.min(GEMINI_PAGES, pdf.pages) }, async (_, i) =>
-                compressForAi(await pdf.renderPng(i + 1, 2)),
-              ),
-            )
-          : [await compressForAi(file.bytes)];
-        return readWithRetry(draft, sources, (model) => readWithGemini(pictures, model));
-      });
+      const step = await attempt(
+        "gemini",
+        async () => {
+          const pictures = pdf
+            ? await Promise.all(
+                Array.from({ length: Math.min(GEMINI_PAGES, pdf.pages) }, async (_, i) =>
+                  compressForAi(await pdf.renderPng(i + 1, 2)),
+                ),
+              )
+            : [await compressForAi(file.bytes)];
+          return readWithRetry(draft, sources, async (model) => {
+            const d = await readWithGemini(pictures, model);
+            return d && groundedInText(d, pdfText);
+          });
+        },
+        errors,
+      );
       if (step) {
         draft = step.draft;
         sources = step.sources;
@@ -115,7 +131,10 @@ async function readDocument(file: ReaderFile) {
       }
     }
 
-    return finishInvoice(draft, sources, readBy, pdf?.pages ?? 1);
+    const result = finishInvoice(draft, sources, readBy, pdf?.pages ?? 1);
+    // Nothing read and a step threw: show the real error instead of "couldn't read an invoice".
+    if (result.documentType === "unknown" && errors.length) throw new Error(errors.join("; "));
+    return result;
   } finally {
     await pdf?.close();
   }

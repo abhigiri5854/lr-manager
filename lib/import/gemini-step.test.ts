@@ -36,17 +36,17 @@ describe("readWithRetry", () => {
       models.push(m);
       return ok;
     });
-    expect(models).toEqual(["gemini-2.5-flash-lite"]);
+    expect(models).toEqual(["gemini-3.5-flash-lite"]);
     expect(r).toMatchObject({ used: true, retried: false });
   });
 
-  it("asks gemini-2.5-flash once when the first answer fails validation, and uses its answer", async () => {
+  it("asks gemini-3.5-flash once when the first answer fails validation, and uses its answer", async () => {
     const models: string[] = [];
     const r = await readWithRetry({ lines: [] }, {}, async (m) => {
       models.push(m);
-      return m === "gemini-2.5-flash" ? ok : bad;
+      return m === "gemini-3.5-flash" ? ok : bad;
     });
-    expect(models).toEqual(["gemini-2.5-flash-lite", "gemini-2.5-flash"]);
+    expect(models).toEqual(["gemini-3.5-flash-lite", "gemini-3.5-flash"]);
     expect(r.retried).toBe(true);
     expect(r.draft.totalPaise).toBe(118000);
   });
@@ -56,7 +56,7 @@ describe("readWithRetry", () => {
     let calls = 0;
     const r = await readWithRetry({ lines: [] }, {}, async (m) => {
       calls++;
-      return m === "gemini-2.5-flash" ? worse : bad;
+      return m === "gemini-3.5-flash" ? worse : bad;
     });
     expect(calls).toBe(2);
     expect(r.draft.totalPaise).toBe(999900);

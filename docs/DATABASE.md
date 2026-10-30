@@ -346,7 +346,7 @@ RLS on for **every** table (incl. lookups: read-only); `anon` has no table privi
 
 | Table(s)                                                   | SELECT                             | INSERT / UPDATE                                                                                                                                                              |
 | ---------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| companies                                                  | member                             | update: `company.manage`. No insert grant: only `app.create_company()` (definer fn: company + owner membership + self party + this FY's number_series rows, one transaction) |
+| companies                                                  | member                             | update: `company.manage`. No insert grant: only `app.register_company()` (definer fn, service role only — the login page's "Register a new company": company + owner membership + self party + this FY's number_series rows, one transaction) |
 | memberships                                                | own row, or `is_office`            | `company.manage`                                                                                                                                                             |
 | users                                                      | self, or shares a company with you | update self, columns name / mobile only (column grant); rest via Auth trigger                                                                                                |
 | parties, trucks, drivers, items                            | `is_office`                        | `master.edit`                                                                                                                                                                |
@@ -521,14 +521,14 @@ version.
 **Companies, users, self party**
 
 13. companies also has `created_by` / `updated_by`, plus column defaults (invoice_title
-    'FREIGHT INVOICE', round-off on, yearly reset on, GST 500 bp, empty prefixes). `create_company()`
+    'FREIGHT INVOICE', round-off on, yearly reset on, GST 500 bp, empty prefixes). `register_company()`
     sets `lr_copies` to Consignor / Consignee / Driver / Office and creates **all three** series rows
     (LR included) for the current FY (IST) starting at 1.
 14. users: `name not null default ''`, mobile check (10 digits), `on delete cascade` from `auth.users`,
     email follows `auth.users` email changes; users update only name / mobile via a column grant.
 15. memberships has both unique indexes `(company_id, user_id)` and `(user_id, company_id)`;
     `keep_one_owner` is an AFTER UPDATE trigger.
-16. Self party is created by trigger on **every** company insert (not inside `create_company` only) and
+16. Self party is created by trigger on **every** company insert (not inside `register_company` only) and
     syncs more fields than designed: also place, pan, state_code (from GSTIN) and pincode (from the
     office address). Users can't insert a self party and `is_self` can't change.
 
@@ -586,8 +586,8 @@ version.
 **After the first switch to the database (prompt 19a)**
 
 35. `0006_mock_login.sql`: helpers for the mock login while it runs on the database —
-    `app.login_lookup` (anon: the account for a mobile / e-mail), `app.record_login`,
-    `app.find_user` (invite an existing login), `app.can_reset_password`,
+    `app.login_lookup(code, identifier)` (anon: the account for a company code + mobile / e-mail), `app.record_login`,
+    `app.find_company_user` (invite: the person with this mobile / e-mail in this company), `app.can_reset_password`,
     `app.company_gstin_taken`; anon gets usage on schema `app` for `login_lookup` only. People
     invited without an e-mail get a placeholder Auth e-mail and `users.email` stays empty.
 36. `0007_goods_gst_40.sql`: items and tax invoice lines allow GST up to 40% (4000 bp, the app's
@@ -595,3 +595,10 @@ version.
 37. Logos and signatures are uploaded to Storage with the secret key after `lib/data` checks the
     permission in the user's RLS transaction (no user token until Supabase logins, prompt 20);
     they are read through short-lived signed URLs.
+
+
+## One login = one company (migration 0011)
+
+- `companies.code` (unique among active companies, `^[A-Z0-9]{3,10}$`) is typed on the login page.
+- One active membership per user (`memberships_one_company_per_user`); `users.company_id` follows the membership (trigger). `users.mobile` / `users.email` are unique **per company**, so the same person can have a separate login in each company. Auth e-mails of new logins are made-up (`u-<id>@lrm.invalid`); the real e-mail lives in `users.email`.
+- The migration kept each multi-company user's first company and gave every other company its own new account (same name / mobile / e-mail, random password — the Owner resets it from Users & roles).

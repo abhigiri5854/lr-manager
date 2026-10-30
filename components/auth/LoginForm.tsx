@@ -1,14 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { loginAction } from "@/app/login/actions";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 
-/** Login.dc.html: mobile / email + password. OTP and password reset come with Supabase Auth. */
+/** Login.dc.html: company code + mobile / email + password. OTP and password reset come with Supabase Auth. */
 export function LoginForm() {
   const next = useSearchParams().get("next") ?? "";
+  const [companyCode, setCompanyCode] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -24,12 +26,22 @@ export function LoginForm() {
         setNote(null);
         startTransition(async () => {
           // Redirects on success; only a failure comes back.
-          const r = await loginAction({ identifier, password, next });
+          const r = await loginAction({ companyCode, identifier, password, next });
           setError(r.message);
         });
       }}
       className="flex flex-col gap-4"
     >
+      <Field
+        label="Company code"
+        name="companyCode"
+        placeholder="e.g. ACM"
+        autoComplete="organization"
+        autoCapitalize="characters"
+        value={companyCode}
+        onChange={(e) => setCompanyCode(e.target.value.toUpperCase())}
+        aria-invalid={error ? true : undefined}
+      />
       <Field
         label="Mobile number or email"
         name="identifier"
@@ -58,12 +70,6 @@ export function LoginForm() {
       <Button type="submit" disabled={pending}>
         {pending ? "Logging in…" : "Log in"}
       </Button>
-      <Button
-        variant="secondary"
-        onClick={() => setNote("Login by OTP isn't switched on yet — use your password for now.")}
-      >
-        Get OTP instead
-      </Button>
       <button
         type="button"
         onClick={() =>
@@ -73,6 +79,12 @@ export function LoginForm() {
       >
         Forgot password?
       </button>
+      <Link
+        href="/register"
+        className="text-center text-sm font-semibold text-primary underline hover:text-primary-hover"
+      >
+        Register a new company
+      </Link>
       {note && (
         <p role="status" className="m-0 text-center text-sm text-muted">
           {note}

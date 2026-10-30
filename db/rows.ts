@@ -58,6 +58,7 @@ export function companyRow(c: Company): Insert<typeof s.companies> {
     updatedAt: c.updatedAt,
     cancelledAt: c.cancelledAt ?? null,
     version: c.version,
+    code: c.code,
     label: c.label,
     name: c.name,
     city: c.city,

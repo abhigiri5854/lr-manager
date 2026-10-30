@@ -82,7 +82,6 @@ export function UsersScreen({
       header: "Role",
       cell: (r) => <Chip tone={ROLE_TONE[r.role]}>{ROLE_LABEL[r.role]}</Chip>,
     },
-    { key: "companies", header: "Companies", cell: (r) => r.companies.join(", ") },
     { key: "login", header: "Last login", cell: (r) => lastLogin(r.lastLoginAt) },
     {
       key: "edit",

@@ -17,7 +17,9 @@ export const geminiEnabled = (): boolean =>
 const PROMPT =
   "Read this Indian GST tax invoice. Return JSON only. Copy values exactly as printed; " +
   "use null for anything not visible. Amounts in rupees as plain numbers. Date as yyyy-mm-dd. " +
-  "GSTIN is 15 characters. One entry in lines per item row.";
+  "GSTIN is 15 characters. One entry in lines per item row. " +
+  "Read only what is printed in the attached picture. If it is blank, unreadable or not an invoice, " +
+  "return null fields and an empty lines array. Never invent, complete or substitute example data.";
 
 const nullableString = { type: Type.STRING, nullable: true };
 const nullableNumber = { type: Type.NUMBER, nullable: true };
@@ -116,6 +118,27 @@ function toDraft(r: z.infer<typeof reply>): Draft {
   set("igstPaise", paise(r.igst));
   set("totalPaise", paise(r.total));
   return draft;
+}
+
+/**
+ * Guards against an invented invoice. Placeholder wording ("fictional", "example") means the model
+ * made it up; and when the PDF has a text layer, the invoice number and every GSTIN/vehicle/e-way
+ * number Gemini returned must literally appear in it.
+ * @returns the draft, or null when it must not be used.
+ */
+export function groundedInText(d: Draft, pdfText: string | null): Draft | null {
+  const words = [d.sellerName, d.buyerName, ...d.lines.map((l) => l.description)].join(" ");
+  if (/(fictional|dummy|lorem|sample|example)/i.test(words)) return null;
+  if (!pdfText) return d;
+  const flat = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const hay = flat(pdfText);
+  const seen = (v: string | undefined) => !v || hay.includes(flat(v));
+  if (d.invoiceNo && !seen(d.invoiceNo)) return null;
+  const out = { ...d };
+  for (const k of ["sellerGstin", "buyerGstin", "vehicleNo", "ewayBillNo"] as const) {
+    if (!seen(out[k])) delete out[k];
+  }
+  return out;
 }
 
 /**

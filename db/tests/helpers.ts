@@ -45,6 +45,13 @@ export function fakeGstin(): string {
   return `10${pick()}${pick()}${pick()}${pick()}${pick()}${digits()}${pick()}1Z${pick()}`;
 }
 
+/** A unique company login code (letters + digits, 3-10). */
+export function fakeCode(): string {
+  return `T${Date.now().toString(36)}${(n++).toString(36)}${Math.random().toString(36).slice(2, 4)}`
+    .toUpperCase()
+    .slice(-10);
+}
+
 export class Fixtures {
   private users: string[] = [];
   private companies: string[] = [];
@@ -62,11 +69,11 @@ export class Fixtures {
     return id;
   }
 
-  /** New company through app.create_company, signed in as its owner. */
+  /** New company through app.register_company (the login page's path), owned by this user. */
   async company(ownerId: string, label = `Test ${uniq()}`): Promise<string> {
-    const [row] = await as(this.sql, ownerId, (tx) =>
-      tx`select app.create_company(${label}, ${label.toUpperCase()}, 'Patna', ${fakeGstin()}, 'AAXFA2859G') as id`,
-    );
+    const [row] = await this
+      .sql`select app.register_company(${ownerId}, ${fakeCode()}, ${label}, ${label.toUpperCase()},
+                                        'Patna', ${fakeGstin()}, 'AAXFA2859G') as id`;
     this.companies.push(row.id as string);
     return row.id as string;
   }
@@ -74,7 +81,8 @@ export class Fixtures {
   /** A company inserted directly (no number series rows), owned by this user. */
   async bareCompany(ownerId: string): Promise<string> {
     const [c] = await this.sql`
-      insert into companies (label, name, gstin, pan) values ('Bare', 'BARE', ${fakeGstin()}, 'AAXFA2859G')
+      insert into companies (code, label, name, gstin, pan)
+      values (${fakeCode()}, 'Bare', 'BARE', ${fakeGstin()}, 'AAXFA2859G')
       returning id`;
     this.companies.push(c.id as string);
     await this.member(c.id as string, ownerId, "owner");
