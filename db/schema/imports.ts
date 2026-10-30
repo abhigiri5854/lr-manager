@@ -76,3 +76,32 @@ export const importMappings = pgTable(
       .where(sql`cancelled_at is null`),
   ],
 ).enableRLS();
+
+/** What users changed after an AI read, per seller: replayed on the next import from that seller. */
+export const importCorrections = pgTable(
+  "import_corrections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id),
+    sellerGstin: text("seller_gstin").notNull(),
+    /** Form field path without the row number: "invoiceNo", "hsn", "uom", "description", "gstRateBp". */
+    field: text("field").notNull(),
+    wrongValue: text("wrong_value").notNull(),
+    correctValue: text("correct_value").notNull(),
+    count: integer("count").notNull().default(1),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("import_corrections_key").on(
+      t.companyId,
+      t.sellerGstin,
+      t.field,
+      t.wrongValue,
+      t.correctValue,
+    ),
+    index("import_corrections_recent_idx").on(t.companyId, t.sellerGstin, t.updatedAt.desc()),
+  ],
+).enableRLS();

@@ -126,6 +126,15 @@ export type DocumentReadResult = {
   readBy?: ReadSource[];
 };
 
+/** A value the reader got wrong for one seller and what the user changed it to (lib/import/corrections.ts). */
+export type ImportCorrection = { field: string; wrong: string; correct: string; count: number };
+
+/** What the company already knows about this document, handed to the reader. */
+export type DocumentHints = {
+  /** Recent corrections for a seller (by GSTIN, once a cheaper step has read it); at most `limit`. */
+  correctionsFor?: (sellerGstin: string, limit: number) => Promise<ImportCorrection[]>;
+};
+
 export type ImportReadResult = ExcelReadResult | DocumentReadResult;
 
 // ---------- the reader interface ----------
@@ -143,5 +152,5 @@ export type ExcelHints = {
 
 export interface ImportReader {
   readExcel(file: ReaderFile, hints?: ExcelHints): Promise<ExcelReadResult>;
-  readDocument(file: ReaderFile): Promise<DocumentReadResult>;
+  readDocument(file: ReaderFile, hints?: DocumentHints): Promise<DocumentReadResult>;
 }

@@ -4,7 +4,8 @@ import type { ImportReader } from "./types";
 /** Loads the real reader (SheetJS, sharp, pdf.js, Gemini SDK) on first use, so unit tests and pages that never read files skip it. */
 const lazyReal: ImportReader = {
   readExcel: async (file, hints) => (await import("./real-reader")).realReader.readExcel(file, hints),
-  readDocument: async (file) => (await import("./real-reader")).realReader.readDocument(file),
+  readDocument: async (file, hints) =>
+    (await import("./real-reader")).realReader.readDocument(file, hints),
 };
 
 /**

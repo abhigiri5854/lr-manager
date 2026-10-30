@@ -7,6 +7,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 import type { Draft } from "../draft";
 import { textDateToIso } from "../text-parser";
+import type { ImportCorrection } from "../types";
 import { GEMINI_MODEL } from "./gemini-models";
 
 export { GEMINI_MODEL } from "./gemini-models";
@@ -121,41 +122,47 @@ function toDraft(r: z.infer<typeof reply>): Draft {
 }
 
 /**
- * Guards against an invented invoice. Placeholder wording ("fictional", "example") means the model
- * made it up; and when the PDF has a text layer, the invoice number and every GSTIN/vehicle/e-way
- * number Gemini returned must literally appear in it.
+ * Guards against an invented invoice: when the PDF has a text layer, the invoice number Gemini
+ * returned must literally appear in it. Wording in names or items is never a reason to reject —
+ * real documents and companies use words like "sample" or "example".
  * @returns the draft, or null when it must not be used.
  */
 export function groundedInText(d: Draft, pdfText: string | null): Draft | null {
-  const words = [d.sellerName, d.buyerName, ...d.lines.map((l) => l.description)].join(" ");
-  if (/(fictional|dummy|lorem|sample|example)/i.test(words)) return null;
-  if (!pdfText) return d;
+  if (!pdfText || !d.invoiceNo) return d;
   const flat = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const hay = flat(pdfText);
-  const seen = (v: string | undefined) => !v || hay.includes(flat(v));
-  if (d.invoiceNo && !seen(d.invoiceNo)) return null;
-  const out = { ...d };
-  for (const k of ["sellerGstin", "buyerGstin", "vehicleNo", "ewayBillNo"] as const) {
-    if (!seen(out[k])) delete out[k];
-  }
-  return out;
+  return flat(pdfText).includes(flat(d.invoiceNo)) ? d : null;
+}
+
+/** Prompt addition: what users fixed on earlier invoices from this seller (at most 10). */
+export function correctionHints(corrections: ImportCorrection[]): string {
+  if (!corrections.length) return "";
+  const lines = corrections
+    .slice(0, 10)
+    .map((c) => `- ${c.field}: "${c.wrong}" was wrong, correct is "${c.correct}"`);
+  return (
+    "\nEarlier readings of invoices from this same seller were corrected by the user as below. " +
+    "Use them only as hints for similar text printed on this invoice; still copy what is printed.\n" +
+    lines.join("\n")
+  );
 }
 
 /**
  * @param images JPEGs, already compressed to 1600 px (lib/import/readers/image.ts) — one per page, at most two.
  * @param model which Gemini model reads it (default: the cheap first-read model)
+ * @param corrections this seller's recent corrections, added to the prompt as hints
  * @returns what Gemini read, or null when both answers were invalid JSON.
  */
 export async function readWithGemini(
   images: Uint8Array[],
   model: string = GEMINI_MODEL,
+  corrections: ImportCorrection[] = [],
 ): Promise<Draft | null> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
   const parts = [
     ...images.map((img) => ({
       inlineData: { mimeType: "image/jpeg", data: Buffer.from(img).toString("base64") },
     })),
-    { text: PROMPT },
+    { text: PROMPT + correctionHints(corrections) },
   ];
 
   // One retry, and only for an answer that isn't valid JSON for the schema (never for API errors).

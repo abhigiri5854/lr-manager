@@ -6,7 +6,9 @@
 // are loaded up front: resolveLookups() runs the work once with a recorder that notes every key
 // asked for, loads exactly those in one round trip, then runs the work again with the answers.
 import type { Lookups } from "@/lib/import/excel-rows";
+import { lookupFrom, type CorrectionRow } from "@/lib/import/corrections";
 import type { PrefillLookups } from "@/lib/import/invoice-prefill";
+import type { ImportCorrection } from "@/lib/import/types";
 import type { PartyOption, TruckOption } from "@/lib/lr-form";
 import type { ImportBatch, ImportMapping, Page, Party } from "@/lib/types";
 import { normaliseVehicleNo } from "@/lib/validators/common";
@@ -52,6 +54,11 @@ export type ImportKeys = {
   invoiceNos: Set<string>;
   /** upper case */
   itemCodes: Set<string>;
+  itemHsns: Set<string>;
+  /** trimmed, lower case */
+  itemNames: Set<string>;
+  /** seller GSTINs whose remembered corrections are needed */
+  sellerGstins: Set<string>;
 };
 
 export type HistoryBatch = ImportBatch & { byName: string | null };
@@ -83,6 +90,10 @@ export interface ImportStore {
   ): Promise<ImportMapping>;
   lrPrefix(companyId: string): Promise<string>;
   lookups(companyId: string, lrPrefix: string, keys: ImportKeys): Promise<ImportLookups>;
+  /** Seller memory: the seller's most recently seen corrections, newest first. */
+  corrections(companyId: string, sellerGstin: string, limit: number): Promise<ImportCorrection[]>;
+  /** Adds one to the count of each (field, wrong, correct), creating rows that are new. */
+  recordCorrections(companyId: string, sellerGstin: string, rows: CorrectionRow[]): Promise<void>;
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -114,6 +125,11 @@ function recorder(keys: ImportKeys, lrPrefix: string): ImportLookups {
     taxInvoice: note((no: string, g: string | null) => g && keys.invoiceNos.add(no)),
     existingInvoice: note((no: string, g: string | null) => g && keys.invoiceNos.add(no)),
     itemByCode: note((c: string) => keys.itemCodes.add(c.toUpperCase())),
+    correction: note((g: string) => keys.sellerGstins.add(g)),
+    itemByHsnOrName: note((hsn: string | null, d: string) => {
+      if (hsn) keys.itemHsns.add(hsn);
+      keys.itemNames.add(d.trim().toLowerCase());
+    }),
   };
 }
 
@@ -133,6 +149,9 @@ export async function resolveLookups<T>(
     trucks: new Set(),
     invoiceNos: new Set(),
     itemCodes: new Set(),
+    itemHsns: new Set(),
+    itemNames: new Set(),
+    sellerGstins: new Set(),
   };
   work(recorder(keys, prefix));
   return work(await store.lookups(companyId, prefix, keys));
@@ -140,6 +159,9 @@ export async function resolveLookups<T>(
 
 // ---------- the in-memory store (unit tests) ----------
 const company = (companyId: string) => db.companies.find((c) => c.id === companyId)!;
+
+/** Seller memory in unit tests (the database one is import_corrections). */
+const mockCorrections: (ImportCorrection & { companyId: string; gstin: string })[] = [];
 
 function mockLookups(companyId: string): ImportLookups {
   const prefix = company(companyId).lrPrefix;
@@ -178,7 +200,19 @@ function mockLookups(companyId: string): ImportLookups {
     },
     itemByCode: (code) => {
       const i = scoped(db.items, companyId).find((x) => x.code === code.toUpperCase());
-      return i ? { id: i.id } : null;
+      return i ? { id: i.id, hsn: i.hsn, uom: i.uom, gstRateBp: i.gstRateBp } : null;
+    },
+    correction: (gstin, field, wrong) =>
+      lookupFrom(mockCorrections.filter((c) => c.companyId === companyId && c.gstin === gstin))(
+        field,
+        wrong,
+      ),
+    itemByHsnOrName: (hsn, description) => {
+      const items = scoped(db.items, companyId);
+      const i =
+        items.find((x) => sameName(x.name, description)) ??
+        (hsn ? items.find((x) => x.hsn === hsn) : undefined);
+      return i ? { id: i.id, hsn: i.hsn, uom: i.uom, gstRateBp: i.gstRateBp } : null;
     },
     taxInvoice: (invoiceNo, gstin) => {
       if (!gstin) return null;
@@ -281,5 +315,25 @@ export const mockImportStore: ImportStore = {
   },
   async lookups(companyId) {
     return mockLookups(companyId);
+  },
+  async corrections(companyId, gstin, limit) {
+    return mockCorrections
+      .filter((c) => c.companyId === companyId && c.gstin === gstin)
+      .slice(-limit)
+      .reverse();
+  },
+  async recordCorrections(companyId, gstin, rows) {
+    for (const r of rows) {
+      const hit = mockCorrections.find(
+        (c) =>
+          c.companyId === companyId &&
+          c.gstin === gstin &&
+          c.field === r.field &&
+          c.wrong === r.wrong &&
+          c.correct === r.correct,
+      );
+      if (hit) hit.count += 1;
+      else mockCorrections.push({ ...r, companyId, gstin, count: 1 });
+    }
   },
 };

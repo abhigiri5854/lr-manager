@@ -8,6 +8,7 @@
 //
 // Storage and lookups go through ImportStore (./import-store.ts): the database, or the sample
 // data in unit tests.
+import { diffCorrections } from "@/lib/import/corrections";
 import { formatDate } from "@/lib/format";
 import { importableRows, reviewExcelRows, type ReviewRow } from "@/lib/import/excel-rows";
 import { checkImportBytes, kindOf, type ImportSource } from "@/lib/import/file-types";
@@ -174,7 +175,9 @@ export async function createImportBatch(
         mappingName: saved?.name ?? null,
       });
     }
-    const result = await getReader().readDocument(file);
+    const result = await getReader().readDocument(file, {
+      correctionsFor: (gstin, limit) => store().corrections(companyId, gstin, limit),
+    });
     return store().saveBatch(created, {
       ...created,
       status: "read",
@@ -1104,6 +1107,15 @@ export async function saveImportedInvoice(
       ? await updateTaxInvoice(companyId, args.update.id, args.update.expectedVersion, input)
       : await createTaxInvoice(companyId, input);
     created.unshift({ table: "tax_invoices", id: invoice.id });
+    // Seller memory: what the user changed from the AI reading is kept for the next invoice.
+    const read = documentResult(batch)?.invoice;
+    if (read?.seller.gstin) {
+      const fixes = diffCorrections(read, {
+        invoiceNo: invoice.invoiceNo,
+        lines: invoice.lines,
+      });
+      await store().recordCorrections(companyId, read.seller.gstin, fixes);
+    }
     await patchBatch(companyId, batch.id, (b) => ({
       ...b,
       status: "imported",

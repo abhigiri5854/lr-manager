@@ -1,4 +1,6 @@
 // Smart import files and saved mappings on the database (ImportStore, see ../import-store.ts).
+import { lookupFrom } from "@/lib/import/corrections";
+import type { ImportCorrection } from "@/lib/import/types";
 import type { ImportBatch } from "@/lib/types";
 import { normaliseVehicleNo } from "@/lib/validators/common";
 import { ConflictError, NotFoundError } from "../errors";
@@ -186,12 +188,39 @@ export const dbImportStore: ImportStore = {
     });
   },
 
+  async corrections(companyId, sellerGstin, limit) {
+    return withUserRead(async (tx) => {
+      const rows = await tx`select field, wrong_value, correct_value, count from import_corrections
+                             where company_id = ${companyId} and seller_gstin = ${sellerGstin}
+                             order by updated_at desc, id limit ${limit}`;
+      return rows.map(toCorrection);
+    });
+  },
+
+  async recordCorrections(companyId, sellerGstin, rows) {
+    if (!rows.length) return;
+    await withUser(async (tx) => {
+      await tx`insert into import_corrections (company_id, seller_gstin, field, wrong_value, correct_value)
+               select ${companyId}, ${sellerGstin}, r->>'field', r->>'wrong', r->>'correct'
+                 from jsonb_array_elements(${tx.json(rows as never)}::jsonb) r
+               on conflict (company_id, seller_gstin, field, wrong_value, correct_value)
+               do update set count = import_corrections.count + 1, updated_at = now()`;
+    });
+  },
+
   async lookups(companyId, lrPrefix, keys) {
     return withUserRead((tx) => loadLookups(tx, companyId, lrPrefix, keys));
   },
 };
 
 const none = Promise.resolve([] as Row[]);
+
+const toCorrection = (r: Row): ImportCorrection => ({
+  field: r.field as string,
+  wrong: r.wrong_value as string,
+  correct: r.correct_value as string,
+  count: Number(r.count),
+});
 
 /** Everything the keys ask for, in one pipelined round trip. */
 async function loadLookups(
@@ -200,7 +229,7 @@ async function loadLookups(
   lrPrefix: string,
   keys: ImportKeys,
 ): Promise<ImportLookups> {
-  const [lrs, parties, trucks, invoices, items] = await Promise.all([
+  const [lrs, parties, trucks, invoices, items, corrections] = await Promise.all([
     keys.lrNos.size
       ? tx`select l.id, l.lr_no, l.cancelled_at,
                   exists (select 1 from freight_bill_lines fl
@@ -232,17 +261,32 @@ async function loadLookups(
               and t.invoice_no in ${textsIn(tx, [...keys.invoiceNos])}
             order by t.created_at, t.id`
       : none,
-    keys.itemCodes.size
-      ? tx`select id, code from items
+    keys.itemCodes.size || keys.itemHsns.size || keys.itemNames.size
+      ? tx`select id, code, name, hsn, uom, gst_rate_bp from items
             where company_id = ${companyId} and cancelled_at is null
-              and code in ${textsIn(tx, [...keys.itemCodes])}`
+              and (code in ${textsIn(tx, [...keys.itemCodes])}
+                   or hsn in ${textsIn(tx, [...keys.itemHsns])}
+                   or lower(trim(name)) in ${textsIn(tx, [...keys.itemNames])})
+            order by created_at, id`
+      : none,
+    keys.sellerGstins.size
+      ? tx`select field, wrong_value, correct_value, count, seller_gstin from import_corrections
+            where company_id = ${companyId}
+              and seller_gstin in ${textsIn(tx, [...keys.sellerGstins])}`
       : none,
   ]);
 
   const lrByNo = new Map((lrs as Row[]).map((r) => [r.lr_no as string, r]));
   const partyRows = (parties as Row[]).map(toParty);
   const truckByNo = new Map((trucks as Row[]).map((r) => [r.number as string, r]));
-  const itemByCode = new Map((items as Row[]).map((r) => [r.code as string, r]));
+  const itemRows = items as Row[];
+  const itemByCode = new Map(itemRows.filter((r) => r.code).map((r) => [r.code as string, r]));
+  const toMatch = (r: Row) => ({
+    id: r.id as string,
+    hsn: (r.hsn as string | null) ?? null,
+    uom: (r.uom as string | null) ?? null,
+    gstRateBp: r.gst_rate_bp == null ? null : Number(r.gst_rate_bp),
+  });
   const invoiceRows = invoices as Row[];
   const invoiceFor = (no: string, gstin: string | null, live: boolean) =>
     gstin
@@ -273,7 +317,17 @@ async function loadLookups(
     },
     itemByCode(code) {
       const r = itemByCode.get(code.toUpperCase());
-      return r ? { id: r.id } : null;
+      return r ? toMatch(r) : null;
+    },
+    correction(gstin, field, wrong) {
+      const mine = (corrections as Row[]).filter((r) => r.seller_gstin === gstin).map(toCorrection);
+      return lookupFrom(mine)(field, wrong);
+    },
+    itemByHsnOrName(hsn, description) {
+      const r =
+        itemRows.find((x) => sameName(x.name as string, description)) ??
+        (hsn ? itemRows.find((x) => x.hsn === hsn) : undefined);
+      return r ? toMatch(r) : null;
     },
     taxInvoice(invoiceNo, gstin) {
       const r = invoiceFor(invoiceNo, gstin, true);

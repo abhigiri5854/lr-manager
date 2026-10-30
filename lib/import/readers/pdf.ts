@@ -5,10 +5,13 @@ import type { PDFDocumentProxy } from "pdfjs-dist/types/src/display/api";
 
 export type PdfFile = {
   pages: number;
-  /** Text of the first `maxPages` pages, one line per visual row. Empty for a scan. */
-  text(maxPages: number): Promise<string>;
+  /** Text of each of the first `maxPages` pages, one line per visual row. Empty strings for a scan. */
+  pageTexts(maxPages: number): Promise<string[]>;
   /** Page `n` (1-based) as raw RGBA pixels at `scale` × the PDF's own size. */
-  render(n: number, scale: number): Promise<{ width: number; height: number; rgba: Uint8ClampedArray }>;
+  render(
+    n: number,
+    scale: number,
+  ): Promise<{ width: number; height: number; rgba: Uint8ClampedArray }>;
   /** Same render as a PNG. */
   renderPng(n: number, scale: number): Promise<Uint8Array>;
   close(): Promise<void>;
@@ -48,8 +51,8 @@ export async function openPdf(bytes: Uint8Array): Promise<PdfFile> {
   return {
     pages: doc.numPages,
 
-    async text(maxPages) {
-      const out: string[] = [];
+    async pageTexts(maxPages) {
+      const pages: string[] = [];
       for (let n = 1; n <= Math.min(maxPages, doc.numPages); n++) {
         const content = await (await doc.getPage(n)).getTextContent();
         // Group runs into rows by their y position (within 2 units), left to right.
@@ -61,11 +64,19 @@ export async function openPdf(bytes: Uint8Array): Promise<PdfFile> {
           row.push({ x: run.transform[4], s: run.str });
           rows.set(y, row);
         }
-        [...rows.entries()]
-          .sort((a, b) => b[0] - a[0])
-          .forEach(([, row]) => out.push(row.sort((a, b) => a.x - b.x).map((r) => r.s).join(" ")));
+        pages.push(
+          [...rows.entries()]
+            .sort((a, b) => b[0] - a[0])
+            .map(([, row]) =>
+              row
+                .sort((a, b) => a.x - b.x)
+                .map((r) => r.s)
+                .join(" "),
+            )
+            .join("\n"),
+        );
       }
-      return out.join("\n");
+      return pages;
     },
 
     async render(n, scale) {

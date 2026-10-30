@@ -32,7 +32,19 @@ export type PrefillLookups = {
   partyByGstin(gstin: string): PartyOption | null;
   partyByName(name: string): PartyOption | null;
   truckByNumber(number: string): TruckOption | null;
-  itemByCode(code: string): { id: string } | null;
+  itemByCode(code: string): ItemMatch | null;
+  /** Saved item with this HSN, or (failing that) this name. */
+  itemByHsnOrName(hsn: string | null, description: string): ItemMatch | null;
+  /** The seller's remembered fix for a wrong reading of `field` (see ./corrections.ts), or null. */
+  correction(sellerGstin: string, field: string, wrong: string): string | null;
+};
+
+/** A saved item: what its master record can fill into an empty invoice row. */
+export type ItemMatch = {
+  id: string;
+  hsn: string | null;
+  uom: string | null;
+  gstRateBp: number | null;
 };
 
 export type InvoicePrefill = {
@@ -54,7 +66,23 @@ export function invoicePrefill(
 
   function resolveParty(p: ReadParty, token: string, field: string): PartyOption {
     const found = (p.gstin ? lookups.partyByGstin(p.gstin) : null) ?? lookups.partyByName(p.name);
-    if (found) return found;
+    if (found) {
+      // Saved details win; only what the saved party lacks is taken from the invoice, to check.
+      const filled = { ...found };
+      let touched = false;
+      const take = <K extends "address" | "phone" | "stateCode" | "place">(k: K, read: string | null) => {
+        if (!filled[k] && read) {
+          filled[k] = read as never;
+          touched = true;
+        }
+      };
+      take("address", p.address);
+      take("phone", p.phone);
+      take("place", p.place);
+      take("stateCode", p.stateCode ?? p.gstin?.slice(0, 2) ?? null);
+      if (touched) flags[field] = "low-confidence";
+      return filled;
+    }
     const id = `${PENDING_PREFIX}${token}`;
     pending.parties[id] = {
       name: p.name,
@@ -107,26 +135,64 @@ export function invoicePrefill(
     flags.truck = "low-confidence";
   }
 
-  const driverMobile =
+  let driverMobile =
     inv.driverMobile && isValidMobile(inv.driverMobile) ? normaliseMobile(inv.driverMobile) : "";
   if (inv.driverMobile && !driverMobile) flags.driverMobile = "low-confidence";
+  // Nothing typed or read: use the driver saved on the matched truck, marked to check.
+  if (!driverMobile && truck?.driverMobile && !isPending(truck.id)) {
+    driverMobile = truck.driverMobile;
+    flags.driverMobile = "low-confidence";
+  }
 
-  const lines = inv.lines.map((l, i) => {
-    const known = l.itemCode ? lookups.itemByCode(l.itemCode) : null;
+  // Seller memory: a value the reader got wrong before for this seller is replaced, marked "check".
+  const sellerGstin = inv.seller.gstin;
+  const remembered = (field: string, value: string, flagPath = field): string => {
+    const fixed = sellerGstin && value ? lookups.correction(sellerGstin, field, value) : null;
+    if (fixed === null) return value;
+    flags[flagPath] = "low-confidence";
+    return fixed;
+  };
+  const invoiceNo = remembered("invoiceNo", inv.invoiceNo);
+
+  const lines = inv.lines.map((l0, i) => {
+    const path = (f: string) => `lines.${i}.${f}`;
+    const l = {
+      ...l0,
+      description: remembered("description", l0.description, path("description")),
+      hsn: l0.hsn ? remembered("hsn", l0.hsn, path("hsn")) : null,
+      uom: l0.uom ? remembered("uom", l0.uom, path("uom")) : null,
+      gstRateBp: Number(remembered("gstRateBp", String(l0.gstRateBp), path("gstRateBp"))) || l0.gstRateBp,
+    };
+    const byCode = l.itemCode ? lookups.itemByCode(l.itemCode) : null;
+    const known = byCode ?? lookups.itemByHsnOrName(l.hsn, l.description);
     // An item code we've never seen: the line is kept, but check it.
-    if (l.itemCode && !known) flags[`lines.${i}.description`] = "new-record";
+    if (l.itemCode && !byCode && !known) flags[`lines.${i}.description`] = "new-record";
+    // Only empty cells are filled from the saved item; each one filled is marked "check".
+    const fill = (field: string, read: string | null, saved: string | null): string => {
+      if (read) return read;
+      if (!saved) return "";
+      flags[`lines.${i}.${field}`] = "low-confidence";
+      return saved;
+    };
+    // The reader always supplies a rate; it is only "empty" when it fell back to the 18% default.
+    const rateGiven = !lowConfidence.includes(`lines.${i}.gstRateBp`);
+    let gstRateBp = String(l.gstRateBp);
+    if (!rateGiven && known?.gstRateBp != null) {
+      gstRateBp = String(known.gstRateBp);
+      flags[`lines.${i}.gstRateBp`] = "low-confidence";
+    }
     return {
       ...emptyLine(),
       key: rowKey(),
       itemId: known?.id ?? null,
       itemCode: l.itemCode ?? "",
       description: l.description,
-      hsn: l.hsn ?? "",
-      uom: l.uom ?? "",
+      hsn: fill("hsn", l.hsn, known?.hsn ?? null),
+      uom: fill("uom", l.uom, known?.uom ?? null),
       qty: l.qty,
       rate: formatPaise(l.ratePaise),
       discount: l.discountPaise ? formatPaise(l.discountPaise) : "",
-      gstRateBp: String(l.gstRateBp),
+      gstRateBp,
     };
   });
 
@@ -135,7 +201,7 @@ export function invoicePrefill(
 
   return {
     initial: {
-      invoiceNo: inv.invoiceNo,
+      invoiceNo,
       invoiceAt: isoToIstInput(inv.invoiceAt),
       customerRef: inv.customerRef ?? "",
       customerRefDate: inv.customerRefDate ?? "",

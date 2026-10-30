@@ -7,6 +7,7 @@
 // Excel / CSV go to the SheetJS reader (excel-reader.ts), with one optional Gemini call for columns
 // it couldn't place.
 import { mergeDraft, missingFields, type Draft, type DraftSources } from "./draft";
+import { distinctPages } from "./copies";
 import { finishInvoice } from "./finish-invoice";
 import { readExcel } from "./excel-reader";
 import { readWithRetry } from "./gemini-step";
@@ -17,7 +18,7 @@ import { openPdf, type PdfFile } from "./readers/pdf";
 import { scanPixels } from "./readers/qr";
 import { parseInvoiceText } from "./text-parser";
 import type { EInvoiceQr } from "./qr-payload";
-import type { ImportReader, ReaderFile, ReadSource } from "./types";
+import type { DocumentHints, ImportReader, ReaderFile, ReadSource } from "./types";
 
 /** QR codes on invoices are small and dense, so PDF pages are drawn large for the scan. */
 const QR_SCALE = 4;
@@ -75,7 +76,7 @@ async function findQr(file: ReaderFile, pdf: PdfFile | null): Promise<EInvoiceQr
   return null;
 }
 
-async function readDocument(file: ReaderFile) {
+async function readDocument(file: ReaderFile, hints?: DocumentHints) {
   const pdf = isPdf(file.bytes) ? await openPdf(file.bytes) : null;
   try {
     let draft: Draft = { lines: [] };
@@ -94,13 +95,19 @@ async function readDocument(file: ReaderFile) {
     const qr = await attempt("qr scan", () => findQr(file, pdf), errors);
     if (qr) take(qrDraft(qr), "qr");
 
-    // 2. PDF text
+    // 2. PDF text. Original/Duplicate/Triplicate copies of a page are one invoice: read the first.
     let pdfText: string | null = null;
-    if (pdf && missingFields(draft).length) {
-      const text = await attempt("pdf text", () => pdf.text(TEXT_PAGES), errors);
-      if (text && text.replace(/\s/g, "").length >= MIN_TEXT_CHARS) {
-        pdfText = text;
-        take(parseInvoiceText(text), "pdf_text");
+    let pageNos = pdf ? Array.from({ length: pdf.pages }, (_, i) => i + 1) : [];
+    if (pdf) {
+      const texts = await attempt("pdf text", () => pdf.pageTexts(TEXT_PAGES), errors);
+      if (texts) {
+        const keep = distinctPages(texts);
+        pageNos = [...keep, ...pageNos.filter((n) => n > texts.length)];
+        const text = keep.map((n) => texts[n - 1]).join("\n");
+        if (missingFields(draft).length && text.replace(/\s/g, "").length >= MIN_TEXT_CHARS) {
+          pdfText = text;
+          take(parseInvoiceText(text), "pdf_text");
+        }
       }
     }
 
@@ -112,13 +119,22 @@ async function readDocument(file: ReaderFile) {
         async () => {
           const pictures = pdf
             ? await Promise.all(
-                Array.from({ length: Math.min(GEMINI_PAGES, pdf.pages) }, async (_, i) =>
-                  compressForAi(await pdf.renderPng(i + 1, 2)),
-                ),
+                pageNos
+                  .slice(0, GEMINI_PAGES)
+                  .map(async (n) => compressForAi(await pdf.renderPng(n, 2))),
               )
             : [await compressForAi(file.bytes)];
+          // This seller's recent corrections (seller known from the QR / PDF text) go in as hints.
+          const corrections =
+            draft.sellerGstin && hints?.correctionsFor
+              ? ((await attempt(
+                  "corrections",
+                  () => hints.correctionsFor!(draft.sellerGstin!, 10),
+                  errors,
+                )) ?? [])
+              : [];
           return readWithRetry(draft, sources, async (model) => {
-            const d = await readWithGemini(pictures, model);
+            const d = await readWithGemini(pictures, model, corrections);
             return d && groundedInText(d, pdfText);
           });
         },
@@ -131,7 +147,7 @@ async function readDocument(file: ReaderFile) {
       }
     }
 
-    const result = finishInvoice(draft, sources, readBy, pdf?.pages ?? 1);
+    const result = finishInvoice(draft, sources, readBy, pdf ? pageNos.length : 1);
     // Nothing read and a step threw: show the real error instead of "couldn't read an invoice".
     if (result.documentType === "unknown" && errors.length) throw new Error(errors.join("; "));
     return result;
