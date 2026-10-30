@@ -16,7 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env.local db/scripts/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env.local db/scripts/seed.ts",
-    "db:reset": "tsx --env-file-if-exists=.env.local db/scripts/reset.ts"
+    "db:reset": "tsx --env-file-if-exists=.env.local db/scripts/reset.ts",
+    "test:readers": "tsx --env-file-if-exists=.env.local scripts/test-readers.ts"
   },
   "dependencies": {
     "@google/genai": "^2.31.0",
