@@ -20,6 +20,8 @@ export const auditLog = pgTable(
     tableName: text("table_name").notNull(),
     recordId: uuid("record_id").notNull(),
     action: auditAction("action").notNull(),
+    /** Why a sensitive change was made (hire edited after payment, early balance payment…). */
+    reason: text("reason"),
     changes: jsonb("changes").$type<AuditEntry["changes"]>().notNull().default([]),
   },
   (t) => [

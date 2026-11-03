@@ -4,6 +4,7 @@ export * from "./_common";
 export * from "./audit";
 export * from "./bills";
 export * from "./companies";
+export * from "./hire";
 export * from "./imports";
 export * from "./invoices";
 export * from "./lrs";

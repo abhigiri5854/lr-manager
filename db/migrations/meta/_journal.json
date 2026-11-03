@@ -92,6 +92,20 @@
       "when": 1793377634531,
       "tag": "0012_import_corrections",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793733588122,
+      "tag": "0013_hire_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793733700000,
+      "tag": "0014_hire_rls_views",
+      "breakpoints": true
     }
   ]
 }

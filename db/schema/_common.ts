@@ -6,6 +6,7 @@ import {
   foreignKey,
   index,
   integer,
+  numeric,
   pgEnum,
   text,
   timestamp,
@@ -51,11 +52,45 @@ export const importStatus = pgEnum("import_status", [
   "failed",
 ]);
 
+// Tier 1: market-truck hire (TIER1-MARKET-TRUCKS.md §5).
+export const truckPartyRole = pgEnum("truck_party_role", ["owner", "broker", "both"]);
+export const truckPartyStatus = pgEnum("truck_party_status", ["active", "blacklisted"]);
+export const chargeDirection = pgEnum("charge_direction", ["add", "deduct"]);
+export const chargeStage = pgEnum("charge_stage", ["hire", "pod"]);
+export const rateBasis = pgEnum("rate_basis", ["trip", "per_tonne"]);
+export const payeeKind = pgEnum("payee_kind", ["owner", "broker"]);
+export const challanStatus = pgEnum("challan_status", [
+  "draft",
+  "dispatched",
+  "in_transit",
+  "reached",
+  "pod_received",
+  "settled",
+]);
+export const hireSeriesKind = pgEnum("hire_series_kind", ["challan", "truck_payment"]);
+export const truckPaymentMode = pgEnum("truck_payment_mode", [
+  "bank",
+  "upi",
+  "cash",
+  "cheque",
+  "diesel",
+]);
+export const truckPaymentStatus = pgEnum("truck_payment_status", [
+  "draft",
+  "pending_approval",
+  "approved",
+  "paid",
+  "reversed",
+]);
+export const allocationKind = pgEnum("allocation_kind", ["advance", "balance", "adjustment"]);
+
 /** Same shape as lib/validators/common.ts (the checksum stays an app-level check). */
 export const GSTIN_SHAPE_SQL = "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z][0-9A-Z][0-9A-Z]$";
 
 /** Integer paise. */
 export const paise = (name: string) => bigint(name, { mode: "number" });
+/** Tier-1 rupee amounts: numeric(14,2), returned as strings. */
+export const money = (name: string) => numeric(name, { precision: 14, scale: 2 });
 export const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "string" });
 
 /** created/updated/cancelled/version columns every business table carries (§1). */
