@@ -58,6 +58,17 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
+    heading: "MARKET TRUCKS",
+    items: [
+      {
+        label: "Truck parties",
+        href: "/market-trucks/parties",
+        isActive: startsWith("/market-trucks/parties"),
+        action: "master.edit",
+      },
+    ],
+  },
+  {
     heading: "SETTINGS",
     items: [
       {

@@ -311,7 +311,9 @@ describe("POD on the database", () => {
       deliveredOn: "2999-01-01",
     });
     expect((await lrs.getLrById(t.companyId, lr.id))!.deliveredAt).toBe("2999-01-01T00:00:00.000Z");
-    expect(later.version).toBe(early.version + 1);
+    // Only the LR's delivery date changed; the POD row itself didn't, so its version stays
+    // (app.tg_bump_row bumps only on a real change).
+    expect(later.version).toBe(early.version);
   });
 
   it("a driver records POD only on their own trip", async () => {

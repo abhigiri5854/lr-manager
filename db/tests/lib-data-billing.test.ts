@@ -20,6 +20,13 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+// These tests are about the database, not the file reader. The real reader (QR / PDF text /
+// Gemini) needs real files, so Smart import here uses the fixed-sample reader.
+vi.mock("@/lib/import/reader", async () => {
+  const { mockReader } = await import("@/lib/import/mock-reader");
+  return { getReader: () => mockReader };
+});
+
 process.env.DATA_SOURCE = "db";
 
 const session = await import("@/lib/data/session");

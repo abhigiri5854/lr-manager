@@ -209,7 +209,9 @@ export type TableName =
   | "tax_invoices"
   | "pods"
   | "freight_bills"
-  | "payments";
+  | "payments"
+  | "truck_parties"
+  | "tds_declarations";
 
 // ---------- small utilities ----------
 export const now = () => new Date().toISOString();

@@ -155,6 +155,46 @@ export type Party = BaseRecord & {
   isSelf: boolean;
 };
 
+export type TruckPartyRole = "owner" | "broker" | "both";
+export type TruckPartyStatus = "active" | "blacklisted";
+
+/** A market-truck owner or broker we pay lorry hire to (TIER1-MARKET-TRUCKS.md §5). */
+export type TruckParty = BaseRecord & {
+  role: TruckPartyRole;
+  name: string;
+  mobile: string | null;
+  altMobile: string | null;
+  pan: string | null;
+  /** From the PAN's 4th character; a hint for the TDS helper only. */
+  panType: "individual" | "huf" | "other" | null;
+  gstin: string | null;
+  address: string | null;
+  bankName: string | null;
+  accountHolder: string | null;
+  accountNo: string | null;
+  ifsc: string | null;
+  upiId: string | null;
+  /** App link to the uploaded UPI QR image. */
+  upiQrUrl: string | null;
+  /** Set by a DB trigger whenever bank / UPI details change (cooling-period alert). */
+  bankChangedAt: IsoDateTime | null;
+  verified: boolean;
+  verifiedAt: IsoDateTime | null;
+  status: TruckPartyStatus;
+  blacklistReason: string | null;
+  notes: string | null;
+};
+
+/** The owner's yearly TDS declaration (nil-TDS under the transporter rule) and its file. */
+export type TdsDeclaration = BaseRecord & {
+  partyId: Uuid;
+  /** "2025-26" */
+  fy: string;
+  fileUrl: string | null;
+  vehiclesOwnedDeclared: number | null;
+  receivedOn: IsoDate | null;
+};
+
 export type Truck = BaseRecord & {
   /** Normalised "BR01GN8331", unique per company. */
   number: string;

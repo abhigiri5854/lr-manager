@@ -8,7 +8,7 @@
 // secret key. Server only.
 
 export type CompanyBucket = "logos" | "signatures";
-export type Bucket = CompanyBucket | "pod" | "imports";
+export type Bucket = CompanyBucket | "pod" | "imports" | "truck-docs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -112,6 +112,30 @@ export function importPathFromUrl(companyId: string, url: string | null | undefi
     throw new Error("Upload the file again");
   }
   return importObjectPath(companyId, id, name);
+}
+
+/** Truck party files (UPI QR, TDS declarations): truck-docs/{company}/{id}-{name}. */
+export function truckDocObjectPath(companyId: string, id: string, name: string) {
+  return `${companyId}/${id}-${name}`;
+}
+
+/** The app link for a stored truck-doc path (null in, null out). */
+export function truckDocUrlFromPath(path: string | null): string | null {
+  if (!path) return null;
+  const file = path.split("/").at(-1)!;
+  return `/uploads/${file.slice(0, 36)}?b=truck-docs&n=${encodeURIComponent(file.slice(37))}`;
+}
+
+/** The stored path for a truck-doc link of this company; anything else throws. */
+export function truckDocPathFromUrl(companyId: string, url: string | null | undefined): string | null {
+  if (!url) return null;
+  const u = new URL(url, "http://x");
+  const id = u.pathname.replace(/^\/uploads\//, "");
+  const name = u.searchParams.get("n") ?? "";
+  if (!UUID.test(id) || u.searchParams.get("b") !== "truck-docs" || safeName(name, "") !== name || !name) {
+    throw new Error("Upload the file again");
+  }
+  return truckDocObjectPath(companyId, id, name);
 }
 
 function config() {

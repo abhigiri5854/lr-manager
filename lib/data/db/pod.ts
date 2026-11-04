@@ -264,14 +264,22 @@ export async function updatePod(
     const receivedAt = "received_at" in set ? set.received_at : cur.received_at;
     if (!receivedAt && docs.length) set.received_at = now();
 
+    // A delivery-date-only edit has no POD columns to set: `update … set` with nothing is a syntax
+    // error, so just re-read the row (same as saveRow's empty set: no change, no version bump).
+    const write =
+      Object.keys(set).length === 0
+        ? tx`select * from pods
+              where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}`
+        : tx`update pods set ${tx(set as never)}
+              where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}
+              returning *`;
+
     const delivery = deliveredOn
       ? setDelivered(tx, companyId, cur.lr_id, deliveredAtFrom(deliveredOn), cur.lr)
       : null;
     const [, [saved]] = await Promise.all([
       delivery?.done,
-      tx`update pods set ${tx(set as never)}
-          where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}
-          returning *`,
+      write,
     ]);
     if (!saved) throw new ConflictError();
     delivery?.record();

@@ -19,13 +19,15 @@ import type {
   Pod,
   TaxInvoice,
   TaxInvoiceLine,
+  TdsDeclaration,
   Truck,
+  TruckParty,
   User,
 } from "@/lib/types";
 import { deriveLrStatus } from "@/lib/lr-status";
 import { auditChanges, type TableName } from "../_store";
 import { withCommit, type Tx } from "./conn";
-import { importUrlFromPath, podUrlFromPath, urlFromPath } from "./storage";
+import { importUrlFromPath, podUrlFromPath, truckDocUrlFromPath, urlFromPath } from "./storage";
 
 // postgres.js rows are untyped records; each mapper below names every column it reads.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,6 +141,43 @@ export function toParty(r: Row): Party {
     defaultChargedAs: r.default_charged_as,
     source: r.source,
     isSelf: r.is_self,
+  });
+}
+
+export function toTruckParty(r: Row): TruckParty {
+  return clean({
+    ...base(r),
+    role: r.role,
+    name: r.name,
+    mobile: r.mobile,
+    altMobile: r.alt_mobile,
+    pan: r.pan,
+    panType: r.pan_type,
+    gstin: r.gstin,
+    address: r.address,
+    bankName: r.bank_name,
+    accountHolder: r.account_holder,
+    accountNo: r.account_no,
+    ifsc: r.ifsc,
+    upiId: r.upi_id,
+    upiQrUrl: truckDocUrlFromPath(r.upi_qr_file),
+    bankChangedAt: r.bank_changed_at,
+    verified: r.verified,
+    verifiedAt: r.verified_at,
+    status: r.status,
+    blacklistReason: r.blacklist_reason,
+    notes: r.notes,
+  });
+}
+
+export function toTdsDeclaration(r: Row): TdsDeclaration {
+  return clean({
+    ...base(r),
+    partyId: r.party_id,
+    fy: r.fy,
+    fileUrl: truckDocUrlFromPath(r.file_url),
+    vehiclesOwnedDeclared: r.vehicles_owned_declared,
+    receivedOn: r.received_on,
   });
 }
 

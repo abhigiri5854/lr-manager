@@ -11,6 +11,8 @@ import {
   podUrlFromPath,
   putObject,
   safeName,
+  truckDocObjectPath,
+  truckDocUrlFromPath,
   urlFromPath,
 } from "./db/storage";
 import { assertCan } from "./session";
@@ -103,6 +105,34 @@ export async function uploadCompanyImage(
     const objectKey = objectPath(bucket, companyId, id, name);
     await putObject(bucket, objectKey, file);
     return { url: urlFromPath(bucket, objectKey)!, name };
+  }
+  const name = file.name.slice(0, 100) || kind;
+  files.set(id, { companyId, name, type: file.type, bytes: file.bytes });
+  return { url: `/uploads/${id}?n=${encodeURIComponent(name)}`, name };
+}
+
+/**
+ * Market-truck party files: the UPI QR image (photo only) or a TDS declaration (photo or PDF),
+ * up to 3 MB. Needs master.edit. On the database it goes to the private `truck-docs` bucket.
+ */
+export async function uploadTruckDoc(
+  companyId: string,
+  kind: "upi-qr" | "tds",
+  file: { name: string; type: string; bytes: Uint8Array },
+): Promise<{ url: string; name: string }> {
+  await assertCan(companyId, "master.edit");
+  const path = kind === "upi-qr" ? "upiQrUrl" : "fileUrl";
+  const okType = kind === "upi-qr" ? file.type.startsWith("image/") : allowed(file.type);
+  if (!okType)
+    fail(path, `${file.name}: ${kind === "upi-qr" ? "upload a photo or screenshot" : "only photos and PDFs can be uploaded"}`);
+  if (file.bytes.byteLength === 0) fail(path, `${file.name}: the file is empty`);
+  if (file.bytes.byteLength > MAX_UPLOAD_BYTES) fail(path, `${file.name}: larger than 3 MB`);
+  const id = newId();
+  if (onDatabase()) {
+    const name = safeName(file.name, kind);
+    const objectKey = truckDocObjectPath(companyId, id, name);
+    await putObject("truck-docs", objectKey, file);
+    return { url: truckDocUrlFromPath(objectKey)!, name };
   }
   const name = file.name.slice(0, 100) || kind;
   files.set(id, { companyId, name, type: file.type, bytes: file.bytes });
