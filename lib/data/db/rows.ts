@@ -4,6 +4,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   AuditEntry,
   Branch,
+  ChallanChargeLine,
+  ChallanLrLine,
+  ChallanView,
   ChargeType,
   HireNumberSeries,
   Pump,
@@ -253,6 +256,64 @@ export function toHireNumberSeries(r: Row): HireNumberSeries {
     padding: r.padding,
     updatedAt: r.updated_at,
   };
+}
+
+export function toChallanLrLine(r: Row): ChallanLrLine {
+  return {
+    lrId: r.lr_id,
+    lrNo: r.lr_no,
+    loadedPkgs: r.loaded_pkgs,
+    loadedWt: r.loaded_wt,
+    freightAllocated: r.freight_allocated,
+  };
+}
+
+export function toChallanChargeLine(r: Row): ChallanChargeLine {
+  return {
+    id: r.id,
+    chargeTypeId: r.charge_type_id,
+    label: r.label,
+    direction: r.direction,
+    amount: r.amount,
+    note: r.note,
+  };
+}
+
+/** challans row (+ challan_date, branch_name, vehicle_no, driver_name, broker_name, payee_name) with its lines. */
+export function toChallanView(
+  r: Row,
+  lrs: ChallanLrLine[],
+  charges: ChallanChargeLine[],
+): ChallanView {
+  return clean({
+    ...base(r),
+    challanNo: r.challan_no,
+    challanFy: r.challan_fy,
+    challanDate: r.challan_date,
+    branchId: r.branch_id,
+    source: r.source,
+    destination: r.destination,
+    vehicleId: r.vehicle_id,
+    vehicleTypeId: r.vehicle_type_id,
+    driverId: r.driver_id,
+    brokerId: r.broker_id,
+    payeePartyId: r.payee_party_id,
+    payeeKind: r.payee_kind,
+    rateBasis: r.rate_basis,
+    rate: r.rate,
+    qtyTonnes: r.qty_tonnes,
+    hireAmount: r.hire_amount,
+    remarks: r.remarks,
+    status: r.status,
+    dispatchedAt: r.dispatched_at,
+    lrs,
+    charges,
+    branchName: r.branch_name ?? "",
+    vehicleNo: r.vehicle_no ?? null,
+    driverName: r.driver_name ?? null,
+    brokerName: r.broker_name ?? null,
+    payeeName: r.payee_name ?? null,
+  });
 }
 
 export function toTruck(r: Row): Truck {

@@ -1,0 +1,438 @@
+// Market-truck hire challans on the database (TIER1-MARKET-TRUCKS.md §5, §6 screen 1).
+import { financialYear } from "@/lib/fy";
+import { calcChallan, fromPaise, toPaise } from "@/lib/hire";
+import type { ChallanChargeLine, ChallanLrLine, ChallanLrPick, ChallanView, LrView } from "@/lib/types";
+import type { ChallanValues } from "@/lib/validators/challan";
+import { newId } from "../_store";
+import { ConflictError, NotFoundError, ValidationError } from "../errors";
+import { listLrs } from "../lrs";
+import { contains, withCommit, withUser, withUserRead, type Tx } from "./conn";
+import { LR_SELECT } from "./lrs";
+import {
+  audit,
+  toChallanChargeLine,
+  toChallanLrLine,
+  toChallanView,
+  toLrView,
+  type Row,
+} from "./rows";
+import { saveRow, uuidsIn } from "./write";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const kgOf = (lr: LrView): number | null => {
+  const total = lr.items.reduce((s, i) => s + Number(i.chargedWeight ?? i.actualWeight ?? 0), 0);
+  return total > 0 ? total : null;
+};
+
+type Usage = { pkgs: number; wt: number; nos: string[] };
+
+/** Packages / kg of each LR already on other live challans (cancelled and transferred lines don't count). */
+async function usageFor(
+  tx: Tx,
+  companyId: string,
+  lrIds: string[],
+  exceptChallanId: string | null,
+): Promise<Map<string, Usage>> {
+  if (!lrIds.length) return new Map();
+  const rows = await tx`
+    select cl.lr_id, sum(cl.loaded_pkgs)::int as pkgs, coalesce(sum(cl.loaded_wt), 0)::float8 as wt,
+           array_agg(c.challan_no order by c.challan_no) as nos
+      from challan_lrs cl
+      join challans c on c.company_id = cl.company_id and c.id = cl.challan_id
+     where cl.company_id = ${companyId} and cl.lr_id in ${uuidsIn(tx, lrIds)}
+       and c.cancelled_at is null and cl.transferred_to_challan_id is null
+       and c.id is distinct from ${exceptChallanId}
+     group by cl.lr_id`;
+  return new Map(
+    rows.map((r) => [
+      r.lr_id as string,
+      { pkgs: r.pkgs as number, wt: r.wt as number, nos: r.nos as string[] },
+    ]),
+  );
+}
+
+function toPick(lr: LrView, use: Usage | undefined): ChallanLrPick {
+  const totalWt = kgOf(lr);
+  return {
+    lrId: lr.id,
+    lrNo: lr.lrNo,
+    lrDate: lr.lrDate,
+    consignorName: lr.consignorName,
+    consigneeName: lr.consigneeName,
+    fromPlace: lr.fromPlace,
+    toPlace: lr.toPlace,
+    totalPkgs: lr.totalPackages,
+    totalWt: totalWt === null ? null : totalWt.toFixed(3),
+    freightPaise: lr.charges.freight ?? 0,
+    remainingPkgs: Math.max(0, lr.totalPackages - (use?.pkgs ?? 0)),
+    remainingWt: totalWt === null ? null : Math.max(0, totalWt - (use?.wt ?? 0)).toFixed(3),
+    onChallanNos: use?.nos ?? [],
+  };
+}
+
+/** Booked LRs matching the search (LR no., party, place, truck…), each with what is still free to load. */
+export async function searchLrPicks(
+  companyId: string,
+  search: string,
+  exceptChallanId: string | null,
+): Promise<ChallanLrPick[]> {
+  const page = await listLrs(companyId, { search, pageSize: 15 });
+  const lrs = page.rows.filter((l) => l.bookedAt !== null);
+  const use = await withUserRead((tx) =>
+    usageFor(tx, companyId, lrs.map((l) => l.id), exceptChallanId),
+  );
+  return lrs.map((l) => toPick(l, use.get(l.id)));
+}
+
+/** Owners and brokers share one table; this lists the ones that can be a challan's broker. */
+export async function searchBrokers(companyId: string, search: string) {
+  const q = contains(search);
+  return withUserRead(async (tx) => {
+    const rows = await tx`select id, name, mobile from truck_parties
+        where company_id = ${companyId} and cancelled_at is null and status = 'active'
+          and role in ('broker', 'both')
+          ${q ? tx`and (lower(name) like ${q} or coalesce(mobile, '') like ${q})` : tx``}
+        order by lower(name), id limit 8`;
+    return rows.map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      mobile: (r.mobile as string | null) ?? null,
+    }));
+  });
+}
+
+async function loadChallan(tx: Tx, companyId: string, id: string): Promise<ChallanView | null> {
+  const [[c], lines, charges] = await Promise.all([
+    tx`select c.*, (c.challan_at at time zone 'Asia/Kolkata')::date::text as challan_date,
+              b.name as branch_name, v.vehicle_no, d.name as driver_name,
+              bk.name as broker_name, pp.name as payee_name
+         from challans c
+         join branches b on b.company_id = c.company_id and b.id = c.branch_id
+         left join market_vehicles v on v.company_id = c.company_id and v.id = c.vehicle_id
+         left join market_drivers d on d.company_id = c.company_id and d.id = c.driver_id
+         left join truck_parties bk on bk.company_id = c.company_id and bk.id = c.broker_id
+         left join truck_parties pp on pp.company_id = c.company_id and pp.id = c.payee_party_id
+        where c.company_id = ${companyId} and c.id = ${id}`,
+    tx`select cl.*, l.lr_no from challan_lrs cl
+         join lrs l on l.company_id = cl.company_id and l.id = cl.lr_id
+        where cl.company_id = ${companyId} and cl.challan_id = ${id}
+        order by cl.created_at, cl.id`,
+    tx`select g.*, t.label from challan_charges g
+         join charge_types t on t.company_id = g.company_id and t.id = g.charge_type_id
+        where g.company_id = ${companyId} and g.challan_id = ${id}
+          and g.stage = 'hire' and g.cancelled_at is null
+        order by g.created_at, g.id`,
+  ]);
+  return c ? toChallanView(c, lines.map(toChallanLrLine), charges.map(toChallanChargeLine)) : null;
+}
+
+export async function getChallan(companyId: string, id: string): Promise<ChallanView | null> {
+  if (!UUID.test(id)) return null;
+  return withUserRead((tx) => loadChallan(tx, companyId, id));
+}
+
+/** The LR picks for a saved challan's lines (their "remaining" excludes this challan itself). */
+export async function getChallanLrPicks(
+  companyId: string,
+  challanId: string,
+  lrIds: string[],
+): Promise<ChallanLrPick[]> {
+  if (!lrIds.length) return [];
+  return withUserRead(async (tx) => {
+    const [rows, use] = await Promise.all([
+      tx`${LR_SELECT(tx)} where l.company_id = ${companyId} and l.id in ${uuidsIn(tx, lrIds)}`,
+      usageFor(tx, companyId, lrIds, challanId),
+    ]);
+    return rows.map((r) => toPick(toLrView(r), use.get(r.id as string)));
+  });
+}
+
+const rowsIf = (cond: unknown, run: () => PromiseLike<Row[]>): PromiseLike<Row[]> =>
+  cond ? run() : Promise.resolve([]);
+
+const chargeSig = (c: { chargeTypeId: string; amount: string; note: string | null }) =>
+  `${c.chargeTypeId}|${fromPaise(toPaise(c.amount))}|${c.note ?? ""}`;
+
+/**
+ * Create (id null) or edit a draft challan, optionally dispatching it. The number is allocated in the
+ * same statement that inserts the challan (app.allocate_hire_number: row lock per branch + FY).
+ */
+export async function saveChallan(
+  companyId: string,
+  id: string | null,
+  expectedVersion: number | null,
+  v: ChallanValues,
+): Promise<ChallanView> {
+  return withUser(async (tx) => {
+    const lrIds = v.lrs.map((l) => l.lrId);
+    const [existing, branches, vehicles, drivers, brokers, types, lrRows, usage] = await Promise.all([
+      id ? loadChallan(tx, companyId, id) : Promise.resolve(null),
+      tx`select id, name from branches where company_id = ${companyId} and id = ${v.branchId} and cancelled_at is null`,
+      rowsIf(v.vehicleId, () =>
+        tx`select mv.id, mv.vehicle_no, mv.owner_party_id, mv.vehicle_type_id, p.name as owner_name
+             from market_vehicles mv
+             left join truck_parties p on p.company_id = mv.company_id and p.id = mv.owner_party_id
+            where mv.company_id = ${companyId} and mv.id = ${v.vehicleId ?? null} and mv.cancelled_at is null`,
+      ),
+      rowsIf(v.driverId, () =>
+        tx`select id, name from market_drivers
+            where company_id = ${companyId} and id = ${v.driverId ?? null} and cancelled_at is null`,
+      ),
+      rowsIf(v.brokerId, () =>
+        tx`select id, name from truck_parties
+            where company_id = ${companyId} and id = ${v.brokerId ?? null} and cancelled_at is null`,
+      ),
+      rowsIf(v.charges.length, () =>
+        tx`select id, label, default_direction, stage, active from charge_types
+            where company_id = ${companyId}
+              and id in ${uuidsIn(tx, v.charges.map((c) => c.chargeTypeId))}
+              and cancelled_at is null`,
+      ),
+      tx`${LR_SELECT(tx)} where l.company_id = ${companyId} and l.id in ${uuidsIn(tx, lrIds)}`,
+      usageFor(tx, companyId, lrIds, id),
+    ]);
+
+    if (id) {
+      if (!existing) throw new NotFoundError("Challan");
+      if (existing.cancelledAt)
+        throw new ValidationError([{ path: "", message: "This challan is cancelled" }]);
+      if (expectedVersion !== null && existing.version !== expectedVersion) throw new ConflictError();
+      if (existing.status !== "draft")
+        throw new ValidationError([{ path: "", message: "Only a draft challan can be edited" }]);
+    }
+
+    const issues: { path: string; message: string }[] = [];
+    const bad = (path: string, message: string) => {
+      issues.push({ path, message });
+    };
+    const [branch] = branches;
+    const [vehicle] = vehicles;
+    const [driver] = drivers;
+    const [broker] = brokers;
+    if (!branch) bad("branchId", "Branch not found in this company");
+    else if (existing && existing.branchId !== v.branchId)
+      bad("branchId", "The branch can't change once the challan has its number");
+    if (v.vehicleId && !vehicle) bad("vehicleId", "Vehicle not found in this company");
+    if (v.driverId && !driver) bad("driverId", "Driver not found in this company");
+    if (v.brokerId && !broker) bad("brokerId", "Broker not found in this company");
+
+    // LR lines: booked, and no more than what is still free to load.
+    const views = new Map(lrRows.map((r) => [r.id as string, r]));
+    const lines: (ChallanLrLine & { wt: string | null })[] = [];
+    v.lrs.forEach((l, i) => {
+      const row = views.get(l.lrId);
+      if (!row) return bad(`lrs.${i}.lrId`, "LR not found in this company");
+      const lr = toLrView(row);
+      if (lr.cancelledAt || !lr.bookedAt) return bad(`lrs.${i}.lrId`, `LR ${lr.lrNo} is not booked`);
+      const pick = toPick(lr, usage.get(lr.id));
+      if (l.loadedPkgs > pick.remainingPkgs)
+        return bad(
+          `lrs.${i}.loadedPkgs`,
+          pick.remainingPkgs === 0
+            ? `LR ${lr.lrNo} is fully loaded on ${pick.onChallanNos.join(", ")}`
+            : `LR ${lr.lrNo}: only ${pick.remainingPkgs} packages left to load`,
+        );
+      if (l.loadedWt && pick.remainingWt !== null && Number(l.loadedWt) > Number(pick.remainingWt) + 0.0005)
+        return bad(`lrs.${i}.loadedWt`, `LR ${lr.lrNo}: only ${pick.remainingWt} kg left to load`);
+      // Weight not typed: the same share of the free weight as of the free packages.
+      const wt =
+        l.loadedWt ??
+        (pick.remainingWt !== null && pick.remainingPkgs > 0
+          ? ((Number(pick.remainingWt) * l.loadedPkgs) / pick.remainingPkgs).toFixed(3)
+          : null);
+      const freight =
+        pick.totalPkgs > 0
+          ? Math.round((pick.freightPaise * l.loadedPkgs) / pick.totalPkgs)
+          : pick.freightPaise;
+      lines.push({
+        lrId: lr.id,
+        lrNo: lr.lrNo,
+        loadedPkgs: l.loadedPkgs,
+        loadedWt: wt,
+        wt,
+        freightAllocated: fromPaise(freight),
+      });
+    });
+
+    // Hire-stage charges only, and only types the company has switched on.
+    const typeById = new Map(types.map((t) => [t.id as string, t]));
+    const charges: ChallanChargeLine[] = [];
+    v.charges.forEach((c, i) => {
+      const t = typeById.get(c.chargeTypeId);
+      if (!t) return bad(`charges.${i}.chargeTypeId`, "Charge type not found");
+      if (!t.active) return bad(`charges.${i}.chargeTypeId`, `${t.label} is switched off in Hire masters`);
+      if (t.stage !== "hire")
+        return bad(`charges.${i}.chargeTypeId`, `${t.label} is added at POD settlement`);
+      charges.push({
+        id: newId(),
+        chargeTypeId: c.chargeTypeId,
+        label: t.label as string,
+        direction: t.default_direction,
+        amount: fromPaise(toPaise(c.amount)),
+        note: c.note ?? null,
+      });
+    });
+
+    // Pay to OWNER = the vehicle's owner; BROKER = the picked broker.
+    const payeeId =
+      v.payeeKind === "broker"
+        ? (v.brokerId ?? null)
+        : ((vehicle?.owner_party_id as string | null | undefined) ?? null);
+    const payeeName =
+      v.payeeKind === "broker"
+        ? ((broker?.name as string | undefined) ?? null)
+        : ((vehicle?.owner_name as string | null | undefined) ?? null);
+    if (v.action === "dispatch" && v.payeeKind === "owner" && vehicle && !payeeId)
+      bad(
+        "payeeKind",
+        "This vehicle has no owner on file — add the owner in Market vehicles, or pay the broker",
+      );
+    if (issues.length) throw new ValidationError(issues);
+
+    const calc = calcChallan({
+      basis: v.rateBasis,
+      rate: v.rate,
+      tonnes: v.qtyTonnes,
+      charges: charges.map((c) => ({ direction: c.direction, amount: c.amount })),
+    });
+    const status = v.action === "dispatch" ? "dispatched" : "draft";
+    const challanAt = `${v.challanDate}T00:00:00+05:30`;
+    const vehicleTypeId = (vehicle?.vehicle_type_id as string | null | undefined) ?? null;
+    const cid = id ?? newId();
+    const lineRows = lines.map((l) => ({
+      lr_id: l.lrId,
+      loaded_pkgs: l.loadedPkgs,
+      loaded_wt: l.wt,
+      freight_allocated: l.freightAllocated,
+    }));
+    let row: Row;
+    if (!id) {
+      const fy = financialYear(v.challanDate);
+      [row] = await tx`
+        with n as (select * from app.allocate_hire_number(${companyId}::uuid, 'challan', ${v.branchId}::uuid, ${fy}::text))
+        insert into challans (id, company_id, challan_no, challan_fy, challan_seq, challan_at, branch_id,
+                              source, destination, vehicle_id, vehicle_type_id, driver_id, broker_id,
+                              payee_party_id, payee_kind, rate_basis, rate, qty_tonnes, hire_amount,
+                              remarks, status, dispatched_at)
+        select ${cid}::uuid, ${companyId}::uuid, n.prefix || lpad(n.no::text, n.padding::int, '0'),
+               ${fy}::text, n.no, ${challanAt}::timestamptz, ${v.branchId}::uuid,
+               ${v.source ?? null}::text, ${v.destination ?? null}::text, ${v.vehicleId ?? null}::uuid,
+               ${vehicleTypeId}::uuid, ${v.driverId ?? null}::uuid, ${v.brokerId ?? null}::uuid,
+               ${payeeId}::uuid, ${v.payeeKind}::payee_kind, ${v.rateBasis}::rate_basis,
+               ${v.rate}::numeric, ${v.qtyTonnes ?? null}::numeric, ${calc.hireAmount}::numeric,
+               ${v.remarks ?? null}::text, ${status}::challan_status,
+               case when ${status}::text = 'dispatched' then now() end
+          from n
+        returning *`;
+    } else {
+      // Draft lines can be replaced (RLS allows the delete only while the challan is a draft), so this
+      // goes before the status can change. A failed version check below rolls it back.
+      await tx`delete from challan_lrs where company_id = ${companyId} and challan_id = ${cid}`;
+      const set: Row = {
+        source: v.source ?? null,
+        destination: v.destination ?? null,
+        vehicle_id: v.vehicleId ?? null,
+        vehicle_type_id: vehicleTypeId,
+        driver_id: v.driverId ?? null,
+        broker_id: v.brokerId ?? null,
+        payee_party_id: payeeId,
+        payee_kind: v.payeeKind,
+        rate_basis: v.rateBasis,
+        rate: v.rate,
+        qty_tonnes: v.qtyTonnes ?? null,
+        hire_amount: calc.hireAmount,
+        remarks: v.remarks ?? null,
+        status,
+      };
+      if (v.challanDate !== existing!.challanDate) set.challan_at = challanAt;
+      if (status === "dispatched") set.dispatched_at = new Date().toISOString();
+      ({ after: row } = await saveRow(tx, "challans", companyId, cid, expectedVersion, set, {
+        what: "Challan",
+      }));
+    }
+
+    withCommit(
+      tx,
+      tx`insert into challan_lrs (company_id, challan_id, lr_id, loaded_pkgs, loaded_wt, freight_allocated, created_by)
+         select ${companyId}::uuid, ${cid}::uuid, x.lr_id, x.loaded_pkgs, x.loaded_wt, x.freight_allocated, auth.uid()
+           from jsonb_to_recordset(${tx.json(lineRows as never)}::jsonb)
+                as x(lr_id uuid, loaded_pkgs int, loaded_wt numeric, freight_allocated numeric)`,
+    );
+    // Charges can't be deleted (no delete grant). On a draft they are updated in place, row by row;
+    // extra new ones are inserted. Only rows left over after removals are soft-cancelled, which
+    // needs the record.cancel permission.
+    const oldCharges = existing?.charges ?? [];
+    const keptCharges =
+      oldCharges.length === charges.length &&
+      oldCharges.map(chargeSig).sort().join(";") === charges.map(chargeSig).sort().join(";");
+    if (!keptCharges) {
+      charges.forEach((c, i) => {
+        if (i < oldCharges.length) c.id = oldCharges[i].id;
+      });
+      const reuse = charges.slice(0, oldCharges.length).map((c) => ({
+        id: c.id,
+        charge_type_id: c.chargeTypeId,
+        amount: c.amount,
+        note: c.note,
+      }));
+      const added = charges.slice(oldCharges.length).map((c) => ({
+        id: c.id,
+        charge_type_id: c.chargeTypeId,
+        amount: c.amount,
+        note: c.note,
+      }));
+      const surplus = oldCharges.slice(charges.length).map((c) => c.id);
+      if (reuse.length)
+        withCommit(
+          tx,
+          tx`update challan_charges g
+                set charge_type_id = x.charge_type_id, direction = t.default_direction,
+                    amount = x.amount, note = x.note
+               from jsonb_to_recordset(${tx.json(reuse as never)}::jsonb)
+                    as x(id uuid, charge_type_id uuid, amount numeric, note text)
+               join charge_types t on t.company_id = ${companyId} and t.id = x.charge_type_id
+              where g.company_id = ${companyId} and g.challan_id = ${cid} and g.id = x.id`,
+        );
+      if (added.length)
+        withCommit(
+          tx,
+          tx`insert into challan_charges (id, company_id, challan_id, charge_type_id, stage, direction, amount, note)
+             select x.id, ${companyId}::uuid, ${cid}::uuid, x.charge_type_id, 'hire', t.default_direction,
+                    x.amount, x.note
+               from jsonb_to_recordset(${tx.json(added as never)}::jsonb)
+                    as x(id uuid, charge_type_id uuid, amount numeric, note text)
+               join charge_types t on t.company_id = ${companyId} and t.id = x.charge_type_id`,
+        );
+      if (surplus.length)
+        withCommit(
+          tx,
+          tx`update challan_charges
+                set cancelled_at = now(), cancel_reason = 'Removed when the draft challan was edited'
+              where company_id = ${companyId} and challan_id = ${cid} and id in ${uuidsIn(tx, surplus)}`,
+        );
+    }
+
+    const saved = toChallanView(
+      {
+        ...row,
+        challan_date: v.challanDate,
+        branch_name: branch.name,
+        vehicle_no: vehicle?.vehicle_no,
+        driver_name: driver?.name,
+        broker_name: broker?.name,
+        payee_name: payeeName,
+      },
+      lines.map((l) => ({
+        lrId: l.lrId,
+        lrNo: l.lrNo,
+        loadedPkgs: l.loadedPkgs,
+        loadedWt: l.loadedWt,
+        freightAllocated: l.freightAllocated,
+      })),
+      keptCharges ? oldCharges : charges,
+    );
+    audit(tx, companyId, "challans", cid, id ? "update" : "create", existing, saved);
+    return saved;
+  });
+}

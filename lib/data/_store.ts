@@ -218,7 +218,8 @@ export type TableName =
   | "charge_types"
   | "pumps"
   | "branches"
-  | "hire_number_series";
+  | "hire_number_series"
+  | "challans";
 
 // ---------- small utilities ----------
 export const now = () => new Date().toISOString();

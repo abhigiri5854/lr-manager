@@ -272,6 +272,90 @@ export type HireNumberSeries = {
   updatedAt: IsoDateTime;
 };
 
+export type ChallanStatus =
+  | "draft"
+  | "dispatched"
+  | "in_transit"
+  | "reached"
+  | "pod_received"
+  | "settled";
+export type PayeeKind = "owner" | "broker";
+export type RateBasis = "trip" | "per_tonne";
+
+/** One LR loaded on a challan. Money is numeric(14,2) rupees as a string; weights are kg. */
+export type ChallanLrLine = {
+  lrId: Uuid;
+  lrNo: string;
+  loadedPkgs: number;
+  /** kg */
+  loadedWt: Decimal | null;
+  freightAllocated: string;
+};
+
+/** A hire-stage charge on a challan (direction comes from its charge type). */
+export type ChallanChargeLine = {
+  id: Uuid;
+  chargeTypeId: Uuid;
+  label: string;
+  direction: ChargeDirection;
+  amount: string;
+  note: string | null;
+};
+
+/** A market-truck hire challan with its LRs and hire-stage charges (TIER1-MARKET-TRUCKS.md §5). */
+export type Challan = BaseRecord & {
+  challanNo: string;
+  challanFy: string;
+  /** yyyy-mm-dd (India) */
+  challanDate: IsoDate;
+  branchId: Uuid;
+  source: string | null;
+  destination: string | null;
+  vehicleId: Uuid | null;
+  vehicleTypeId: Uuid | null;
+  driverId: Uuid | null;
+  brokerId: Uuid | null;
+  payeePartyId: Uuid | null;
+  payeeKind: PayeeKind;
+  rateBasis: RateBasis;
+  rate: string;
+  qtyTonnes: Decimal | null;
+  hireAmount: string;
+  remarks: string | null;
+  status: ChallanStatus;
+  dispatchedAt: IsoDateTime | null;
+  lrs: ChallanLrLine[];
+  charges: ChallanChargeLine[];
+};
+
+/** Challan plus the names the form shows in its pickers. */
+export type ChallanView = Challan & {
+  branchName: string;
+  vehicleNo: string | null;
+  driverName: string | null;
+  brokerName: string | null;
+  payeeName: string | null;
+};
+
+/** An LR offered in the challan's LR picker, with how much of it is still free to load. */
+export type ChallanLrPick = {
+  lrId: Uuid;
+  lrNo: string;
+  lrDate: IsoDate | null;
+  consignorName: string | null;
+  consigneeName: string | null;
+  fromPlace: string | null;
+  toPlace: string | null;
+  totalPkgs: number;
+  /** kg, from the LR's goods (charged weight, else actual). Null when none is entered. */
+  totalWt: Decimal | null;
+  freightPaise: Paise;
+  remainingPkgs: number;
+  remainingWt: Decimal | null;
+  /** Other live challans carrying part of this LR. */
+  onChallanNos: string[];
+};
+
 export type Truck = BaseRecord & {
   /** Normalised "BR01GN8331", unique per company. */
   number: string;
