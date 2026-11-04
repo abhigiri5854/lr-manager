@@ -222,6 +222,56 @@ export type MarketDriver = BaseRecord & {
   dlFileUrl: string | null;
 };
 
+/** Company master of hired-truck body types ("32ft MXL", "Taurus 16W"…). */
+export type VehicleType = BaseRecord & {
+  name: string;
+  capacityKg: number | null;
+  active: boolean;
+};
+
+export type ChargeDirection = "add" | "deduct";
+export type ChargeStage = "hire" | "pod";
+
+/** A pass-through charge / deduction on a challan (detention, late-POD fee…). */
+export type ChargeType = BaseRecord & {
+  /** Upper case, unique per company. */
+  code: string;
+  label: string;
+  defaultDirection: ChargeDirection;
+  defaultBillParty: boolean;
+  stage: ChargeStage;
+  active: boolean;
+};
+
+/** A diesel pump we hold an advance account with. */
+export type Pump = BaseRecord & {
+  name: string;
+  location: string | null;
+  ledgerRef: string | null;
+};
+
+export type Branch = BaseRecord & {
+  name: string;
+  code: string | null;
+  address: string | null;
+};
+
+export type HireSeriesKind = "challan" | "truck_payment";
+
+/** Challan / truck-payment counter per branch + FY. Keyed by (docType, branchId, fy); no version. */
+export type HireNumberSeries = {
+  companyId: Uuid;
+  docType: HireSeriesKind;
+  branchId: Uuid;
+  branchName: string;
+  /** "2026-27" */
+  fy: string;
+  prefix: string;
+  nextNo: number;
+  padding: number;
+  updatedAt: IsoDateTime;
+};
+
 export type Truck = BaseRecord & {
   /** Normalised "BR01GN8331", unique per company. */
   number: string;

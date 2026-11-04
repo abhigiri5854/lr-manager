@@ -8,6 +8,7 @@ import type {
   MarketVehicleRow,
 } from "../market-vehicles";
 import { contains, paging, withUser, withUserRead, type Tx } from "./conn";
+import { selectVehicleTypeOptions } from "./hire-masters";
 import { audit, toMarketVehicle } from "./rows";
 import { truckDocPathFromUrl } from "./storage";
 import { check, columns, insertRow, refCheck, saveRow, type Fragment } from "./write";
@@ -92,10 +93,7 @@ export async function listMarketVehicleOptions(
           where company_id = ${companyId} and cancelled_at is null
             and ((status = 'active' and role in ('owner', 'both')) or id = ${include.ownerPartyId ?? null})
           order by lower(name), id limit 1000`,
-      tx`select id, name, capacity_kg from vehicle_types
-          where company_id = ${companyId} and cancelled_at is null
-            and (active or id = ${include.vehicleTypeId ?? null})
-          order by lower(name), id`,
+      selectVehicleTypeOptions(tx, companyId, include.vehicleTypeId),
     ]);
     return {
       owners: owners.map((o) => ({
@@ -103,11 +101,7 @@ export async function listMarketVehicleOptions(
         name: o.name as string,
         mobile: (o.mobile as string | null) ?? null,
       })),
-      types: types.map((t) => ({
-        id: t.id as string,
-        name: t.name as string,
-        capacityKg: (t.capacity_kg as number | null) ?? null,
-      })),
+      types,
     };
   });
 }

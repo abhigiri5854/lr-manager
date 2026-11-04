@@ -3,6 +3,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   AuditEntry,
+  Branch,
+  ChargeType,
+  HireNumberSeries,
+  Pump,
+  VehicleType,
   Company,
   Driver,
   FreightBill,
@@ -209,6 +214,45 @@ export function toMarketDriver(r: Row): MarketDriver {
     dlUpto: r.dl_upto,
     dlFileUrl: truckDocUrlFromPath(r.dl_file),
   });
+}
+
+export function toVehicleType(r: Row): VehicleType {
+  return clean({ ...base(r), name: r.name, capacityKg: r.capacity_kg, active: r.active });
+}
+
+export function toChargeType(r: Row): ChargeType {
+  return clean({
+    ...base(r),
+    code: r.code,
+    label: r.label,
+    defaultDirection: r.default_direction,
+    defaultBillParty: r.default_bill_party,
+    stage: r.stage,
+    active: r.active,
+  });
+}
+
+export function toPump(r: Row): Pump {
+  return clean({ ...base(r), name: r.name, location: r.location, ledgerRef: r.ledger_ref });
+}
+
+export function toBranch(r: Row): Branch {
+  return clean({ ...base(r), name: r.name, code: r.code, address: r.address });
+}
+
+/** hire_number_series row (+ branch_name from the query). */
+export function toHireNumberSeries(r: Row): HireNumberSeries {
+  return {
+    companyId: r.company_id,
+    docType: r.doc_type,
+    branchId: r.branch_id,
+    branchName: r.branch_name ?? "",
+    fy: r.fy,
+    prefix: r.prefix,
+    nextNo: Number(r.next_no),
+    padding: r.padding,
+    updatedAt: r.updated_at,
+  };
 }
 
 export function toTruck(r: Row): Truck {

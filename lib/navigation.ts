@@ -78,6 +78,12 @@ export const navGroups: NavGroup[] = [
         isActive: startsWith("/market-trucks/drivers"),
         action: "master.edit",
       },
+      {
+        label: "Hire masters",
+        href: "/market-trucks/masters",
+        isActive: startsWith("/market-trucks/masters"),
+        action: "master.edit",
+      },
     ],
   },
   {

@@ -214,7 +214,11 @@ export type TableName =
   | "tds_declarations"
   | "market_vehicles"
   | "market_drivers"
-  | "vehicle_types";
+  | "vehicle_types"
+  | "charge_types"
+  | "pumps"
+  | "branches"
+  | "hire_number_series";
 
 // ---------- small utilities ----------
 export const now = () => new Date().toISOString();
