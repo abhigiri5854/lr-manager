@@ -105,8 +105,13 @@ describe("numbering reset", () => {
     allocateNumber(acmId(), "freight_bill", "2025-26");
     expect(allocateNumber(acmId(), "freight_bill", "2026-27")).toBe(1);
 
-    resetStore();
-    db.companies.find((c) => c.id === acmId())!.numberingResetsYearly = false;
+    const companyId = acmId();
+    db.numberSeries.splice(
+      0,
+      db.numberSeries.length,
+      ...db.numberSeries.filter((s) => s.companyId !== companyId || s.series === "lr"),
+    );
+    db.companies.find((c) => c.id === companyId)!.numberingResetsYearly = false;
     allocateNumber(acmId(), "tax_invoice", "2025-26");
     allocateNumber(acmId(), "tax_invoice", "2025-26");
     expect(allocateNumber(acmId(), "tax_invoice", "2026-27")).toBe(3);

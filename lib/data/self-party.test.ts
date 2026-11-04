@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db, resetStore } from "./_store";
+import { db, resetStore, SAMPLE_IDS } from "./_store";
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
 import { updateCompany } from "./companies";
@@ -36,6 +36,8 @@ describe("self party", () => {
   });
 
   it("follows Company profile edits (name, GSTIN, address, phone) and writes audit", async () => {
+    db.memberships.find((m) => m.companyId === rs().id && m.role === "owner")!.userId =
+      SAMPLE_IDS.ownerId;
     const before = await getSelfParty(rs().id);
     await updateCompany(rs().id, rs().version, {
       name: "RS LOGISTICS PVT LTD",

@@ -164,9 +164,10 @@ export function invoicePrefill(
       gstRateBp: Number(remembered("gstRateBp", String(l0.gstRateBp), path("gstRateBp"))) || l0.gstRateBp,
     };
     const byCode = l.itemCode ? lookups.itemByCode(l.itemCode) : null;
-    const known = byCode ?? lookups.itemByHsnOrName(l.hsn, l.description);
-    // An item code we've never seen: the line is kept, but check it.
-    if (l.itemCode && !byCode && !known) flags[`lines.${i}.description`] = "new-record";
+    const hsn = lowConfidence.includes(path("hsn")) ? null : l.hsn;
+    const known = byCode ?? lookups.itemByHsnOrName(hsn, l.description);
+    // A line that doesn't match a saved item is kept, but marked as new.
+    if (!known) flags[`lines.${i}.description`] = "new-record";
     // Only empty cells are filled from the saved item; each one filled is marked "check".
     const fill = (field: string, read: string | null, saved: string | null): string => {
       if (read) return read;
