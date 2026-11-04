@@ -195,6 +195,33 @@ export type TdsDeclaration = BaseRecord & {
   receivedOn: IsoDate | null;
 };
 
+/** A hired (market) vehicle, unique per company by normalised number (TIER1-MARKET-TRUCKS.md §5). */
+export type MarketVehicle = BaseRecord & {
+  /** Normalised "BR01GN8331". */
+  vehicleNo: string;
+  ownerPartyId: Uuid | null;
+  vehicleTypeId: Uuid | null;
+  capacityKg: number | null;
+  rcOwnerName: string | null;
+  insuranceUpto: IsoDate | null;
+  fitnessUpto: IsoDate | null;
+  permitUpto: IsoDate | null;
+  pucUpto: IsoDate | null;
+  /** App link to the uploaded RC copy. */
+  rcFileUrl: string | null;
+  lastVerifiedAt: IsoDateTime | null;
+};
+
+/** A driver hired with a market vehicle (not the company's own driver login). */
+export type MarketDriver = BaseRecord & {
+  name: string;
+  mobile: string | null;
+  dlNo: string | null;
+  dlUpto: IsoDate | null;
+  /** App link to the uploaded licence copy. */
+  dlFileUrl: string | null;
+};
+
 export type Truck = BaseRecord & {
   /** Normalised "BR01GN8331", unique per company. */
   number: string;

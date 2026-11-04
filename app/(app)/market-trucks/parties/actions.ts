@@ -71,12 +71,13 @@ export async function addTdsDeclarationAction(
   }
 }
 
-/** One UPI QR image or TDS declaration file (FormData: kind = "upi-qr" | "tds", file). */
+/** One UPI QR, TDS declaration, RC or DL file (FormData: kind = "upi-qr" | "tds" | "rc" | "dl", file). */
 export async function uploadTruckDocAction(
   form: FormData,
 ): Promise<{ ok: true; url: string; name: string } | { ok: false; message: string }> {
   const companyId = await getActiveCompanyId();
-  const kind = form.get("kind") === "tds" ? "tds" : "upi-qr";
+  const raw = form.get("kind");
+  const kind = raw === "tds" || raw === "rc" || raw === "dl" ? raw : "upi-qr";
   const file = form.get("file");
   if (!(file instanceof File)) return { ok: false, message: "Choose a file first" };
   try {

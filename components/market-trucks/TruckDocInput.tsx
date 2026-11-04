@@ -6,7 +6,7 @@ import { prepareUpload } from "@/lib/image-upload";
 
 /**
  * Pick a file, shrink it if it is a photo, upload it, and report the app link back.
- * `kind` decides what the server accepts: "upi-qr" photos only, "tds" photos or PDF.
+ * `kind` decides what the server accepts: "upi-qr" photos only; "tds", "rc", "dl" photos or PDF.
  */
 export function TruckDocInput({
   label,
@@ -16,7 +16,7 @@ export function TruckDocInput({
   error,
 }: {
   label: string;
-  kind: "upi-qr" | "tds";
+  kind: "upi-qr" | "tds" | "rc" | "dl";
   url: string | null;
   onChange: (url: string | null) => void;
   error?: string;

@@ -66,6 +66,18 @@ export const navGroups: NavGroup[] = [
         isActive: startsWith("/market-trucks/parties"),
         action: "master.edit",
       },
+      {
+        label: "Market vehicles",
+        href: "/market-trucks/vehicles",
+        isActive: startsWith("/market-trucks/vehicles"),
+        action: "master.edit",
+      },
+      {
+        label: "Market drivers",
+        href: "/market-trucks/drivers",
+        isActive: startsWith("/market-trucks/drivers"),
+        action: "master.edit",
+      },
     ],
   },
   {

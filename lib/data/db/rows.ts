@@ -12,6 +12,8 @@ import type {
   Item,
   Lr,
   LrView,
+  MarketDriver,
+  MarketVehicle,
   Membership,
   Party,
   Payment,
@@ -178,6 +180,34 @@ export function toTdsDeclaration(r: Row): TdsDeclaration {
     fileUrl: truckDocUrlFromPath(r.file_url),
     vehiclesOwnedDeclared: r.vehicles_owned_declared,
     receivedOn: r.received_on,
+  });
+}
+
+export function toMarketVehicle(r: Row): MarketVehicle {
+  return clean({
+    ...base(r),
+    vehicleNo: r.vehicle_no,
+    ownerPartyId: r.owner_party_id,
+    vehicleTypeId: r.vehicle_type_id,
+    capacityKg: r.capacity_kg,
+    rcOwnerName: r.rc_owner_name,
+    insuranceUpto: r.insurance_upto,
+    fitnessUpto: r.fitness_upto,
+    permitUpto: r.permit_upto,
+    pucUpto: r.puc_upto,
+    rcFileUrl: truckDocUrlFromPath(r.rc_file),
+    lastVerifiedAt: r.last_verified_at,
+  });
+}
+
+export function toMarketDriver(r: Row): MarketDriver {
+  return clean({
+    ...base(r),
+    name: r.name,
+    mobile: r.mobile,
+    dlNo: r.dl_no,
+    dlUpto: r.dl_upto,
+    dlFileUrl: truckDocUrlFromPath(r.dl_file),
   });
 }
 

@@ -112,16 +112,17 @@ export async function uploadCompanyImage(
 }
 
 /**
- * Market-truck party files: the UPI QR image (photo only) or a TDS declaration (photo or PDF),
- * up to 3 MB. Needs master.edit. On the database it goes to the private `truck-docs` bucket.
+ * Market-truck files: the UPI QR image (photo only), a TDS declaration, a vehicle RC or a driver's
+ * licence (photo or PDF), up to 3 MB. Needs master.edit. On the database it goes to the private
+ * `truck-docs` bucket.
  */
 export async function uploadTruckDoc(
   companyId: string,
-  kind: "upi-qr" | "tds",
+  kind: "upi-qr" | "tds" | "rc" | "dl",
   file: { name: string; type: string; bytes: Uint8Array },
 ): Promise<{ url: string; name: string }> {
   await assertCan(companyId, "master.edit");
-  const path = kind === "upi-qr" ? "upiQrUrl" : "fileUrl";
+  const path = { "upi-qr": "upiQrUrl", tds: "fileUrl", rc: "rcFileUrl", dl: "dlFileUrl" }[kind];
   const okType = kind === "upi-qr" ? file.type.startsWith("image/") : allowed(file.type);
   if (!okType)
     fail(path, `${file.name}: ${kind === "upi-qr" ? "upload a photo or screenshot" : "only photos and PDFs can be uploaded"}`);
