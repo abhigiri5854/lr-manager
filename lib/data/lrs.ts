@@ -409,6 +409,29 @@ export async function dispatchLr(
   return toLrView(saved);
 }
 
+/** Challan path: stamps the LR In transit for a dispatched market-truck challan. No truck_id needed. */
+export async function dispatchLrOnChallan(
+  companyId: string,
+  id: string,
+  challanId: string,
+): Promise<LrView> {
+  await assertCan(companyId, "lr.edit");
+  if (onDatabase()) return dbl.dispatchLrOnChallan(companyId, id, challanId);
+  const saved = updateRecord(
+    "lrs",
+    db.lrs,
+    companyId,
+    id,
+    db.lrs.find((r) => r.companyId === companyId && r.id === id)?.version ?? 0,
+    (current) => {
+      if (!current.bookedAt) fail("", "Book the LR before dispatching it");
+      return current.dispatchedAt ? current : { ...current, dispatchedAt: now() };
+    },
+    "LR",
+  );
+  return toLrView(saved);
+}
+
 /** Soft-cancels an LR with a reason. Not allowed while it is on a freight bill. */
 export async function cancelLr(
   companyId: string,

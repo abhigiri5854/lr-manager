@@ -626,6 +626,34 @@ export async function dispatchLr(
   });
 }
 
+/** Market-truck path: a dispatched challan stamps its LR In transit and keeps the challan id. No truck_id needed. */
+export async function dispatchLrOnChallan(
+  companyId: string,
+  id: string,
+  challanId: string,
+): Promise<LrView> {
+  return withUser(async (tx) => {
+    if (!isUuid(id)) throw new NotFoundError("LR");
+    const { before, after } = await saveRow(
+      tx,
+      "lrs",
+      companyId,
+      id,
+      null,
+      { dispatched_at: tx`coalesce(cur.dispatched_at, now())`, challan_id: challanId },
+      {
+        what: "LR",
+        extra: lrViewCols(tx),
+        validate: (b) => {
+          if (!b.booked_at) fail("", "Book the LR before dispatching it");
+        },
+      },
+    );
+    audit(tx, companyId, "lrs", id, "update", toLr(before), toLr(after));
+    return toLrView(after);
+  });
+}
+
 export async function cancelLr(companyId: string, id: string, reason: string): Promise<LrView> {
   return withUser(async (tx) => {
     if (!isUuid(id)) throw new NotFoundError("LR");

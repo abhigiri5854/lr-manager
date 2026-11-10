@@ -1,4 +1,5 @@
 // Market-truck hire challans on the database (TIER1-MARKET-TRUCKS.md §5, §6 screen 1).
+import type { ChallanInsightQuery, ChallanInsights } from "@/lib/challan-insights";
 import { financialYear } from "@/lib/fy";
 import { calcChallan, fromPaise, toPaise } from "@/lib/hire";
 import type { ChallanChargeLine, ChallanLrLine, ChallanLrPick, ChallanView, LrView } from "@/lib/types";
@@ -99,6 +100,92 @@ export async function searchBrokers(companyId: string, search: string) {
       name: r.name as string,
       mobile: (r.mobile as string | null) ?? null,
     }));
+  });
+}
+
+/** Settings, lane rates, payee / vehicle / driver status and e-way expiries for the challan form's right rail. */
+export async function getChallanInsights(
+  companyId: string,
+  q: ChallanInsightQuery,
+): Promise<ChallanInsights> {
+  const validId = (s: string | null) => (s && UUID.test(s) ? s : null);
+  const vehicleId = validId(q.vehicleId);
+  const driverId = validId(q.driverId);
+  const brokerId = validId(q.brokerId);
+  const lrIds = q.lrIds.filter((x) => UUID.test(x));
+  const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  return withUserRead(async (tx) => {
+    const [[co], [veh], [drv], [brk], ewb] = await Promise.all([
+      tx`select min_margin_pct, rate_outlier_pct, ewb_alert_hours from companies where id = ${companyId}`,
+      rowsIf(vehicleId, () =>
+        tx`select mv.vehicle_no, mv.vehicle_type_id, mv.insurance_upto::text, mv.fitness_upto::text,
+                  mv.permit_upto::text, p.name as owner_name, p.verified as owner_verified,
+                  (p.status = 'blacklisted') as owner_blacklisted
+             from market_vehicles mv
+             left join truck_parties p on p.company_id = mv.company_id and p.id = mv.owner_party_id
+            where mv.company_id = ${companyId} and mv.id = ${vehicleId}`,
+      ),
+      rowsIf(driverId, () =>
+        tx`select name, dl_upto::text from market_drivers where company_id = ${companyId} and id = ${driverId}`,
+      ),
+      rowsIf(brokerId, () =>
+        tx`select name, verified, (status = 'blacklisted') as blacklisted from truck_parties
+            where company_id = ${companyId} and id = ${brokerId}`,
+      ),
+      rowsIf(lrIds.length, () =>
+        tx`select l.lr_no, min(i.eway_expires_at)::text as expires_at
+             from lrs l join lr_invoices i on i.company_id = l.company_id and i.lr_id = l.id
+            where l.company_id = ${companyId} and l.id in ${uuidsIn(tx, lrIds)}
+              and i.eway_bill_no is not null and i.eway_expires_at is not null
+            group by l.lr_no order by l.lr_no`,
+      ),
+    ]);
+    const src = q.source.trim().toLowerCase();
+    const dst = q.destination.trim().toLowerCase();
+    const [lane] =
+      src && dst
+        ? await tx`select n, median_rate, rates from v_lane_rates
+                    where company_id = ${companyId} and source = ${src} and destination = ${dst}
+                      and rate_basis = ${q.rateBasis}::rate_basis
+                      and vehicle_type_id is not distinct from ${(veh?.vehicle_type_id as string | null) ?? null}::uuid`
+        : [];
+    const payee =
+      q.payeeKind === "broker"
+        ? brk
+          ? { name: brk.name as string, verified: !!brk.verified, blacklisted: !!brk.blacklisted }
+          : null
+        : veh?.owner_name
+          ? {
+              name: veh.owner_name as string,
+              verified: !!veh.owner_verified,
+              blacklisted: !!veh.owner_blacklisted,
+            }
+          : null;
+    return {
+      settings: {
+        minMarginPct: num(co?.min_margin_pct),
+        rateOutlierPct: num(co?.rate_outlier_pct),
+        ewbAlertHours: num(co?.ewb_alert_hours),
+      },
+      lane: lane
+        ? {
+            n: lane.n as number,
+            medianRate: String(lane.median_rate),
+            rates: (lane.rates as unknown[]).map(String),
+          }
+        : null,
+      vehicle: veh
+        ? {
+            vehicleNo: veh.vehicle_no as string,
+            insuranceUpto: (veh.insurance_upto as string | null) ?? null,
+            fitnessUpto: (veh.fitness_upto as string | null) ?? null,
+            permitUpto: (veh.permit_upto as string | null) ?? null,
+          }
+        : null,
+      driver: drv ? { name: drv.name as string, dlUpto: (drv.dl_upto as string | null) ?? null } : null,
+      payee,
+      ewb: ewb.map((r) => ({ lrNo: r.lr_no as string, expiresAt: r.expires_at as string })),
+    } satisfies ChallanInsights;
   });
 }
 

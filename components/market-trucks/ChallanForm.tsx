@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
+  challanInsightsAction,
   saveChallanAction,
   searchChallanBrokersAction,
   searchChallanDriversAction,
@@ -15,6 +16,12 @@ import { Card } from "@/components/ui/Card";
 import { Combobox } from "@/components/ui/Combobox";
 import { DateField } from "@/components/ui/DateField";
 import { Field, Select, Textarea } from "@/components/ui/Field";
+import {
+  challanWarnings,
+  rateOutlier,
+  tripMargin,
+  type ChallanInsights,
+} from "@/lib/challan-insights";
 import { formatDate, formatRupees } from "@/lib/format";
 import { calcChallan, toPaise } from "@/lib/hire";
 import type { Branch, ChallanLrPick, ChallanView, ChargeType } from "@/lib/types";
@@ -50,8 +57,8 @@ const money = (value: string) => {
 };
 
 /**
- * Challan create / edit (TIER1-MARKET-TRUCKS.md §6 screen 1, part A: no margin card, warnings or
- * lane-rate hint yet). Hire totals come from lib/hire; the server recomputes them on save.
+ * Challan create / edit (TIER1-MARKET-TRUCKS.md §6 screen 1): right rail has the margin card and
+ * warnings, the rate field a lane-rate hint. Hire totals come from lib/hire; the server recomputes them on save.
  * `challan` set = editing; only a draft can be edited, anything else shows read-only.
  */
 export function ChallanForm({
@@ -183,6 +190,57 @@ export function ChallanForm({
 
   const payeeName = payeeKind === "broker" ? (broker?.name ?? null) : (vehicle?.ownerName ?? null);
 
+  // ---------- right rail: margin, lane rate, warnings ----------
+  const [insights, setInsights] = useState<ChallanInsights | null>(null);
+  const [asOfMs, setAsOfMs] = useState(0); // when the insights were fetched (e-way expiry is judged at that moment)
+  const lrIdsKey = lines.map((l) => l.pick.lrId).join(",");
+  const vehicleId = vehicle?.id ?? null;
+  const driverId = driver?.id ?? null;
+  const brokerId = broker?.id ?? null;
+  useEffect(() => {
+    let stale = false;
+    const t = setTimeout(() => {
+      challanInsightsAction({
+        vehicleId,
+        driverId,
+        brokerId,
+        payeeKind,
+        source,
+        destination,
+        rateBasis,
+        lrIds: lrIdsKey ? lrIdsKey.split(",") : [],
+      })
+        .then((r) => {
+          if (stale) return;
+          setInsights(r);
+          setAsOfMs(Date.now());
+        })
+        .catch(() => {
+          if (!stale) setInsights(null);
+        });
+    }, 400);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [vehicleId, driverId, brokerId, payeeKind, source, destination, rateBasis, lrIdsKey]);
+
+  const freightPaise = lines.reduce((s, l) => {
+    const n = Number(l.pkgs) || 0;
+    const { freightPaise: f, totalPkgs } = l.pick;
+    return s + (totalPkgs > 0 ? Math.round((f * n) / totalPkgs) : f);
+  }, 0);
+  const grossPaise = calc ? toPaise(calc.hireAmount) + toPaise(calc.additions) : null;
+  const margin =
+    grossPaise === null || lines.length === 0
+      ? null
+      : tripMargin(freightPaise, grossPaise, insights?.settings.minMarginPct ?? null);
+  const outlier =
+    insights?.lane && Number(rate) > 0
+      ? rateOutlier(Number(rate), Number(insights.lane.medianRate), insights.settings.rateOutlierPct)
+      : null;
+  const warnings = challanWarnings(insights, today, asOfMs);
+
   // ---------- save ----------
   function buildInput(action: "draft" | "dispatch"): ChallanInput {
     return {
@@ -248,13 +306,14 @@ export function ChallanForm({
 
   return (
     <>
+    <div className="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
     <form
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
         save("draft");
       }}
-      className="mt-6 flex flex-col gap-5"
+      className="flex min-w-0 flex-col gap-5"
     >
       {readOnly && (
         <Alert tone="info" title={`This challan is ${challan!.status.replace("_", " ")}.`}>
@@ -511,6 +570,18 @@ export function ChallanForm({
               value={rate}
               onChange={(e) => setRate(e.target.value)}
               error={err("rate")}
+              hint={
+                insights?.lane ? (
+                  <span className={outlier?.outlier ? "font-semibold text-warning" : undefined}>
+                    Lane median {money(insights.lane.medianRate)} · last{" "}
+                    {insights.lane.rates
+                      .slice(0, 3)
+                      .map((r) => money(r))
+                      .join(", ")}
+                    {outlier?.outlier ? ` · ${outlier.abovePct.toFixed(0)}% above median` : ""}
+                  </span>
+                ) : undefined
+              }
             />
             <Field
               label="Tonnes"
@@ -622,6 +693,45 @@ export function ChallanForm({
         </div>
       )}
     </form>
+
+    <aside className="flex flex-col gap-5 lg:sticky lg:top-4" aria-label="Trip summary">
+      <Card title="Trip margin">
+        {margin === null ? (
+          <p className="m-0 text-[13px] text-muted">Add an LR and a hire rate to see the margin.</p>
+        ) : (
+          <>
+            <div className={`font-mono text-2xl font-bold ${margin.low ? "text-danger" : "text-success"}`}>
+              {formatRupees(margin.marginPaise)}
+              <span className="ml-2 text-base">{margin.pct === null ? "" : `${margin.pct.toFixed(1)}%`}</span>
+            </div>
+            <dl className="mt-3 mb-0 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+              <dt className="text-muted">Party freight</dt>
+              <dd className="m-0 text-right font-mono">{formatRupees(freightPaise)}</dd>
+              <dt className="text-muted">Hire + additions</dt>
+              <dd className="m-0 text-right font-mono">{formatRupees(grossPaise ?? 0)}</dd>
+            </dl>
+            {margin.low && (
+              <p className="mt-2 mb-0 text-[13px] text-danger">
+                {insights?.settings.minMarginPct != null
+                  ? `Below the company minimum of ${insights.settings.minMarginPct}%.`
+                  : "Below the company minimum margin."}
+              </p>
+            )}
+          </>
+        )}
+      </Card>
+
+      {warnings.length > 0 && (
+        <Alert tone="warning" title={`${warnings.length} thing${warnings.length > 1 ? "s" : ""} to check`}>
+          <ul className="m-0 list-disc pl-5">
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+    </aside>
+    </div>
 
     {/* Outside the <form>: the drawers hold forms of their own. */}
       <QuickAddVehicleDrawer

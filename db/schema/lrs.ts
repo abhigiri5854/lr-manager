@@ -71,6 +71,8 @@ export const lrs = pgTable(
     // lifecycle stamps the LR owns
     bookedAt: ts("booked_at"),
     dispatchedAt: ts("dispatched_at"),
+    /** Challan that dispatched this LR on a market truck (FK in migration 0016 only: schema cycle). */
+    challanId: uuid("challan_id"),
     deliveredAt: ts("delivered_at"),
     // cached from the POD / bill / payments by trigger (app.refresh_lr_stamps)
     podReceivedAt: ts("pod_received_at"),

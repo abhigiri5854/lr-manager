@@ -9,8 +9,14 @@ import { db, resetStore, SAMPLE_IDS } from "./_store";
 // Tests run outside a Next.js request, where connection() would throw.
 vi.mock("next/server", () => ({ connection: async () => {} }));
 import * as bills from "./bills";
+import * as challans from "./challans";
 import * as companies from "./companies";
 import { ForbiddenError } from "./errors";
+import * as hireMasters from "./hire-masters";
+import * as hireSettings from "./hire-settings";
+import * as marketDrivers from "./market-drivers";
+import * as marketVehicles from "./market-vehicles";
+import * as truckParties from "./truck-parties";
 import * as imports from "./import";
 import * as invoices from "./invoices";
 import * as items from "./items";
@@ -90,6 +96,7 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   updateLr: ["lr.edit", () => lrs.updateLr(c(), X, 1, {})],
   bookLr: ["lr.edit", () => lrs.bookLr(c(), X, 1)],
   dispatchLr: ["lr.edit", () => lrs.dispatchLr(c(), X, 1)],
+  dispatchLrOnChallan: ["lr.edit", () => lrs.dispatchLrOnChallan(c(), X, X)],
   cancelLr: ["record.cancel", () => lrs.cancelLr(c(), X, { reason: "x" })],
   changeMemberRole: ["company.manage", () => members.changeMemberRole(c(), X, 1, "owner")],
   removeMember: ["company.manage", () => members.removeMember(c(), X)],
@@ -111,6 +118,26 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   createPod: ["pod.upload", () => pod.createPod(c(), { lrId: X } as never)],
   updatePod: ["pod.upload", () => pod.updatePod(c(), X, 1, {})],
   uploadPodFile: ["pod.upload", () => uploads.uploadPodFile(c(), png)],
+  // Tier 1 (market trucks): masters need master.edit, challans need lr.edit.
+  createVehicleType: ["master.edit", () => hireMasters.createVehicleType(c(), {} as never)],
+  updateVehicleType: ["master.edit", () => hireMasters.updateVehicleType(c(), X, 1, {})],
+  createChargeType: ["master.edit", () => hireMasters.createChargeType(c(), {} as never)],
+  updateChargeType: ["master.edit", () => hireMasters.updateChargeType(c(), X, 1, {})],
+  createPump: ["master.edit", () => hireMasters.createPump(c(), {} as never)],
+  updatePump: ["master.edit", () => hireMasters.updatePump(c(), X, 1, {})],
+  createBranch: ["master.edit", () => hireMasters.createBranch(c(), {} as never)],
+  updateBranch: ["master.edit", () => hireMasters.updateBranch(c(), X, 1, {})],
+  createHireSeries: ["master.edit", () => hireMasters.createHireSeries(c(), {} as never)],
+  updateHireSeries: ["master.edit", () => hireMasters.updateHireSeries(c(), "challan" as never, {} as never)],
+  uploadTruckDoc: ["master.edit", () => uploads.uploadTruckDoc(c(), "rc", png)],
+  updateHireSettings: ["company.manage", () => hireSettings.updateHireSettings(c(), 1, {} as never)],
+  createMarketVehicle: ["master.edit", () => marketVehicles.createMarketVehicle(c(), {} as never)],
+  updateMarketVehicle: ["master.edit", () => marketVehicles.updateMarketVehicle(c(), X, 1, {})],
+  createMarketDriver: ["master.edit", () => marketDrivers.createMarketDriver(c(), {} as never)],
+  updateMarketDriver: ["master.edit", () => marketDrivers.updateMarketDriver(c(), X, 1, {})],
+  createTruckParty: ["master.edit", () => truckParties.createTruckParty(c(), {} as never)],
+  updateTruckParty: ["master.edit", () => truckParties.updateTruckParty(c(), X, 1, {})],
+  saveChallan: ["lr.edit", () => challans.saveChallan(c(), null, null, {} as never)],
 };
 
 /** Resolves to true when the call was refused for permissions. */

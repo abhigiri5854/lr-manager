@@ -113,6 +113,13 @@
       "when": 1793763342000,
       "tag": "0015_truck_docs_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793849742000,
+      "tag": "0016_lr_challan",
+      "breakpoints": true
     }
   ]
 }

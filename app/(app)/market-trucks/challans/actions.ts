@@ -1,7 +1,8 @@
 "use server";
 
 // Server actions for the challan screen. Role checks happen in lib/data (lr.edit to save).
-import { saveChallan, searchBrokers, searchChallanLrs } from "@/lib/data/challans";
+import type { ChallanInsightQuery, ChallanInsights } from "@/lib/challan-insights";
+import { getChallanInsights, saveChallan, searchBrokers, searchChallanLrs } from "@/lib/data/challans";
 import { listMarketDriverRows } from "@/lib/data/market-drivers";
 import { listMarketVehicleRows, type MarketVehicleRow } from "@/lib/data/market-vehicles";
 import { getActiveCompanyId } from "@/lib/data/session";
@@ -20,6 +21,10 @@ export async function saveChallanAction(
   } catch (e) {
     return toFailure(e);
   }
+}
+
+export async function challanInsightsAction(query: ChallanInsightQuery): Promise<ChallanInsights> {
+  return getChallanInsights(await getActiveCompanyId(), query);
 }
 
 export async function searchChallanLrsAction(

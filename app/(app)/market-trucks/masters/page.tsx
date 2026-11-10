@@ -9,6 +9,7 @@ import {
   SeriesTab,
   VehicleTypesTab,
 } from "@/components/market-trucks/HireMasterTabs";
+import { HireSettingsTab } from "@/components/market-trucks/HireSettingsTab";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
   listBranches,
@@ -17,7 +18,9 @@ import {
   listPumps,
   listVehicleTypes,
 } from "@/lib/data/hire-masters";
-import { getActiveCompanyId } from "@/lib/data/session";
+import { getHireSettings } from "@/lib/data/hire-settings";
+import { getActiveCompanyId, getRole } from "@/lib/data/session";
+import { can } from "@/lib/permissions";
 
 export const metadata: Metadata = { title: "Hire masters" };
 
@@ -25,14 +28,21 @@ export const metadata: Metadata = { title: "Hire masters" };
 async function TabLoader({ searchParams }: Pick<PageProps<"/market-trucks/masters">, "searchParams">) {
   const tab = parseMasterTab((await searchParams).tab);
   const companyId = await getActiveCompanyId();
+  const isOwner = can((await getRole(companyId)) ?? "booking_staff", "company.manage");
   return (
     <>
-      <MasterTabNav active={tab} />
+      <MasterTabNav active={tab} showSettings={isOwner} />
       {tab === "vehicle-types" && <VehicleTypesTab rows={await listVehicleTypes(companyId)} />}
       {tab === "charge-types" && <ChargeTypesTab rows={await listChargeTypes(companyId)} />}
       {tab === "pumps" && <PumpsTab rows={await listPumps(companyId)} />}
       {tab === "branches" && <BranchesTab rows={await listBranches(companyId)} />}
       {tab === "series" && <SeriesTabLoader companyId={companyId} />}
+      {tab === "settings" &&
+        (isOwner ? (
+          <HireSettingsTab settings={await getHireSettings(companyId)} />
+        ) : (
+          <p className="text-sm text-muted">Only the company Owner can change these settings.</p>
+        ))}
     </>
   );
 }
@@ -47,7 +57,7 @@ export default function HireMastersPage({ searchParams }: PageProps<"/market-tru
     <>
       <PageHeader
         title="Hire masters"
-        subtitle="Vehicle types, charge types, pumps, branches and challan / payment number series."
+        subtitle="Vehicle types, charge types, pumps, branches and challan / payment number series and hire settings."
       />
       <Suspense fallback={<MasterTabNav active="vehicle-types" />}>
         <TabLoader searchParams={searchParams} />

@@ -20,6 +20,7 @@ export const MASTER_TABS = [
   { key: "pumps", label: "Pumps" },
   { key: "branches", label: "Branches" },
   { key: "series", label: "Number series" },
+  { key: "settings", label: "Settings" },
 ] as const;
 export type MasterTab = (typeof MASTER_TABS)[number]["key"];
 
@@ -28,10 +29,10 @@ export function parseMasterTab(raw: string | string[] | undefined): MasterTab {
   return MASTER_TABS.find((t) => t.key === v)?.key ?? "vehicle-types";
 }
 
-export function MasterTabNav({ active }: { active: MasterTab }) {
+export function MasterTabNav({ active, showSettings = false }: { active: MasterTab; showSettings?: boolean }) {
   return (
     <nav aria-label="Hire masters" className="mb-4 flex flex-wrap gap-2">
-      {MASTER_TABS.map((t) => (
+      {MASTER_TABS.filter((t) => showSettings || t.key !== "settings").map((t) => (
         <Link
           key={t.key}
           href={`${BASE}?tab=${t.key}`}

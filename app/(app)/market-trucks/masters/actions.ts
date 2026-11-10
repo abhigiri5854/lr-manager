@@ -14,6 +14,7 @@ import {
   updatePump,
   updateVehicleType,
 } from "@/lib/data/hire-masters";
+import { updateHireSettings } from "@/lib/data/hire-settings";
 import type {
   Branch,
   ChargeType,
@@ -34,6 +35,7 @@ import type {
   VehicleTypeInput,
   VehicleTypePatch,
 } from "@/lib/validators/hire-master";
+import type { HireSettings, HireSettingsInput } from "@/lib/validators/hire-settings";
 import { toFailure, type ActionFailure } from "../failure";
 
 type Saved<T> = { ok: true; row: T } | ActionFailure;
@@ -85,3 +87,8 @@ export const updateSeriesAction = async (
   key: SeriesKey,
   input: SeriesCounterInput,
 ): Promise<Saved<HireNumberSeries>> => run((c) => updateHireSeries(c, key, input));
+
+export const updateHireSettingsAction = async (
+  version: number,
+  input: HireSettingsInput,
+): Promise<Saved<HireSettings>> => run((c) => updateHireSettings(c, version, input));
