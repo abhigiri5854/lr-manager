@@ -22,6 +22,7 @@ const BANK_KEYS = [
   "ifsc",
   "upiId",
   "upiQrUrl",
+  "bankProofUrl",
   "verified",
   "status",
   "blacklistReason",

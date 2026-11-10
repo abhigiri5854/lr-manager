@@ -41,6 +41,7 @@ export const truckPartyFields = z.object({
   ifsc: optional(ifscSchema),
   upiId: optional(upiSchema),
   upiQrUrl: optionalText(500),
+  bankProofUrl: optionalText(500),
   verified: z.boolean(),
   status: truckPartyStatusSchema,
   blacklistReason: optionalText(300),
@@ -78,7 +79,7 @@ export const tdsDeclarationFields = z.object({
   partyId: z.uuid(),
   fy: z.string().regex(/^\d{4}-\d{2}$/, "Financial year looks like 2025-26"),
   fileUrl: optionalText(500),
-  vehiclesOwnedDeclared: optional(z.coerce.number().int("Whole number").min(0)),
+  vehiclesOwnedDeclared: optional(z.coerce.number("Enter a whole number, e.g. 5").int("Whole number").min(0)),
   receivedOn: optional(isoDate),
 });
 export type TdsDeclarationInput = z.input<typeof tdsDeclarationFields>;

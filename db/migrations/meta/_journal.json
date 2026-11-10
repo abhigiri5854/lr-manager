@@ -127,6 +127,20 @@
       "when": 1793936142000,
       "tag": "0017_truck_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794022542000,
+      "tag": "0018_truck_party_bank_proof",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794108942000,
+      "tag": "0019_hire_series_grants",
+      "breakpoints": true
     }
   ]
 }

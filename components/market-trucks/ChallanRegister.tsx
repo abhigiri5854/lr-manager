@@ -25,7 +25,6 @@ const STATUS_TONE: Record<ChallanStatus, ChipTone> = {
   settled: "grey",
 };
 
-const COMING_SOON = "Coming soon";
 
 const columns: Column<ChallanRegisterRow>[] = [
   { key: "no", header: "Challan no.", cell: (r) => r.challanNo, mono: true, sticky: true },
@@ -71,10 +70,10 @@ const columns: Column<ChallanRegisterRow>[] = [
         <Button href={`/pdf/challan/${r.id}`} newTab variant="secondary" className="px-3">
           Print PDF
         </Button>
-        <Button variant="secondary" className="px-3" disabled title={COMING_SOON}>
+        <Button href={`/market-trucks/payments/new?challanId=${r.id}`} variant="secondary" className="px-3">
           Pay
         </Button>
-        <Button variant="secondary" className="px-3" disabled title={COMING_SOON}>
+        <Button variant="secondary" className="px-3" disabled title="Coming soon">
           POD
         </Button>
       </div>

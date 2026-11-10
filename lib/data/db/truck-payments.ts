@@ -21,7 +21,7 @@ import type { PayableChallan, TruckPayment } from "@/lib/types";
 import type { TruckPaymentValues } from "@/lib/validators/truck-payment";
 import { fail, newId } from "../_store";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
-import { withUser, withUserRead, type Tx } from "./conn";
+import { contains, withUser, withUserRead, type Tx } from "./conn";
 import { audit, toTruckPayment, toTruckPaymentAllocation, type Row } from "./rows";
 import { truckDocPathFromUrl } from "./storage";
 import { saveRow, type Fragment } from "./write";
@@ -642,5 +642,99 @@ export async function listPayableChallans(
         tdsTaken: p(r.tds_taken) > 0,
       };
     });
+  });
+}
+
+// ---------- lists (payments screen, challan page) ----------
+
+/** One line of the payments list / a challan's payments. Rupees as numeric strings. */
+export type TruckPaymentRow = {
+  id: string;
+  version: number;
+  paymentNo: string | null;
+  paidOn: string;
+  payeeName: string | null;
+  challanNos: string[];
+  amount: string;
+  tdsAmount: string;
+  grossAmount: string;
+  mode: TruckPayment["mode"];
+  status: TruckPayment["status"];
+  refNo: string | null;
+};
+
+const toRow = (r: Row): TruckPaymentRow => ({
+  id: r.id,
+  version: Number(r.version),
+  paymentNo: r.payment_no ?? null,
+  paidOn: r.paid_on,
+  payeeName: r.payee_name ?? null,
+  challanNos: (r.challan_nos as string[] | null) ?? [],
+  amount: String(r.amount),
+  tdsAmount: String(r.tds_amount),
+  grossAmount: fromPaise(p(r.amount) + p(r.tds_amount)),
+  mode: r.mode,
+  status: r.status,
+  refNo: r.ref_no ?? null,
+});
+
+const ROW_SELECT = (tx: Tx) => tx`
+  t.id, t.version, t.payment_no, t.paid_on::text as paid_on, t.mode::text as mode, t.status::text as status,
+  t.ref_no, t.amount, t.tds_amount, tp.name as payee_name, ch.nos as challan_nos`;
+const ROW_JOINS = (tx: Tx) => tx`
+  left join truck_parties tp on tp.company_id = t.company_id and tp.id = t.payee_party_id
+  left join lateral (
+    select array_agg(c.challan_no order by c.challan_no) as nos
+      from truck_payment_allocations a
+      join challans c on c.company_id = a.company_id and c.id = a.challan_id
+     where a.company_id = t.company_id and a.payment_id = t.id) ch on true`;
+
+export async function listTruckPaymentRows(
+  companyId: string,
+  f: {
+    from?: string;
+    to?: string;
+    status?: string;
+    payee?: string;
+    mode?: string;
+    page: number;
+    pageSize: number;
+  },
+): Promise<{ rows: TruckPaymentRow[]; total: number; page: number; pageSize: number }> {
+  const pageSize = Math.min(Math.max(f.pageSize, 1), 50);
+  const page = Math.max(f.page, 1);
+  const like = contains(f.payee);
+  return withUserRead(async (tx) => {
+    const where = tx`t.company_id = ${companyId} and t.cancelled_at is null
+      ${f.from ? tx`and t.paid_on >= ${f.from}::date` : tx``}
+      ${f.to ? tx`and t.paid_on <= ${f.to}::date` : tx``}
+      ${f.status ? tx`and t.status::text = ${f.status}` : tx``}
+      ${f.mode ? tx`and t.mode::text = ${f.mode}` : tx``}
+      ${like ? tx`and lower(tp.name) like ${like}` : tx``}`;
+    const [rows, [{ n }]] = await Promise.all([
+      tx`select ${ROW_SELECT(tx)} from truck_payments t ${ROW_JOINS(tx)}
+          where ${where} order by t.paid_on desc, t.created_at desc, t.id
+          limit ${pageSize} offset ${(page - 1) * pageSize}`,
+      tx`select count(*)::int as n from truck_payments t
+          left join truck_parties tp on tp.company_id = t.company_id and tp.id = t.payee_party_id
+          where ${where}`,
+    ]);
+    return { rows: rows.map(toRow), total: n as number, page, pageSize };
+  });
+}
+
+/** Live and past payments that settle part of one challan (challan page, newest first). */
+export async function listPaymentsForChallan(
+  companyId: string,
+  challanId: string,
+): Promise<TruckPaymentRow[]> {
+  if (!UUID.test(challanId)) return [];
+  return withUserRead(async (tx) => {
+    const rows = await tx`select ${ROW_SELECT(tx)} from truck_payments t ${ROW_JOINS(tx)}
+        where t.company_id = ${companyId} and t.cancelled_at is null
+          and exists (select 1 from truck_payment_allocations a
+                       where a.company_id = t.company_id and a.payment_id = t.id and a.challan_id = ${challanId})
+        order by t.paid_on desc, t.created_at desc limit 50`;
+    return rows.map(toRow);
   });
 }

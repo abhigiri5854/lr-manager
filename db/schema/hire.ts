@@ -143,6 +143,8 @@ export const truckParties = pgTable(
     accountHolder: text("account_holder"),
     upiId: text("upi_id"),
     upiQrFile: text("upi_qr_file"),
+    /** Optional bank proof (cancelled cheque / passbook), truck-docs bucket. */
+    bankProofFile: text("bank_proof_file"),
     /** Set by trigger when any bank / UPI detail changes (cooling-period alert). */
     bankChangedAt: ts("bank_changed_at"),
     verified: boolean("verified").notNull().default(false),

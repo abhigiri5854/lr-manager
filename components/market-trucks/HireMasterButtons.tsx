@@ -3,7 +3,8 @@
 // Add / Edit dialogs for the hire masters (vehicle types, charge types, pumps, branches, number
 // series). One small shared form shell; each master only lists its fields.
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition, type ReactNode } from "react";
+import { useRef, useState, useTransition, type ChangeEvent, type ReactNode } from "react";
+import { financialYear, fyOptions, todayInIndia } from "@/lib/fy";
 import {
   addBranchAction,
   addChargeTypeAction,
@@ -185,6 +186,54 @@ export function VehicleTypeButton({ row }: { row?: VehicleType }) {
   );
 }
 
+const COMMON_VEHICLE_TYPES: { name: string; capacityKg: number }[] = [
+  { name: "Tata 407", capacityKg: 2500 },
+  { name: "14 ft", capacityKg: 4000 },
+  { name: "17 ft", capacityKg: 7000 },
+  { name: "19 ft", capacityKg: 9000 },
+  { name: "20 ft", capacityKg: 10000 },
+  { name: "22 ft", capacityKg: 12000 },
+  { name: "24 ft", capacityKg: 15000 },
+  { name: "32 ft SXL", capacityKg: 7000 },
+  { name: "32 ft MXL", capacityKg: 16000 },
+  { name: "10 wheel", capacityKg: 21000 },
+  { name: "12 wheel", capacityKg: 25000 },
+  { name: "14 wheel", capacityKg: 30000 },
+  { name: "Trailer 40 ft", capacityKg: 32000 },
+];
+
+/** Adds the starter list of common truck body types, one add call each, skipping names already there. */
+export function AddCommonVehicleTypesButton({ existingNames }: { existingNames: string[] }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        variant="secondary"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            setError(null);
+            const have = new Set(existingNames.map((n) => n.trim().toLowerCase()));
+            let failed: string | null = null;
+            for (const t of COMMON_VEHICLE_TYPES) {
+              if (have.has(t.name.toLowerCase())) continue;
+              const result = await addVehicleTypeAction({ ...t, active: true });
+              if (!result.ok) failed = `${t.name}: ${result.message}`;
+            }
+            if (failed) setError(`Some types were not added. ${failed}`);
+            router.refresh();
+          })
+        }
+      >
+        {pending ? "Adding…" : "Add common types"}
+      </Button>
+      {error && <p className="m-0 text-[13px] text-danger">{error}</p>}
+    </div>
+  );
+}
+
 // ---------- charge types ----------
 
 export function ChargeTypeButton({ row }: { row?: ChargeType }) {
@@ -344,12 +393,142 @@ const counterRead = (d: FormData) => ({
   padding: int(d, "padding") ?? Number.NaN,
 });
 
-function CounterFields({ row, e }: { row?: HireNumberSeries; e: Errors }) {
+/** "PAT/CH/26-27/" from branch code, document type and FY "2026-27". Branch part is skipped if it has no code. */
+function suggestPrefix(docType: string, branchCode: string | null | undefined, fy: string): string | null {
+  const m = /^(\d{2})(\d{2})-(\d{2})$/.exec(fy.trim());
+  if (!m) return null;
+  const short = `${m[2]}-${m[3]}`;
+  const doc = docType === "truck_payment" ? "PV" : "CH";
+  return [branchCode, doc, short].filter(Boolean).join("/") + "/";
+}
+
+/** Branch code, or the first 3 letters of its name (uppercase) when it has none. */
+const branchPart = (b?: SeriesBranch) =>
+  (b?.code?.trim() || (b?.name ?? "").replace(/[^A-Za-z0-9]/g, "").slice(0, 3)).toUpperCase();
+
+/** Same rule as app.format_hire_number: pad only when padding > 0, never truncate. */
+function formatNumber(prefix: string, nextNo: number, padding: number) {
+  return `${prefix}${padding > 0 ? String(nextNo).padStart(padding, "0") : String(nextNo)}`;
+}
+
+function CounterFields({
+  row,
+  e,
+  prefix,
+}: {
+  row?: HireNumberSeries;
+  e: Errors;
+  prefix?: { value: string; onChange: (v: string) => void };
+}) {
+  const [ownPrefix, setOwnPrefix] = useState(row?.prefix ?? "");
+  const [nextNo, setNextNo] = useState(String(row?.nextNo ?? 1));
+  const [padding, setPadding] = useState(String(row?.padding ?? 4));
+  const pfx = prefix?.value ?? ownPrefix;
+  const n = Number(nextNo);
+  const p = Number(padding);
+  const valid = nextNo.trim() !== "" && padding.trim() !== "" && Number.isInteger(n) && n >= 0 && Number.isInteger(p) && p >= 0;
   return (
     <>
-      <Field label="Prefix" name="prefix" defaultValue={row?.prefix ?? ""} error={e.prefix} hint="e.g. CH/26-27/" className="col-span-2 sm:col-span-1 [&_input]:font-mono" />
-      <Field label="Next number" name="nextNo" inputMode="numeric" required defaultValue={row?.nextNo ?? 1} error={e.nextNo} className="col-span-2 sm:col-span-1" />
-      <Field label="Padding (digits)" name="padding" inputMode="numeric" required defaultValue={row?.padding ?? 4} error={e.padding} hint="4 turns 7 into 0007; 0 = no padding." className="col-span-2 sm:col-span-1" />
+      <Field
+        label="Prefix"
+        name="prefix"
+        value={pfx}
+        onChange={(ev: ChangeEvent<HTMLInputElement>) => (prefix ? prefix.onChange(ev.target.value) : setOwnPrefix(ev.target.value))}
+        error={e.prefix}
+        hint="e.g. PAT/CH/26-27/"
+        className="col-span-2 sm:col-span-1 [&_input]:font-mono"
+      />
+      <Field label="Next number" name="nextNo" inputMode="numeric" required value={nextNo} onChange={(ev) => setNextNo(ev.target.value)} error={e.nextNo} className="col-span-2 sm:col-span-1" />
+      <Field label="Padding (digits)" name="padding" inputMode="numeric" required value={padding} onChange={(ev) => setPadding(ev.target.value)} error={e.padding} hint="4 turns 7 into 0007; 0 = no padding." className="col-span-2 sm:col-span-1" />
+      {valid && (
+        <p className="col-span-2 text-sm text-muted">
+          {row ? "Next number will be: " : "First number will be: "}
+          <span className="font-mono text-text">{formatNumber(pfx, n, p)}</span>
+        </p>
+      )}
+    </>
+  );
+}
+
+type SeriesBranch = { id: string; name: string; code?: string | null };
+
+function AddSeriesFields({ branches, e }: { branches?: SeriesBranch[]; e: Errors }) {
+  const [docType, setDocType] = useState("challan");
+  const [branchId, setBranchId] = useState("");
+  const [fyChoices] = useState(() => fyOptions(todayInIndia()));
+  const [fy, setFy] = useState(() => financialYear(todayInIndia()));
+  const [prefix, setPrefix] = useState("");
+  // True while Prefix is empty or still holds an auto-filled value; false once the user types in it.
+  const [auto, setAuto] = useState(true);
+
+  const refill = (d: string, b: string, f: string) => {
+    if (!auto || !b) return;
+    const next = suggestPrefix(d, branchPart(branches?.find((x) => x.id === b)), f);
+    if (next) setPrefix(next);
+  };
+
+  return (
+    <>
+      <Select
+        label="Document"
+        name="docType"
+        value={docType}
+        onChange={(ev) => {
+          setDocType(ev.target.value);
+          refill(ev.target.value, branchId, fy);
+        }}
+        error={e.docType}
+        className="col-span-2 sm:col-span-1"
+      >
+        <option value="challan">Challan</option>
+        <option value="truck_payment">Truck payment</option>
+      </Select>
+      <Select
+        label="Branch"
+        name="branchId"
+        required
+        value={branchId}
+        onChange={(ev) => {
+          setBranchId(ev.target.value);
+          refill(docType, ev.target.value, fy);
+        }}
+        error={e.branchId}
+        className="col-span-2 sm:col-span-1"
+      >
+        <option value="" disabled>
+          Choose a branch
+        </option>
+        {branches?.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </Select>
+      <Select
+        label="Financial year"
+        name="fy"
+        required
+        value={fy}
+        onChange={(ev) => {
+          setFy(ev.target.value);
+          refill(docType, branchId, ev.target.value);
+        }}
+        error={e.fy}
+        className="col-span-2 sm:col-span-1 [&_select]:font-mono"
+      >
+        {fyChoices.map((f) => (
+          <option key={f} value={f}>
+            {f}
+          </option>
+        ))}
+      </Select>
+      <CounterFields e={e} prefix={{
+          value: prefix,
+          onChange: (v) => {
+            setPrefix(v);
+            setAuto(v.trim() === "");
+          },
+        }} />
     </>
   );
 }
@@ -359,7 +538,7 @@ export function SeriesButton({
   branches,
 }: {
   row?: HireNumberSeries;
-  branches?: { id: string; name: string }[];
+  branches?: SeriesBranch[];
 }) {
   return (
     <MasterDialog
@@ -394,26 +573,7 @@ export function SeriesButton({
         >
           {(e) => (
             <>
-              {!row && (
-                <>
-                  <Select label="Document" name="docType" defaultValue="challan" error={e.docType} className="col-span-2 sm:col-span-1">
-                    <option value="challan">Challan</option>
-                    <option value="truck_payment">Truck payment</option>
-                  </Select>
-                  <Select label="Branch" name="branchId" required defaultValue="" error={e.branchId} className="col-span-2 sm:col-span-1">
-                    <option value="" disabled>
-                      Choose a branch
-                    </option>
-                    {branches?.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <Field label="Financial year" name="fy" required placeholder="2026-27" error={e.fy} className="col-span-2 sm:col-span-1 [&_input]:font-mono" />
-                </>
-              )}
-              <CounterFields row={row} e={e} />
+              {row ? <CounterFields row={row} e={e} /> : <AddSeriesFields branches={branches} e={e} />}
             </>
           )}
         </MasterForm>

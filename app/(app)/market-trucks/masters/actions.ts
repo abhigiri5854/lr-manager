@@ -81,12 +81,24 @@ export const updateBranchAction = async (
   patch: BranchPatch,
 ): Promise<Saved<Branch>> => run((c) => updateBranch(c, id, version, patch));
 
+/** Like run(), but a Postgres "permission denied" (42501) becomes a friendly message. */
+async function runSeries<T>(fn: (companyId: string) => Promise<T>): Promise<Saved<T>> {
+  try {
+    return await run(fn);
+  } catch (e) {
+    if ((e as { code?: string } | null)?.code === "42501") {
+      return { ok: false, kind: "error", message: "You don't have permission to change number series" };
+    }
+    throw e;
+  }
+}
+
 export const addSeriesAction = async (input: SeriesInput): Promise<Saved<HireNumberSeries>> =>
-  run((c) => createHireSeries(c, input));
+  runSeries((c) => createHireSeries(c, input));
 export const updateSeriesAction = async (
   key: SeriesKey,
   input: SeriesCounterInput,
-): Promise<Saved<HireNumberSeries>> => run((c) => updateHireSeries(c, key, input));
+): Promise<Saved<HireNumberSeries>> => runSeries((c) => updateHireSeries(c, key, input));
 
 export const updateHireSettingsAction = async (
   version: number,

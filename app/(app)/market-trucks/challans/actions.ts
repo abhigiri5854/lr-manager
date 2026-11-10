@@ -1,6 +1,7 @@
 "use server";
 
 // Server actions for the challan screen. Role checks happen in lib/data (lr.edit to save).
+import { revalidatePath } from "next/cache";
 import type { ChallanInsightQuery, ChallanInsights } from "@/lib/challan-insights";
 import { getChallanInsights, saveChallan, searchBrokers, searchChallanLrs } from "@/lib/data/challans";
 import { listMarketDriverRows } from "@/lib/data/market-drivers";
@@ -17,7 +18,11 @@ export async function saveChallanAction(
 ): Promise<{ ok: true; challan: ChallanView } | ActionFailure> {
   const companyId = await getActiveCompanyId();
   try {
-    return { ok: true, challan: await saveChallan(companyId, id, expectedVersion, input) };
+    const challan = await saveChallan(companyId, id, expectedVersion, input);
+    // Create / edit / dispatch all go through here: refresh the register and the challan page.
+    revalidatePath("/market-trucks/challans");
+    revalidatePath(`/market-trucks/challans/${challan.id}`);
+    return { ok: true, challan };
   } catch (e) {
     return toFailure(e);
   }

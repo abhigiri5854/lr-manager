@@ -28,7 +28,7 @@ export function Drawer({ open, onClose, title, description, children }: DrawerPr
       ref={ref}
       aria-labelledby={titleId}
       onClose={onClose}
-      className="m-0 ml-auto h-dvh max-h-none w-[min(480px,100vw)] overflow-y-auto border-l border-border bg-surface p-6 text-text shadow-popover backdrop:bg-navy/40"
+      className="m-0 ml-auto h-dvh max-h-none w-[min(480px,100vw)] overflow-y-auto border-l border-border bg-surface p-6 text-left text-text shadow-popover backdrop:bg-navy/40"
     >
       <h2 id={titleId} className="m-0 text-[18px] font-bold">
         {title}

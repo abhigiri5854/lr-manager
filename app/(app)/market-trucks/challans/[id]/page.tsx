@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ChallanForm } from "@/components/market-trucks/ChallanForm";
+import { ChallanPayments } from "@/components/market-trucks/ChallanPayments";
 import { Chip } from "@/components/ui/Chip";
 import { NoAccess } from "@/components/ui/NoAccess";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -9,6 +10,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { getChallan, getChallanLrPicks } from "@/lib/data/challans";
 import { listBranches, listChargeTypes } from "@/lib/data/hire-masters";
 import { getActiveCompanyId, getActiveRole } from "@/lib/data/session";
+import { listPaymentsForChallan } from "@/lib/data/truck-payments";
 import { todayInIndia } from "@/lib/fy";
 import { can } from "@/lib/permissions";
 
@@ -31,10 +33,11 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
   const companyId = await getActiveCompanyId();
   const challan = await getChallan(companyId, id);
   if (!challan || challan.cancelledAt) notFound();
-  const [picks, branches, chargeTypes] = await Promise.all([
+  const [picks, branches, chargeTypes, payments] = await Promise.all([
     getChallanLrPicks(companyId, challan.id, challan.lrs.map((l) => l.lrId)),
     listBranches(companyId),
     listChargeTypes(companyId),
+    listPaymentsForChallan(companyId, challan.id),
   ]);
   return (
     <>
@@ -61,6 +64,9 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
         )}
         today={todayInIndia()}
       />
+      <div className="mt-5">
+        <ChallanPayments challanId={challan.id} payments={payments} canRecord={can(role, "bill.edit")} />
+      </div>
     </>
   );
 }

@@ -77,7 +77,7 @@ export async function uploadTruckDocAction(
 ): Promise<{ ok: true; url: string; name: string } | { ok: false; message: string }> {
   const companyId = await getActiveCompanyId();
   const raw = form.get("kind");
-  const kind = raw === "tds" || raw === "rc" || raw === "dl" ? raw : "upi-qr";
+  const kind = raw === "tds" || raw === "rc" || raw === "dl" || raw === "bank-proof" ? raw : "upi-qr";
   const file = form.get("file");
   if (!(file instanceof File)) return { ok: false, message: "Choose a file first" };
   try {

@@ -94,6 +94,7 @@ export async function insertTruckParty(
         company_id: companyId,
         ...columns(v, PARTY_COLUMNS),
         upi_qr_file: truckDocPathFromUrl(companyId, v.upiQrUrl),
+        bank_proof_file: truckDocPathFromUrl(companyId, v.bankProofUrl),
         verified: v.verified,
         verified_by: v.verified ? userId : null,
         verified_at: v.verified ? new Date().toISOString() : null,
@@ -117,6 +118,7 @@ export async function updateTruckParty(
     const gstin = "gstin" in patch ? (patch.gstin ?? null) : tx`(select gstin from cur)`;
     const set = columns(patch, PARTY_COLUMNS);
     if ("upiQrUrl" in patch) set.upi_qr_file = truckDocPathFromUrl(companyId, patch.upiQrUrl);
+    if ("bankProofUrl" in patch) set.bank_proof_file = truckDocPathFromUrl(companyId, patch.bankProofUrl);
     if (patch.verified === true) {
       // Keep who / when verified if it already was; stamp only on the switch to verified.
       set.verified = true;

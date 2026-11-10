@@ -174,6 +174,7 @@ export function toTruckParty(r: Row): TruckParty {
     ifsc: r.ifsc,
     upiId: r.upi_id,
     upiQrUrl: truckDocUrlFromPath(r.upi_qr_file),
+    bankProofUrl: truckDocUrlFromPath(r.bank_proof_file),
     bankChangedAt: r.bank_changed_at,
     verified: r.verified,
     verifiedAt: r.verified_at,

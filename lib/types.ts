@@ -176,6 +176,8 @@ export type TruckParty = BaseRecord & {
   upiId: string | null;
   /** App link to the uploaded UPI QR image. */
   upiQrUrl: string | null;
+  /** App link to the optional bank proof (cancelled cheque / passbook photo or PDF). */
+  bankProofUrl: string | null;
   /** Set by a DB trigger whenever bank / UPI details change (cooling-period alert). */
   bankChangedAt: IsoDateTime | null;
   verified: boolean;

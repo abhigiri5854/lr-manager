@@ -22,6 +22,16 @@ import { assertCan } from "./session";
 
 export type TruckPaymentResult = dbp.TruckPaymentResult;
 
+export type TruckPaymentRow = dbp.TruckPaymentRow;
+
+export const listTruckPaymentRows = (
+  companyId: string,
+  f: Parameters<typeof dbp.listTruckPaymentRows>[1],
+) => dbp.listTruckPaymentRows(companyId, f);
+
+export const listPaymentsForChallan = (companyId: string, challanId: string) =>
+  dbp.listPaymentsForChallan(companyId, challanId);
+
 export const getTruckPayment = (companyId: string, id: string): Promise<TruckPayment | null> =>
   dbp.getTruckPayment(companyId, id);
 

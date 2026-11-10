@@ -28,7 +28,7 @@ export function Dialog({ open, onClose, title, description, children }: DialogPr
       ref={ref}
       aria-labelledby={titleId}
       onClose={onClose}
-      className="m-auto w-[min(520px,calc(100vw-32px))] rounded-card border border-border bg-surface p-6 text-text shadow-popover backdrop:bg-navy/40"
+      className="m-auto w-[min(520px,calc(100vw-32px))] rounded-card border border-border bg-surface p-6 text-left text-text shadow-popover backdrop:bg-navy/40"
     >
       <h2 id={titleId} className="m-0 text-[18px] font-bold">
         {title}

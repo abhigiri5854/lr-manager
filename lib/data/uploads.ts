@@ -118,11 +118,11 @@ export async function uploadCompanyImage(
  */
 export async function uploadTruckDoc(
   companyId: string,
-  kind: "upi-qr" | "tds" | "rc" | "dl",
+  kind: "upi-qr" | "tds" | "rc" | "dl" | "bank-proof",
   file: { name: string; type: string; bytes: Uint8Array },
 ): Promise<{ url: string; name: string }> {
   await assertCan(companyId, "master.edit");
-  const path = { "upi-qr": "upiQrUrl", tds: "fileUrl", rc: "rcFileUrl", dl: "dlFileUrl" }[kind];
+  const path = { "upi-qr": "upiQrUrl", tds: "fileUrl", rc: "rcFileUrl", dl: "dlFileUrl", "bank-proof": "bankProofUrl" }[kind];
   const okType = kind === "upi-qr" ? file.type.startsWith("image/") : allowed(file.type);
   if (!okType)
     fail(path, `${file.name}: ${kind === "upi-qr" ? "upload a photo or screenshot" : "only photos and PDFs can be uploaded"}`);

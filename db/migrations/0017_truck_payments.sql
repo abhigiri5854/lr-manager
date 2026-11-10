@@ -17,8 +17,9 @@ $$;
 grant execute on function app.format_hire_number(text, bigint, smallint) to authenticated, service_role;
 --> statement-breakpoint
 
--- Bank-change cooling is off unless the company sets it (null / 0 = off).
-alter table public.companies alter column bank_change_cooling_hours drop default;
+-- Bank-change cooling is off unless the company sets it (null / 0 = off; the column has no
+-- default). Owner decision: off for all existing companies.
+update public.companies set bank_change_cooling_hours = null;
 --> statement-breakpoint
 
 alter table public.truck_payments alter column payment_no drop not null;

@@ -25,7 +25,7 @@ const columns: Column<TruckPartyRow>[] = [
     key: "pay",
     header: "Pay by",
     cell: (r) =>
-      [r.accountNo && "Bank", r.upiId && "UPI"].filter(Boolean).join(" · ") || (
+      [r.accountNo && "Bank", (r.upiId || r.upiQrUrl) && "UPI"].filter(Boolean).join(" · ") || (
         <Chip tone="amber">No bank / UPI</Chip>
       ),
   },

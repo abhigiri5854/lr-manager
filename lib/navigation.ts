@@ -67,6 +67,12 @@ export const navGroups: NavGroup[] = [
         action: "lr.edit",
       },
       {
+        label: "Payments",
+        href: "/market-trucks/payments",
+        isActive: startsWith("/market-trucks/payments"),
+        action: "freight.view",
+      },
+      {
         label: "Truck parties",
         href: "/market-trucks/parties",
         isActive: startsWith("/market-trucks/parties"),

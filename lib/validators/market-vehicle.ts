@@ -6,7 +6,7 @@ export const marketVehicleFields = z.object({
   vehicleNo: vehicleNoSchema,
   ownerPartyId: optional(uuid),
   vehicleTypeId: optional(uuid),
-  capacityKg: optional(z.coerce.number().int("Whole kg").positive("Must be more than 0").max(200_000)),
+  capacityKg: optional(z.coerce.number("Enter capacity in kg, e.g. 16000").int("Whole kg").positive("Must be more than 0").max(200_000)),
   rcOwnerName: optionalText(200),
   insuranceUpto: optional(isoDate),
   fitnessUpto: optional(isoDate),

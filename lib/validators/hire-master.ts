@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { isValidFy } from "@/lib/fy";
 import { optionalText, text } from "./common";
 
 // Hire masters: vehicle types, charge types, pumps, branches, challan / payment number series
 // (TIER1-MARKET-TRUCKS.md §5, §7).
 
 const optionalInt = (min: number, max: number) =>
-  z.number().int().min(min).max(max).nullable().optional();
+  z.number("Enter capacity in kg, e.g. 16000").int("Whole kg").min(min).max(max).nullable().optional();
 
 export const vehicleTypeFields = z.object({
   name: text(100),
@@ -58,12 +59,13 @@ export type BranchPatch = z.input<typeof branchPatchSchema>;
 const fySchema = z
   .string()
   .trim()
-  .regex(/^[0-9]{4}-[0-9]{2}$/, "Financial year looks like 2026-27");
+  .regex(/^[0-9]{4}-[0-9]{2}$/, "Financial year looks like 2026-27")
+  .refine(isValidFy, "Financial year must span consecutive years, e.g. 2026-27");
 
 const seriesCounter = {
   prefix: z.string().trim().max(20, "Prefix is at most 20 characters"),
-  nextNo: z.number().int("Next number is a whole number").min(1, "Next number starts at 1"),
-  padding: z.number().int().min(0, "Padding is 0–12").max(12, "Padding is 0–12"),
+  nextNo: z.number("Enter the next number, e.g. 1").int("Next number is a whole number").min(1, "Next number starts at 1"),
+  padding: z.number("Enter padding 0–12").int("Padding is 0–12").min(0, "Padding is 0–12").max(12, "Padding is 0–12"),
 };
 
 export const seriesFields = z.object({

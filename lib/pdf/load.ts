@@ -4,6 +4,8 @@
 import { getChallan, getChallanLrPicks, getChallanPrintExtras } from "@/lib/data/challans";
 import type { ChallanPrintExtras } from "@/lib/data/db/challans";
 import { getCompany } from "@/lib/data/companies";
+import { listBranches, listPumps } from "@/lib/data/hire-masters";
+import { getTruckPayment } from "@/lib/data/truck-payments";
 import { getFreightBillById } from "@/lib/data/bills";
 import {
   getObject,
@@ -26,6 +28,7 @@ import type {
   PartySnapshot,
   Pod,
   TaxInvoice,
+  TruckPayment,
 } from "@/lib/types";
 import type { PdfCompany, PdfMark } from "./types";
 
@@ -324,5 +327,34 @@ export async function loadBillPdf(companyId: string, id: string): Promise<BillPd
     shipFrom,
     shipTo,
     mark: markOf(bill, bill.status === "draft"),
+  };
+}
+
+// ---------- market-truck payment voucher ----------
+
+export type PaymentPdfData = {
+  payment: TruckPayment;
+  branchName: string | null;
+  pumpName: string | null;
+  company: PdfCompany;
+  mark: PdfMark;
+};
+
+export async function loadPaymentPdf(companyId: string, id: string): Promise<PaymentPdfData | null> {
+  const payment = await getTruckPayment(companyId, id);
+  if (!payment || payment.cancelledAt) return null;
+  const [company, branches, pumps] = await Promise.all([
+    loadPdfCompany(companyId),
+    listBranches(companyId),
+    payment.pumpId ? listPumps(companyId) : Promise.resolve([]),
+  ]);
+  if (!company) return null;
+  return {
+    payment,
+    company,
+    branchName: branches.find((b) => b.id === payment.branchId)?.name ?? null,
+    pumpName: pumps.find((u) => u.id === payment.pumpId)?.name ?? null,
+    // A reversed voucher prints CANCELLED; one with no voucher number yet prints DRAFT.
+    mark: payment.status === "reversed" ? "CANCELLED" : payment.paymentNo ? null : "DRAFT",
   };
 }

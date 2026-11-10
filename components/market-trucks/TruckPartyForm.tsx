@@ -26,6 +26,7 @@ const BANK_KEYS = [
   "ifsc",
   "upiId",
   "upiQrUrl",
+  "bankProofUrl",
   "verified",
   "status",
   "blacklistReason",
@@ -43,6 +44,8 @@ export function TruckPartyForm({ party, onDone }: { party?: TruckParty; onDone: 
   const router = useRouter();
   const canBank = useCan("payee.bank");
   const [qrUrl, setQrUrl] = useState<string | null>(party?.upiQrUrl ?? null);
+  const [proofUrl, setProofUrl] = useState<string | null>(party?.bankProofUrl ?? null);
+  const [pan, setPan] = useState(party?.pan ?? "");
   const [status, setStatus] = useState(party?.status ?? "active");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -67,6 +70,7 @@ export function TruckPartyForm({ party, onDone }: { party?: TruckParty; onDone: 
       ifsc: get("ifsc"),
       upiId: get("upiId"),
       upiQrUrl: qrUrl,
+      bankProofUrl: proofUrl,
       verified: data.get("verified") === "on",
       status: get("status") as TruckPartyInput["status"],
       blacklistReason: get("blacklistReason"),
@@ -126,8 +130,19 @@ export function TruckPartyForm({ party, onDone }: { party?: TruckParty; onDone: 
       </Select>
       <Field label="Mobile" name="mobile" inputMode="tel" defaultValue={party?.mobile ?? ""} error={errors.mobile} className="col-span-2 sm:col-span-1" />
       <Field label="Alternate mobile" name="altMobile" inputMode="tel" defaultValue={party?.altMobile ?? ""} error={errors.altMobile} className="col-span-2 sm:col-span-1" />
-      <Field label="PAN" name="pan" defaultValue={party?.pan ?? ""} error={errors.pan} hint={party?.panType ? `PAN type: ${party.panType}` : undefined} className="col-span-2 sm:col-span-1 [&_input]:font-mono" />
-      <Field label="GSTIN" name="gstin" defaultValue={party?.gstin ?? ""} error={errors.gstin} className="col-span-2 [&_input]:font-mono" />
+      <Field label="PAN" name="pan" value={pan} onChange={(e) => setPan(e.target.value)} error={errors.pan} hint={party?.panType ? `PAN type: ${party.panType}` : undefined} className="col-span-2 sm:col-span-1 [&_input]:font-mono" />
+      <Field
+        label="GSTIN"
+        name="gstin"
+        defaultValue={party?.gstin ?? ""}
+        onChange={(e) => {
+          // PAN is characters 3–12 of a GSTIN; fill it only when empty, never over a typed PAN.
+          const g = e.target.value.trim().toUpperCase();
+          if (/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(g)) setPan((p) => (p.trim() ? p : g.slice(2, 12)));
+        }}
+        error={errors.gstin}
+        className="col-span-2 [&_input]:font-mono"
+      />
       <Textarea label="Address" name="address" defaultValue={party?.address ?? ""} error={errors.address} className="col-span-2" />
 
       <Field label="Bank name" name="bankName" readOnly={!canBank} defaultValue={party?.bankName ?? ""} error={errors.bankName} className="col-span-2 sm:col-span-1" />
@@ -140,6 +155,13 @@ export function TruckPartyForm({ party, onDone }: { party?: TruckParty; onDone: 
           <TruckDocInput label="UPI QR image" kind="upi-qr" url={qrUrl} onChange={setQrUrl} error={errors.upiQrUrl} />
         ) : (
           <Field label="UPI QR image" readOnly value={qrUrl ? "Uploaded" : "Not added"} />
+        )}
+      </div>
+      <div className="col-span-2 sm:col-span-1">
+        {canBank ? (
+          <TruckDocInput label="Bank proof (cancelled cheque / passbook)" kind="bank-proof" url={proofUrl} onChange={setProofUrl} error={errors.bankProofUrl} />
+        ) : (
+          <Field label="Bank proof" readOnly value={proofUrl ? "Uploaded" : "Not added"} />
         )}
       </div>
       {!canBank && (

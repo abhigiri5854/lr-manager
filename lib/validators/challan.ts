@@ -17,7 +17,7 @@ const kg = z
 
 export const challanLrFields = z.object({
   lrId: uuid,
-  loadedPkgs: z.coerce.number().int("Whole packages only").min(1, "At least 1 package"),
+  loadedPkgs: z.coerce.number("Enter number of packages, e.g. 10").int("Whole packages only").min(1, "At least 1 package"),
   loadedWt: optional(kg),
 });
 

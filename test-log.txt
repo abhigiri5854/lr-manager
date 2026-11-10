@@ -1,0 +1,124 @@
+﻿pnpm.exe : $ vitest run --config vitest.db.config.mts --exclude "db/tests/**/*.slow.test.ts"
+At C:\Users\asus\AppData\Roaming\npm\pnpm.ps1:14 char:3
++   & "$basedir/node_modules/pnpm/pnpm.exe"   $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ vitest run --...*.slow.test.ts":String) [], Remote 
+   Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/soap/tms[39m
+
+ [32mΓ£ô[39m db/tests/lib-data-billing.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 113127[2mms[22m[39m
+   [32mΓ£ô[39m tax invoices on the database [2m(1)[22m
+     [33m[2mΓ£ô[22m[39m draft ΓåÆ edit ΓåÆ finalise (number, snapshot, item rate) ΓåÆ cancel; imported numbers stay unique[33m 21645[2mms[22m[39m
+   [32mΓ£ô[39m freight bills and payments on the database [2m(1)[22m
+     [33m[2mΓ£ô[22m[39m bill ΓåÆ finalise ΓåÆ payments drive the LR status and the dashboard's money[33m 28956[2mms[22m[39m
+   [32mΓ£ô[39m Smart import on the database [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m Excel: upload ΓåÆ map ΓåÆ save mapping ΓåÆ import valid rows (system audit, LR series moved)[33m 37282[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m invoice photo: prefill ΓåÆ save creates pending records + draft, linked to the file[33m 25071[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/lib-data-lrs.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 93266[2mms[22m[39m
+   [32mΓ£ô[39m LRs on the database [2m(6)[22m
+     [33m[2mΓ£ô[22m[39m create a draft and book it: number from the series, snapshot, audit, lines kept[33m 9607[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m edit: a lines-only change still bumps the version; stale version conflicts; draft ΓåÆ booked[33m 7812[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m register: search (incl. truck no.), party / status filters, paging, export[33m 8876[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m dispatch needs a truck; cancel needs the owner and a reason; cancelled LRs leave the register[33m 9717[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a final freight bill locks the LR[33m 7487[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m consignor defaults, consignee 'To' and duplicate invoice lookups[33m 5610[2mms[22m[39m
+   [32mΓ£ô[39m POD on the database [2m(4)[22m
+     [33m[2mΓ£ô[22m[39m delivery ΓåÆ pending ΓåÆ signed copy ΓåÆ POD received; cancel puts it back[33m 14793[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m short / damaged need remarks; any delivery date is accepted[33m 8614[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a driver records POD only on their own trip[33m 10107[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m dashboard: counts, e-way and POD alerts, recent LRs, repeat routes[33m 10427[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/permissions.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 63875[2mms[22m[39m
+   [32mΓ£ô[39m role_permissions = lib/permissions.ts [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m has exactly the PERMISSIONS map[33m 681[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m app.can agrees with can() for every role and action[33m 4843[2mms[22m[39m
+   [32mΓ£ô[39m writes follow the role [2m(8)[22m
+     [33m[2mΓ£ô[22m[39m LRs: booking staff may create, accountant may not[33m 4503[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m freight bills: accountant may create, booking staff may not[33m 3769[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m cancelling is owner-only (record.cancel)[33m 5389[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m booking staff can't cancel an LR; the owner can[33m 3684[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m import files can be removed by anyone with import.run (not record.cancel)[33m 4509[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m users & roles: only company.manage changes memberships; the last owner stays[33m 4279[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m the self party can't be cancelled or edited from Parties, even by the owner[33m 5245[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m number series: each series needs its edit permission[33m 4671[2mms[22m[39m
+   [32mΓ£ô[39m drivers and POD [2m(4)[22m
+     [33m[2mΓ£ô[22m[39m a driver reads no masters and no LRs directly, only their trips[33m 4916[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a driver records POD and delivery on their own trips only[33m 6159[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m without lr.edit you may only record delivery on an LR[33m 5617[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m an accountant's payment marks the LR paid without lr.edit[33m 5518[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/lib-data.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 35749[2mms[22m[39m
+   [32mΓ£ô[39m lib/data on the database [2m(8)[22m
+     [33m[2mΓ£ô[22m[39m session: user and memberships come from the database[33m 4267[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m parties: create, SQL search + paging, version conflict, audit rows[33m 5855[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m another company's data is invisible and can't be written (RLS behind assertCan)[33m 4492[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m roles: staff can edit masters but not cancel; cancel is blocked while a live LR uses it[33m 5154[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m items: 40% GST is accepted; codes are unique case-insensitively[33m 3577[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m trucks: normalised unique number, trip and cancel rule from LRs[33m 4640[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m company profile: LR series only moves forward; members list from the database[33m 5061[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m the sample-data store is off outside unit tests[33m 2549[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/lr-stamps.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 42263[2mms[22m[39m
+   [32mΓ£ô[39m cached LR stamps in the database [2m(3)[22m
+     [33m[2mΓ£ô[22m[39m follow every POD, bill and payment write[33m 36004[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m users can't write the stamps directly[33m 3311[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m the seeded sample data is consistent[33m 2843[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/constraints.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 39379[2mms[22m[39m
+   [32mΓ£ô[39m unique per company [2m(15)[22m
+     [33m[2mΓ£ô[22m[39m party GSTIN: unique among live parties; free again once cancelled; other companies unaffected[33m 3514[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m party GSTIN must have the GSTIN shape[33m 1317[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m one self party per company[33m 1344[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m truck number: unique among live trucks, normalised (no spaces / lower case)[33m 2222[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m driver mobile: unique among live drivers[33m 1155[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m item code: unique per company, case-insensitive[33m 1255[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m LR number: unique including cancelled LRs[33m 1880[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m freight bill number (FY + seq): unique including cancelled bills[33m 1657[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m tax invoice number: unique per seller + FY (two sellers may share a number)[33m 2147[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m one live POD per LR[33m 2224[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m an LR is on at most one live freight bill; free again once that bill is cancelled[33m 3624[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a payment can only settle bills of its own party[33m 3970[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a booked LR needs its date and snapshot[33m 1600[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a finalised bill's snapshot can't change[33m 4148[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m updates bump version and stamp updated_by; optimistic lock sees the change[33m 6805[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/audit.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 43659[2mms[22m[39m
+   [32mΓ£ô[39m audit_log [2m(5)[22m
+     [33m[2mΓ£ô[22m[39m a member writes rows as themselves and office roles read them[33m 8230[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m can't be written as someone else[33m 3880[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m system rows need a batch the writer created; actor and user_id must agree[33m 6304[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m can't be updated or deleted by a user (not even the owner)[33m 7844[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m can't be updated or deleted even by the database owner role[33m 3823[2mms[22m[39m
+   [32mΓ£ô[39m no hard deletes [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m business rows can't be deleted, by users or the owner role; cancel instead[33m 6763[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m draft lines may be replaced, but not once the bill is final[33m 6694[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/rls.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 59496[2mms[22m[39m
+   [32mΓ£ô[39m RLS: company isolation [2m(9)[22m
+     [33m[2mΓ£ô[22m[39m A's owner reads only A's rows, in every company-scoped table[33m 4391[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m works the same through db/client asUser (drizzle, pooler, prepare: false)[33m 4874[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m A's owner can't insert into B[33m 2589[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m A's owner can't update or cancel B's rows (they are invisible: 0 rows)[33m 2886[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m A's owner can't move a row into B[33m 9679[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m composite FKs stop a row in A pointing at B's party, even for the system[33m 7598[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m A's owner can't take B's document numbers or read B's series[33m 3349[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m B's users are invisible to A, and A can't add itself to B[33m 2800[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m anon can read nothing[33m 2065[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/one-company.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 27699[2mms[22m[39m
+   [32mΓ£ô[39m one active membership per user [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m refuses a second company for the same login[33m 2260[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m allows a new company after the first membership is cancelled[33m 2328[2mms[22m[39m
+   [32mΓ£ô[39m app.login_lookup [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m finds a person only under their own company's code (same answer otherwise)[33m 2491[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m lets the same mobile exist in two companies[33m 2238[2mms[22m[39m
+   [32mΓ£ô[39m forged company id [2m(1)[22m
+     [33m[2mΓ£ô[22m[39m A's user can't read or write B's rows, whatever company id is claimed or inserted[33m 18019[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/numbering.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 11578[2mms[22m[39m
+   [32mΓ£ô[39m number_series [2m(4)[22m
+     [33m[2mΓ£ô[22m[39m a rolled-back save gives its number back (no gap)[33m 3254[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m LR numbers run on across FYs; bills restart; prefix is copied per FY[33m 3714[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m raise_number never goes backwards[33m 1900[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m an LR series that was never set up is an error[33m 2630[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m10 passed[39m[22m[90m (10)[39m
+[2m      Tests [22m [1m[32m79 passed[39m[22m[90m (79)[39m
+[2m   Start at [22m 19:14:51
+[2m   Duration [22m 557.24s[2m (tests 96%, import 4%)[22m
+

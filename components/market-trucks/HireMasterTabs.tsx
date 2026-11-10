@@ -4,6 +4,7 @@ import { Chip } from "@/components/ui/Chip";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import type { Branch, ChargeType, HireNumberSeries, Pump, VehicleType } from "@/lib/types";
 import {
+  AddCommonVehicleTypesButton,
   AddLatePodFeeButton,
   BranchButton,
   ChargeTypeButton,
@@ -91,7 +92,12 @@ export function VehicleTypesTab({ rows }: { rows: VehicleType[] }) {
       columns={columns}
       rows={rows}
       rowKey={(r) => r.id}
-      empty="No vehicle types yet. Use + Add vehicle type."
+      empty={
+        <div className="flex flex-col items-center gap-3 py-2">
+          <span>No vehicle types yet. Use + Add vehicle type, or start with the common ones.</span>
+          <AddCommonVehicleTypesButton existingNames={rows.map((r) => r.name)} />
+        </div>
+      }
     />
   );
 }
@@ -163,15 +169,15 @@ export function BranchesTab({ rows }: { rows: Branch[] }) {
 
 /** Example of the next number, e.g. "CH/26-27/0007". */
 function nextExample(s: HireNumberSeries) {
-  return `${s.prefix}${String(s.nextNo).padStart(s.padding, "0")}`;
+  return `${s.prefix}${s.padding > 0 ? String(s.nextNo).padStart(s.padding, "0") : s.nextNo}`;
 }
 
 export function SeriesTab({ rows, branches }: { rows: HireNumberSeries[]; branches: Branch[] }) {
-  const options = branches.map((b) => ({ id: b.id, name: b.name }));
+  const options = branches.map((b) => ({ id: b.id, name: b.name, code: b.code }));
   const columns: Column<HireNumberSeries>[] = [
-    { key: "doc", header: "Document", cell: (r) => (r.docType === "challan" ? "Challan" : "Truck payment"), sticky: true },
-    { key: "branch", header: "Branch", cell: (r) => r.branchName, wrap: true },
+    { key: "branch", header: "Branch", cell: (r) => r.branchName, wrap: true, sticky: true },
     { key: "fy", header: "FY", cell: (r) => r.fy, mono: true },
+    { key: "doc", header: "Document", cell: (r) => (r.docType === "challan" ? "Challan" : "Truck payment") },
     { key: "prefix", header: "Prefix", cell: (r) => r.prefix || "—", mono: true },
     { key: "next", header: "Next number", cell: (r) => r.nextNo },
     { key: "pad", header: "Padding", cell: (r) => r.padding },

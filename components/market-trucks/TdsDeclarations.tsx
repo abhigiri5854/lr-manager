@@ -6,7 +6,8 @@ import {
   listTdsDeclarationsAction,
 } from "@/app/(app)/market-trucks/parties/actions";
 import { Button } from "@/components/ui/Button";
-import { Field } from "@/components/ui/Field";
+import { Field, Select } from "@/components/ui/Field";
+import { financialYear, fyOptions, todayInIndia } from "@/lib/fy";
 import { formatDate } from "@/lib/format";
 import type { TdsDeclaration } from "@/lib/types";
 import { TruckDocInput } from "./TruckDocInput";
@@ -18,6 +19,8 @@ export function TdsDeclarations({ partyId }: { partyId: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formKey, setFormKey] = useState(0);
   const [pending, startTransition] = useTransition();
+  const [fyChoices] = useState(() => fyOptions(todayInIndia()));
+  const [currentFy] = useState(() => financialYear(todayInIndia()));
 
   useEffect(() => {
     let live = true;
@@ -86,7 +89,13 @@ export function TdsDeclarations({ partyId }: { partyId: string }) {
         }}
         className="grid grid-cols-2 gap-3"
       >
-        <Field label="Financial year" name="fy" placeholder="2025-26" error={errors.fy} className="col-span-2 sm:col-span-1" />
+        <Select label="Financial year" name="fy" defaultValue={currentFy} error={errors.fy} className="col-span-2 sm:col-span-1 [&_select]:font-mono">
+          {fyChoices.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </Select>
         <Field label="Vehicles owned (declared)" name="vehicles" inputMode="numeric" error={errors.vehiclesOwnedDeclared} className="col-span-2 sm:col-span-1" />
         <Field label="Received on" name="receivedOn" type="date" error={errors.receivedOn} className="col-span-2 sm:col-span-1" />
         <div className="col-span-2 sm:col-span-1">

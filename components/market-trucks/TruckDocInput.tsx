@@ -16,7 +16,7 @@ export function TruckDocInput({
   error,
 }: {
   label: string;
-  kind: "upi-qr" | "tds" | "rc" | "dl";
+  kind: "upi-qr" | "tds" | "rc" | "dl" | "bank-proof";
   url: string | null;
   onChange: (url: string | null) => void;
   error?: string;
