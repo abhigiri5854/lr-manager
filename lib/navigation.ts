@@ -61,8 +61,8 @@ export const navGroups: NavGroup[] = [
     heading: "MARKET TRUCKS",
     items: [
       {
-        label: "New challan",
-        href: "/market-trucks/challans/new",
+        label: "Challans",
+        href: "/market-trucks/challans",
         isActive: startsWith("/market-trucks/challans"),
         action: "lr.edit",
       },

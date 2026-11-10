@@ -5,6 +5,7 @@ import {
   challanRuleErrors,
   type ChallanInput,
 } from "@/lib/validators/challan";
+import type { ChallanListFilters } from "@/lib/validators/challan-list";
 import { parseInput } from "./_store";
 import * as dbc from "./db/challans";
 import { ValidationError } from "./errors";
@@ -52,6 +53,17 @@ export async function saveChallan(
   }
   return saved;
 }
+
+/** Register rows (50 per page) for the filters. Reading is freight.view (RLS + the page check). */
+export const listChallanRegister = (companyId: string, filters: ChallanListFilters, page: number) =>
+  dbc.listChallanRegister(companyId, filters, { page });
+
+/** Every row for the filters (capped at 5,000), for the Excel export. */
+export const listChallanRegisterAll = (companyId: string, filters: ChallanListFilters) =>
+  dbc.listChallanRegister(companyId, filters, { all: true });
+
+export const getChallanPrintExtras = (companyId: string, id: string) =>
+  dbc.getChallanPrintExtras(companyId, id);
 
 export const getChallanInsights = (
   companyId: string,

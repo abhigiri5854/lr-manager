@@ -131,7 +131,7 @@ export function HireSettingsTab({ settings }: { settings: HireSettings }) {
           {numberField("tdsRateNoPanPct", "Rate: no PAN (%)", "Suggested when the party has no PAN on file.")}
           {numberField("tdsThreshold", "Yearly threshold (₹)", "TDS is suggested only once a party's yearly payments cross this.")}
           {numberField("tdsNilMaxVehicles", "Nil-TDS max vehicles", "Owners with at most this many vehicles can give a no-TDS declaration.", { step: "1" })}
-          <Select name="tdsTiming" label="When TDS is deducted" hint="Decided: at balance, not on advances." defaultValue={settings.tdsTiming} error={errors.tdsTiming}>
+          <Select name="tdsTiming" label="When TDS is deducted" hint="Decided: at balance, not on advances." defaultValue="balance" error={errors.tdsTiming}>
             {TDS_TIMINGS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
           <Select name="tdsBase" label="TDS is calculated on" hint="The amount the rate is applied to." defaultValue={settings.tdsBase} error={errors.tdsBase}>

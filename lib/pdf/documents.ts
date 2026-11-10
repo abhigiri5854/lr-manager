@@ -1,6 +1,7 @@
 // One builder per document: load the data, fill the template, name the file.
-import { loadBillPdf, loadInvoicePdf, loadLrPdf, loadPodPdf } from "./load";
+import { loadBillPdf, loadChallanPdf, loadInvoicePdf, loadLrPdf, loadPodPdf } from "./load";
 import { billHtml } from "./templates/bill";
+import { challanHtml } from "./templates/challan";
 import { invoiceHtml } from "./templates/invoice";
 import { lrHtml } from "./templates/lr";
 import { podHtml } from "./templates/pod";
@@ -30,6 +31,12 @@ export const invoicePdf: PdfBuilder = async (companyId, id) => {
 export const podPdf: PdfBuilder = async (companyId, id) => {
   const d = await loadPodPdf(companyId, id);
   return d && { html: podHtml(d), filename: `POD-${fileSafe(d.lr.lrNo)}.pdf` };
+};
+
+/** /pdf/challan/[id] → CH-<no>.pdf */
+export const challanPdf: PdfBuilder = async (companyId, id) => {
+  const d = await loadChallanPdf(companyId, id);
+  return d && { html: challanHtml(d), filename: `CH-${fileSafe(d.challan.challanNo)}.pdf` };
 };
 
 /** /pdf/bill/[id] → FB-<no>.pdf */

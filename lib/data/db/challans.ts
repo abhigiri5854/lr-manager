@@ -2,12 +2,20 @@
 import type { ChallanInsightQuery, ChallanInsights } from "@/lib/challan-insights";
 import { financialYear } from "@/lib/fy";
 import { calcChallan, fromPaise, toPaise } from "@/lib/hire";
-import type { ChallanChargeLine, ChallanLrLine, ChallanLrPick, ChallanView, LrView } from "@/lib/types";
+import type {
+  ChallanChargeLine,
+  ChallanLrLine,
+  ChallanLrPick,
+  ChallanView,
+  LrView,
+  Page,
+} from "@/lib/types";
 import type { ChallanValues } from "@/lib/validators/challan";
+import type { ChallanListFilters } from "@/lib/validators/challan-list";
 import { newId } from "../_store";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import { listLrs } from "../lrs";
-import { contains, withCommit, withUser, withUserRead, type Tx } from "./conn";
+import { contains, paging, withCommit, withUser, withUserRead, type Tx } from "./conn";
 import { LR_SELECT } from "./lrs";
 import {
   audit,
@@ -521,5 +529,148 @@ export async function saveChallan(
     );
     audit(tx, companyId, "challans", cid, id ? "update" : "create", existing, saved);
     return saved;
+  });
+}
+
+// ---------- register (screen 2) ----------
+
+export type ChallanRegisterRow = {
+  id: string;
+  challanNo: string;
+  /** yyyy-mm-dd (India) */
+  challanDate: string;
+  status: ChallanView["status"];
+  branchName: string;
+  vehicleNo: string | null;
+  source: string | null;
+  destination: string | null;
+  payeeName: string | null;
+  hirePaise: number;
+  paidPaise: number;
+  balancePaise: number;
+  /** Whole days from unloaded to POD received, or to today while the POD is pending; null when not unloaded. */
+  podAgeDays: number | null;
+  podReceived: boolean;
+};
+
+const REGISTER_EXPORT_MAX = 5000;
+
+/** Filtered challan register: paid / balance come from v_challan_balance (cancelled challans aren't in it). */
+export async function listChallanRegister(
+  companyId: string,
+  f: ChallanListFilters,
+  params: { page?: number; all?: boolean },
+): Promise<Page<ChallanRegisterRow>> {
+  const { page, pageSize, offset } = paging(params);
+  const payee = contains(f.payee);
+  const vehicle = contains(f.vehicle?.replace(/\s+/g, ""));
+  return withUserRead(async (tx) => {
+    const where = () => tx`c.company_id = ${companyId} and c.cancelled_at is null
+      ${f.from ? tx`and (c.challan_at at time zone 'Asia/Kolkata')::date >= ${f.from}::date` : tx``}
+      ${f.to ? tx`and (c.challan_at at time zone 'Asia/Kolkata')::date <= ${f.to}::date` : tx``}
+      ${f.branch ? tx`and c.branch_id = ${f.branch}::uuid` : tx``}
+      ${f.status ? tx`and c.status = ${f.status}::challan_status` : tx``}
+      ${payee ? tx`and lower(pp.name) like ${payee}` : tx``}
+      ${vehicle ? tx`and lower(v.vehicle_no) like ${vehicle}` : tx``}`;
+    const from = () => tx`challans c
+        join v_challan_balance vb on vb.company_id = c.company_id and vb.challan_id = c.id
+        join branches b on b.company_id = c.company_id and b.id = c.branch_id
+        left join market_vehicles v on v.company_id = c.company_id and v.id = c.vehicle_id
+        left join truck_parties pp on pp.company_id = c.company_id and pp.id = c.payee_party_id`;
+    const [rows, [{ n }]] = await Promise.all([
+      tx`select c.id, c.challan_no, (c.challan_at at time zone 'Asia/Kolkata')::date::text as challan_date,
+                c.status, b.name as branch_name, v.vehicle_no, c.source, c.destination, pp.name as payee_name,
+                c.hire_amount, vb.paid, vb.balance,
+                case when c.unloaded_at is not null
+                     then coalesce((c.pod_received_at at time zone 'Asia/Kolkata')::date,
+                                   (now() at time zone 'Asia/Kolkata')::date)
+                          - (c.unloaded_at at time zone 'Asia/Kolkata')::date
+                end as pod_age_days,
+                (c.pod_received_at is not null) as pod_received
+           from ${from()} where ${where()}
+          order by c.challan_at desc, c.id desc
+          ${params.all ? tx`limit ${REGISTER_EXPORT_MAX}` : tx`limit ${pageSize} offset ${offset}`}`,
+      tx`select count(*) as n from ${from()} where ${where()}`,
+    ]);
+    return {
+      rows: rows.map((r) => ({
+        id: r.id as string,
+        challanNo: r.challan_no as string,
+        challanDate: r.challan_date as string,
+        status: r.status as ChallanView["status"],
+        branchName: r.branch_name as string,
+        vehicleNo: (r.vehicle_no as string | null) ?? null,
+        source: (r.source as string | null) ?? null,
+        destination: (r.destination as string | null) ?? null,
+        payeeName: (r.payee_name as string | null) ?? null,
+        hirePaise: toPaise(r.hire_amount as string),
+        paidPaise: toPaise(r.paid as string),
+        balancePaise: toPaise(r.balance as string),
+        podAgeDays: r.pod_age_days === null ? null : Number(r.pod_age_days),
+        podReceived: !!r.pod_received,
+      })),
+      total: Number(n),
+      page,
+      pageSize: params.all ? REGISTER_EXPORT_MAX : pageSize,
+    };
+  });
+}
+
+// ---------- print (challan PDF) ----------
+
+export type ChallanPrintExtras = {
+  driverMobile: string | null;
+  driverDlNo: string | null;
+  vehicleTypeName: string | null;
+  payeeMobile: string | null;
+  payeePan: string | null;
+  /** Rupees as numeric strings, from v_challan_balance. */
+  money: {
+    additions: string;
+    deductions: string;
+    grossCredit: string;
+    tds: string;
+    netPayable: string;
+    advancePaid: string;
+    paid: string;
+    balance: string;
+  };
+};
+
+export async function getChallanPrintExtras(
+  companyId: string,
+  id: string,
+): Promise<ChallanPrintExtras | null> {
+  if (!UUID.test(id)) return null;
+  return withUserRead(async (tx) => {
+    const [r] = await tx`
+      select d.mobile as driver_mobile, d.dl_no, vt.name as vehicle_type_name,
+             pp.mobile as payee_mobile, pp.pan as payee_pan,
+             vb.additions, vb.deductions, vb.gross_credit, vb.tds_amount, vb.net_payable,
+             vb.advance_paid, vb.paid, vb.balance
+        from challans c
+        join v_challan_balance vb on vb.company_id = c.company_id and vb.challan_id = c.id
+        left join market_drivers d on d.company_id = c.company_id and d.id = c.driver_id
+        left join vehicle_types vt on vt.company_id = c.company_id and vt.id = c.vehicle_type_id
+        left join truck_parties pp on pp.company_id = c.company_id and pp.id = c.payee_party_id
+       where c.company_id = ${companyId} and c.id = ${id}`;
+    if (!r) return null;
+    return {
+      driverMobile: (r.driver_mobile as string | null) ?? null,
+      driverDlNo: (r.dl_no as string | null) ?? null,
+      vehicleTypeName: (r.vehicle_type_name as string | null) ?? null,
+      payeeMobile: (r.payee_mobile as string | null) ?? null,
+      payeePan: (r.payee_pan as string | null) ?? null,
+      money: {
+        additions: String(r.additions),
+        deductions: String(r.deductions),
+        grossCredit: String(r.gross_credit),
+        tds: String(r.tds_amount),
+        netPayable: String(r.net_payable),
+        advancePaid: String(r.advance_paid),
+        paid: String(r.paid),
+        balance: String(r.balance),
+      },
+    };
   });
 }

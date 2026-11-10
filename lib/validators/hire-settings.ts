@@ -5,8 +5,8 @@ import { optional } from "./common";
 // Percentages are 0–100; money is rupees (numeric columns, not paise). Empty = not configured.
 
 export const TDS_TIMINGS = [
+  // Client decision (TIER1 §9 #2): TDS is deducted at the balance payment only, never on advances.
   { value: "balance", label: "At balance payment" },
-  { value: "each_payment", label: "On every payment" },
 ] as const;
 export const TDS_BASES = [
   { value: "gross_credit", label: "Gross amount credited" },

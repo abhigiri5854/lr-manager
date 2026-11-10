@@ -1,6 +1,8 @@
 // Reads everything a PDF needs through lib/data (company-scoped, role-checked by the route) and
 // inlines the images. Finalised documents print their stored snapshot of company and parties;
 // drafts print the live records. Nothing about a company lives in the templates.
+import { getChallan, getChallanLrPicks, getChallanPrintExtras } from "@/lib/data/challans";
+import type { ChallanPrintExtras } from "@/lib/data/db/challans";
 import { getCompany } from "@/lib/data/companies";
 import { getFreightBillById } from "@/lib/data/bills";
 import {
@@ -16,6 +18,8 @@ import { getPodById } from "@/lib/data/pod";
 import { getTruckById } from "@/lib/data/trucks";
 import { companySnapshot } from "@/lib/snapshots";
 import type {
+  ChallanLrPick,
+  ChallanView,
   CompanySnapshot,
   FreightBillView,
   LrView,
@@ -247,6 +251,30 @@ export async function loadPodPdf(companyId: string, id: string): Promise<PodPdfD
     copies,
     mark: markOf(pod, false),
   };
+}
+
+// ---------- market-truck hire challan ----------
+
+export type ChallanPdfData = {
+  challan: ChallanView;
+  extras: ChallanPrintExtras;
+  /** One per LR line (date, parties, places); LRs that can't be read are left out. */
+  lrs: ChallanLrPick[];
+  company: PdfCompany;
+  mark: PdfMark;
+};
+
+export async function loadChallanPdf(companyId: string, id: string): Promise<ChallanPdfData | null> {
+  const challan = await getChallan(companyId, id);
+  if (!challan || challan.cancelledAt) return null;
+  // Challans keep no snapshot of the company, so the live profile prints.
+  const [company, extras, lrs] = await Promise.all([
+    loadPdfCompany(companyId),
+    getChallanPrintExtras(companyId, id),
+    getChallanLrPicks(companyId, id, challan.lrs.map((l) => l.lrId)),
+  ]);
+  if (!company || !extras) return null;
+  return { challan, extras, lrs, company, mark: markOf(challan, challan.status === "draft") };
 }
 
 // ---------- freight bill ----------
