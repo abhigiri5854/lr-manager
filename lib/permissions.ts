@@ -26,7 +26,12 @@ export type Action =
    * Add / edit parties, trucks, drivers and items. Not a row in the design table: given to
    * every office role, because creating LRs and invoices adds them on the fly.
    */
-  | "master.edit";
+  | "master.edit"
+  /**
+   * Change a truck party's bank details, UPI ID, UPI QR, verified flag or blacklist status
+   * (TIER1-MARKET-TRUCKS.md fraud controls). Owner and Accountant only; booking staff see them read-only.
+   */
+  | "payee.bank";
 
 export const PERMISSIONS: Record<Role, readonly Action[]> = {
   owner: [
@@ -39,8 +44,16 @@ export const PERMISSIONS: Record<Role, readonly Action[]> = {
     "pod.upload",
     "freight.view",
     "master.edit",
+    "payee.bank",
   ],
-  accountant: ["invoice.edit", "bill.edit", "import.run", "freight.view", "master.edit"],
+  accountant: [
+    "invoice.edit",
+    "bill.edit",
+    "import.run",
+    "freight.view",
+    "master.edit",
+    "payee.bank",
+  ],
   booking_staff: [
     "lr.edit",
     "invoice.edit",
@@ -76,6 +89,7 @@ export const ACTION_LABEL: Record<Action, string> = {
   "pod.upload_own": "record POD for this LR",
   "freight.view": "see freight amounts",
   "master.edit": "add or edit parties, trucks, drivers and items",
+  "payee.bank": "change bank / UPI details, verification or blacklist of truck parties",
 };
 
 export function deniedMessage(role: Role | null | undefined, action: Action): string {
@@ -106,6 +120,7 @@ export const PERMISSION_ROWS: Array<{
   },
   { label: "See freight amounts", action: "freight.view" },
   { label: "Parties, trucks & items", action: "master.edit" },
+  { label: "Truck party bank, UPI & blacklist", action: "payee.bank" },
 ];
 
 /** What a cell of that table says: "✓", "✓ own trips" or "—". */

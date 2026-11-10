@@ -2,7 +2,7 @@
 
 Multi-company logistics software: LRs (consignment notes), tax invoices, POD, freight bills,
 payments, parties, trucks, AI import, branded PDFs. Used by many companies and users.
-
+- Market-truck module spec: TIER1-MARKET-TRUCKS.md (section 9 = client decisions, highest priority)
 ## Source of truth for UI
 - `design/screens/*.dc.html` = the approved design. Match layout, spacing, colors, copy and order exactly.
 - Each file's `<x-dc>` block is plain HTML with inline styles; ignore `<script type="text/x-dc">`,

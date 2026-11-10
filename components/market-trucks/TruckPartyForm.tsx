@@ -9,6 +9,7 @@ import {
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field, Select, Textarea } from "@/components/ui/Field";
+import { useCan } from "@/components/ui/Permissions";
 import type { TruckParty } from "@/lib/types";
 import {
   truckPartyFields,
@@ -17,9 +18,30 @@ import {
 import { TruckDocInput } from "./TruckDocInput";
 import { truckPartyRoleLabel } from "./labels";
 
+// Fields only payee.bank may change; booking staff see them read-only and the server rejects changes.
+const BANK_KEYS = [
+  "bankName",
+  "accountHolder",
+  "accountNo",
+  "ifsc",
+  "upiId",
+  "upiQrUrl",
+  "verified",
+  "status",
+  "blacklistReason",
+] as const;
+
+/** An edit that names no bank field, so it can't touch them. */
+function withoutBank(input: TruckPartyInput): TruckPartyInput {
+  const o: Record<string, unknown> = { ...input };
+  for (const k of BANK_KEYS) delete o[k];
+  return o as TruckPartyInput;
+}
+
 /** Create (no `party`) or edit a truck party. Saves with its own buttons, then refreshes the list. */
 export function TruckPartyForm({ party, onDone }: { party?: TruckParty; onDone: () => void }) {
   const router = useRouter();
+  const canBank = useCan("payee.bank");
   const [qrUrl, setQrUrl] = useState<string | null>(party?.upiQrUrl ?? null);
   const [status, setStatus] = useState(party?.status ?? "active");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -59,7 +81,7 @@ export function TruckPartyForm({ party, onDone }: { party?: TruckParty; onDone: 
     setFormError(null);
     startTransition(async () => {
       const result = party
-        ? await updateTruckPartyAction(party.id, version.current, input)
+        ? await updateTruckPartyAction(party.id, version.current, canBank ? input : withoutBank(input))
         : await addTruckPartyAction(input);
       if (result.ok) {
         version.current = result.party.version;
@@ -108,25 +130,34 @@ export function TruckPartyForm({ party, onDone }: { party?: TruckParty; onDone: 
       <Field label="GSTIN" name="gstin" defaultValue={party?.gstin ?? ""} error={errors.gstin} className="col-span-2 [&_input]:font-mono" />
       <Textarea label="Address" name="address" defaultValue={party?.address ?? ""} error={errors.address} className="col-span-2" />
 
-      <Field label="Bank name" name="bankName" defaultValue={party?.bankName ?? ""} error={errors.bankName} className="col-span-2 sm:col-span-1" />
-      <Field label="Account holder" name="accountHolder" defaultValue={party?.accountHolder ?? ""} error={errors.accountHolder} className="col-span-2 sm:col-span-1" />
-      <Field label="Account number" name="accountNo" inputMode="numeric" defaultValue={party?.accountNo ?? ""} error={errors.accountNo} className="col-span-2 sm:col-span-1 [&_input]:font-mono" />
-      <Field label="IFSC" name="ifsc" defaultValue={party?.ifsc ?? ""} error={errors.ifsc} className="col-span-2 sm:col-span-1 [&_input]:font-mono" />
-      <Field label="UPI ID" name="upiId" defaultValue={party?.upiId ?? ""} error={errors.upiId} hint="e.g. name@bank" className="col-span-2 sm:col-span-1" />
+      <Field label="Bank name" name="bankName" readOnly={!canBank} defaultValue={party?.bankName ?? ""} error={errors.bankName} className="col-span-2 sm:col-span-1" />
+      <Field label="Account holder" name="accountHolder" readOnly={!canBank} defaultValue={party?.accountHolder ?? ""} error={errors.accountHolder} className="col-span-2 sm:col-span-1" />
+      <Field label="Account number" name="accountNo" readOnly={!canBank} inputMode="numeric" defaultValue={party?.accountNo ?? ""} error={errors.accountNo} className="col-span-2 sm:col-span-1 [&_input]:font-mono" />
+      <Field label="IFSC" name="ifsc" readOnly={!canBank} defaultValue={party?.ifsc ?? ""} error={errors.ifsc} className="col-span-2 sm:col-span-1 [&_input]:font-mono" />
+      <Field label="UPI ID" name="upiId" readOnly={!canBank} defaultValue={party?.upiId ?? ""} error={errors.upiId} hint="e.g. name@bank" className="col-span-2 sm:col-span-1" />
       <div className="col-span-2 sm:col-span-1">
-        <TruckDocInput label="UPI QR image" kind="upi-qr" url={qrUrl} onChange={setQrUrl} error={errors.upiQrUrl} />
+        {canBank ? (
+          <TruckDocInput label="UPI QR image" kind="upi-qr" url={qrUrl} onChange={setQrUrl} error={errors.upiQrUrl} />
+        ) : (
+          <Field label="UPI QR image" readOnly value={qrUrl ? "Uploaded" : "Not added"} />
+        )}
       </div>
+      {!canBank && (
+        <p className="col-span-2 m-0 text-[13px] text-muted">
+          Bank details, UPI, the verified flag and blacklisting can only be changed by an Owner or Accountant.
+        </p>
+      )}
 
       <label className="col-span-2 flex min-h-control items-center gap-2 text-sm font-semibold text-text">
-        <input type="checkbox" name="verified" defaultChecked={party?.verified ?? false} className="size-4" />
+        <input type="checkbox" name="verified" disabled={!canBank} defaultChecked={party?.verified ?? false} className="size-4" />
         Verified (KYC and bank details checked)
       </label>
-      <Select label="Status" name="status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} error={errors.status} className="col-span-2 sm:col-span-1">
+      <Select label="Status" name="status" disabled={!canBank} value={status} onChange={(e) => setStatus(e.target.value as typeof status)} error={errors.status} className="col-span-2 sm:col-span-1">
         <option value="active">Active</option>
         <option value="blacklisted">Blacklisted</option>
       </Select>
       {status === "blacklisted" && (
-        <Field label="Blacklist reason" name="blacklistReason" required defaultValue={party?.blacklistReason ?? ""} error={errors.blacklistReason} className="col-span-2 sm:col-span-1" />
+        <Field label="Blacklist reason" name="blacklistReason" required readOnly={!canBank} defaultValue={party?.blacklistReason ?? ""} error={errors.blacklistReason} className="col-span-2 sm:col-span-1" />
       )}
       <Textarea label="Notes" name="notes" defaultValue={party?.notes ?? ""} error={errors.notes} className="col-span-2" />
 

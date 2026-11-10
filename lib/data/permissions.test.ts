@@ -171,6 +171,45 @@ describe("every lib/data write checks lib/permissions", () => {
     });
   }
 
+  // Bank / UPI / verified / blacklist on truck parties need payee.bank (Owner + Accountant only);
+  // any other truck-party edit only needs master.edit.
+  const BANK_PATCHES: Record<string, object> = {
+    bankName: { bankName: "HDFC" },
+    accountHolder: { accountHolder: "A B" },
+    accountNo: { accountNo: "123456789" },
+    ifsc: { ifsc: "HDFC0001234" },
+    upiId: { upiId: "a@b" },
+    upiQrUrl: { upiQrUrl: null },
+    verified: { verified: true },
+    status: { status: "blacklisted", blacklistReason: "x" },
+  };
+  for (const role of roles) {
+    const bank = can(role, "payee.bank");
+    it.each(Object.entries(BANK_PATCHES))(`${role}: truck party %s change`, async (_k, patch) => {
+      actAs(role);
+      expect(await refused(() => truckParties.updateTruckParty(c(), X, 1, patch as never))).toBe(!bank);
+    });
+    it(`${role}: truck party bank details on create`, async () => {
+      actAs(role);
+      expect(
+        await refused(() =>
+          truckParties.createTruckParty(c(), { role: "owner", name: "TEST", bankName: "HDFC" } as never),
+        ),
+      ).toBe(!bank);
+    });
+    it(`${role}: other truck party edits only need master.edit`, async () => {
+      actAs(role);
+      expect(await refused(() => truckParties.updateTruckParty(c(), X, 1, { notes: "x" }))).toBe(false);
+    });
+  }
+
+  it("payee.bank is Owner + Accountant only", () => {
+    expect(can("owner", "payee.bank")).toBe(true);
+    expect(can("accountant", "payee.bank")).toBe(true);
+    expect(can("booking_staff", "payee.bank")).toBe(false);
+    expect(can("driver", "payee.bank")).toBe(false);
+  });
+
   it("sends logged-out visitors to /login", async () => {
     await setTestUser(null);
     await expect(lrs.createLr(acmId(), {})).rejects.toThrow("NEXT_REDIRECT /login");

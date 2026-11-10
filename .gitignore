@@ -48,3 +48,8 @@ samples/
 
 # Local dev credentials
 DEV-LOGINS.md
+
+# Final browser check output
+final-check/
+
+scripts/dev-reset-passwords.ts

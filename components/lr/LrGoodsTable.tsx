@@ -34,7 +34,8 @@ export function LrGoodsTable({
 
   return (
     <>
-      <div className="overflow-x-auto">
+      {/* `relative` keeps the absolutely positioned sr-only labels (e.g. the "Remove" header) inside the scroller; without it they sit outside the clip and widen the whole page. */}
+      <div className="relative overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr>
