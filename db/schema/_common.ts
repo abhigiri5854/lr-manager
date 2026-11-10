@@ -83,6 +83,8 @@ export const truckPaymentStatus = pgEnum("truck_payment_status", [
   "reversed",
 ]);
 export const allocationKind = pgEnum("allocation_kind", ["advance", "balance", "adjustment"]);
+/** System POD lines on challan_charges (0020_pod_settlement.sql). */
+export const podAutoKind = pgEnum("pod_auto_kind", ["late_pod", "shortage"]);
 
 /** Same shape as lib/validators/common.ts (the checksum stays an app-level check). */
 export const GSTIN_SHAPE_SQL = "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z][0-9A-Z][0-9A-Z]$";

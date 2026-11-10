@@ -9,6 +9,7 @@ import { db, resetStore, SAMPLE_IDS } from "./_store";
 // Tests run outside a Next.js request, where connection() would throw.
 vi.mock("next/server", () => ({ connection: async () => {} }));
 import * as bills from "./bills";
+import * as challanPod from "./challan-pod";
 import * as challans from "./challans";
 import * as companies from "./companies";
 import { ForbiddenError } from "./errors";
@@ -148,6 +149,12 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
     "payment.approve",
     () => truckPayments.reverseTruckPayment(c(), X, 1, { reason: "x" }),
   ],
+  // POD settlement (T1-07): recording the POD writes the LRs' PODs = pod.upload; POD charges and
+  // settling = bill.edit; reopening a settled challan = record.cancel.
+  recordChallanPod: ["pod.upload", () => challanPod.recordChallanPod(c(), X, 1, {})],
+  saveChallanPodCharges: ["bill.edit", () => challanPod.saveChallanPodCharges(c(), X, 1, {})],
+  settleChallan: ["bill.edit", () => challanPod.settleChallan(c(), X, 1)],
+  reopenChallan: ["record.cancel", () => challanPod.reopenChallan(c(), X, 1, { reason: "x" })],
 };
 
 /** Resolves to true when the call was refused for permissions. */
@@ -165,7 +172,7 @@ describe("every lib/data write checks lib/permissions", () => {
       .flatMap((f) =>
         [
           ...readFileSync(join(dir, f), "utf8").matchAll(
-            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit|submit|approve|mark|reverse)\w*)/g,
+            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit|submit|approve|mark|reverse|record|settle|reopen)\w*)/g,
           ),
         ].map((m) => m[1]),
       );

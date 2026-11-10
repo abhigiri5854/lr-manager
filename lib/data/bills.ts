@@ -57,9 +57,15 @@ import {
   priceBill,
   type ParsedBillLine,
 } from "./bill-calc";
+import { z } from "zod";
+import type { UnbilledChallanCharge } from "@/lib/types";
 import * as dbb from "./db/bills";
+import * as dbs from "./db/challan-pod";
 import { assertCan } from "./session";
 import { onDatabase } from "./source";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const chargeIdsSchema = z.array(z.string().regex(UUID, "Not a valid id")).max(200).default([]);
 
 export type FreightBillListParams = ListParams & {
   partyId?: string;
@@ -146,14 +152,33 @@ export async function listUnbilledLrs(companyId: string, partyId?: string): Prom
     .map(toLrView);
 }
 
-/** Saves a draft bill. It gets its number only when finalised, so drafts never leave gaps. */
+/**
+ * Party-billable POD charges (detention, unloading… filled at POD settlement) not on a live bill yet.
+ * New freight bill offers them as lines to add; challans are on the database only.
+ */
+export async function listUnbilledChallanCharges(
+  companyId: string,
+  partyId?: string,
+): Promise<UnbilledChallanCharge[]> {
+  if (onDatabase()) return dbs.listUnbilledChallanCharges(companyId, partyId);
+  return [];
+}
+
+/**
+ * Saves a draft bill. It gets its number only when finalised, so drafts never leave gaps.
+ * `chargeIds`: party-billable POD charges to add — each lands on its LR's line (the LR must be on
+ * the bill) and is marked billed in the same transaction; a charge can be on one live bill only.
+ */
 export async function createFreightBill(
   companyId: string,
   input: FreightBillInput,
+  opts: { chargeIds?: string[] } = {},
 ): Promise<FreightBillView> {
   await assertCan(companyId, "bill.edit");
   const v = parseInput(freightBillFields, input);
-  if (onDatabase()) return dbb.insertFreightBill(companyId, v);
+  const chargeIds = parseInput(chargeIdsSchema, opts.chargeIds);
+  if (onDatabase()) return dbb.insertFreightBill(companyId, v, chargeIds);
+  if (chargeIds.length) fail("charges", "Challan charges need the database");
   assertRef(db.parties, companyId, v.partyId, "partyId", "Party");
   assertBillableLrs(v.lines, mockLrForBill(companyId));
   const company = db.companies.find((c) => c.id === companyId);

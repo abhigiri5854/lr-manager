@@ -141,6 +141,13 @@
       "when": 1794108942000,
       "tag": "0019_hire_series_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794195342000,
+      "tag": "0020_pod_settlement",
+      "breakpoints": true
     }
   ]
 }

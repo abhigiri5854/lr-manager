@@ -35,6 +35,8 @@ export const hireSettingsFields = z.object({
   tdsNilMaxVehicles: whole(1000),
   tdsTiming: choice(TDS_TIMINGS),
   tdsBase: choice(TDS_BASES),
+  /** Auto shortage deduction at POD settlement. Left out = unchanged. */
+  shortageAuto: z.boolean().optional(),
   shortageAllowancePct: pct,
   shortageRateSource: optional(choice(SHORTAGE_RATE_SOURCES)),
   detentionFreeDays: whole(365),
@@ -64,6 +66,7 @@ export type HireSettings = {
   tdsNilMaxVehicles: number | null;
   tdsTiming: string;
   tdsBase: string;
+  shortageAuto: boolean;
   shortageAllowancePct: number | null;
   shortageRateSource: string | null;
   detentionFreeDays: number | null;
@@ -90,6 +93,7 @@ export const HIRE_SETTING_COLUMNS: Record<keyof Omit<HireSettings, "version">, s
   tdsNilMaxVehicles: "tds_nil_max_vehicles",
   tdsTiming: "tds_timing",
   tdsBase: "tds_base",
+  shortageAuto: "shortage_auto",
   shortageAllowancePct: "shortage_allowance_pct",
   shortageRateSource: "shortage_rate_source",
   detentionFreeDays: "detention_free_days",

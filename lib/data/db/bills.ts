@@ -19,6 +19,12 @@ import {
 import type { BillFacts } from "../bill-reports";
 import type { FreightBillListParams, PaymentListParams } from "../bills";
 import { ConflictError, NotFoundError } from "../errors";
+import {
+  addChargesToLines,
+  auditChargesBilled,
+  lockChargesForBill,
+  markChargesBilled,
+} from "./challan-pod";
 import { contains, paging, withUser, withUserRead, type Tx } from "./conn";
 import { isUuid, LR_SELECT } from "./lrs";
 import { audit, toCompany, toFreightBill, toLrView, toParty, toPayment, type Row } from "./rows";
@@ -271,17 +277,23 @@ const billColumns = (b: FreightBill): Row => ({
 export async function insertFreightBill(
   companyId: string,
   v: ParsedBill,
+  chargeIds: string[] = [],
 ): Promise<FreightBillView> {
   return withUser(async (tx) => {
-    const [[company], [party], lrRows, problems] = await Promise.all([
+    const [[company], [party], lrRows, problems, chargeRows] = await Promise.all([
       tx`select gstin, freight_gst_rate_bp from companies where id = ${companyId}`,
       tx`select * from parties where company_id = ${companyId} and id in ${uuidsIn(tx, [v.partyId])}`,
       lrsForBill(tx, companyId, v.lines.map((l) => l.lrId)),
       runChecks(tx, refCheck(tx, companyId, "parties", "partyId", "Party", v.partyId)),
+      chargeIds.length
+        ? lockChargesForBill(tx, companyId, chargeIds)
+        : Promise.resolve([] as Row[]),
     ]);
     assertNoProblems(problems);
     const lrFor = lrLookup(lrRows);
     assertBillableLrs(v.lines, lrFor);
+    // Party-billable POD charges land on their LR's line before pricing.
+    const lines = chargeIds.length ? addChargesToLines(v.lines, chargeRows, chargeIds) : v.lines;
     const gstRateBp =
       v.gstRateBp ?? (v.gstMode === "forward_charge" ? (company?.freight_gst_rate_bp ?? 0) : 0);
     const t = now();
@@ -299,18 +311,22 @@ export async function insertFreightBill(
       partyId: v.partyId,
       gstMode: v.gstMode,
       gstRateBp,
-      ...priceBill(company.gstin, partyStateOf(party), v.gstMode, gstRateBp, v.lines),
+      ...priceBill(company.gstin, partyStateOf(party), v.gstMode, gstRateBp, lines),
       snapshot: null,
     };
-    const [[saved]] = await checkedWrite<Row[][]>(
+    const [[saved], , marked] = await checkedWrite<Row[][]>(
       null,
       [
         tx`insert into freight_bills ${tx({ id: bill.id, company_id: companyId, status: "draft", ...billColumns(bill) } as never)}
            returning *`,
         tx`insert into freight_bill_lines ${tx(billLineRows(bill) as never)}`,
+        ...(chargeIds.length ? [markChargesBilled(tx, companyId, bill.id, chargeIds)] : []),
       ],
       () => {},
     );
+    // The charges were locked and checked above, so every one must have been marked.
+    if (chargeIds.length && (marked?.length ?? 0) !== new Set(chargeIds).size) throw new ConflictError();
+    if (chargeIds.length) auditChargesBilled(tx, companyId, bill.id, chargeRows);
     const view = toBillView({
       ...saved,
       lines: bill.lines,
@@ -350,14 +366,28 @@ export async function updateFreightBill(
   p: ParsedBillPatch,
 ): Promise<FreightBillView> {
   return withUser(async (tx) => {
-    const [{ cur, company, parties }, lrRows, problems] = await Promise.all([
+    const [{ cur, company, parties }, lrRows, problems, strandedCharges] = await Promise.all([
       readBillForEdit(tx, companyId, id, p.partyId),
       p.lines ? lrsForBill(tx, companyId, p.lines.map((l) => l.lrId)) : Promise.resolve([] as Row[]),
       runChecks(tx, refCheck(tx, companyId, "parties", "partyId", "Party", p.partyId)),
+      // POD charges billed on this bill whose LR the edit would drop.
+      p.lines && isUuid(id)
+        ? tx`select l.lr_no from challan_charges g
+               join lrs l on l.company_id = g.company_id and l.id = g.lr_id
+              where g.company_id = ${companyId} and g.billed_in_freight_bill_id = ${id}
+                and g.cancelled_at is null
+                and g.lr_id not in ${uuidsIn(tx, p.lines.map((l) => l.lrId))}
+              limit 1`
+        : Promise.resolve([] as Row[]),
     ]);
     assertNoProblems(problems);
     const lrFor = lrLookup(lrRows);
     if (p.lines) assertBillableLrs(p.lines, lrFor, id);
+    if (strandedCharges.length)
+      fail(
+        "lines",
+        `LR ${strandedCharges[0].lr_no} carries challan charges billed on this bill — cancel the bill to re-bill them`,
+      );
     assertBillEditable(cur, expectedVersion);
     const before = toFreightBill(cur);
     if (before.status === "final") {

@@ -30,6 +30,7 @@ import {
   hireSeriesKind,
   money,
   payeeKind,
+  podAutoKind,
   rateBasis,
   truckPartyRole,
   truckPartyStatus,
@@ -325,9 +326,18 @@ export const challans = pgTable(
     /** Late-POD fee override for this challan (days + fee default from company settings). */
     latePodDays: integer("late_pod_days"),
     latePodFee: money("late_pod_fee"),
+    /** Last reopen of a settled challan (record.cancel + reason; 0020_pod_settlement.sql). */
+    reopenedAt: ts("reopened_at"),
+    reopenReason: text("reopen_reason"),
   },
   (t) => [
     ...businessConstraints("challans", t),
+    check("challans_reopen_check", sql`(reopened_at is null) = (reopen_reason is null)`),
+    check(
+      "challans_pod_status_check",
+      sql`status not in ('pod_received', 'settled') or pod_received_at is not null`,
+    ),
+    check("challans_settled_check", sql`status <> 'settled' or settled_at is not null`),
     ...companyFk("challans_branch", t.companyId, t.branchId, branches),
     ...companyFk("challans_vehicle", t.companyId, t.vehicleId, marketVehicles),
     ...companyFk("challans_vehicle_type", t.companyId, t.vehicleTypeId, vehicleTypes),
@@ -382,6 +392,10 @@ export const challanLrs = pgTable(
       sql`loaded_pkgs >= 0 and (delivered_pkgs is null or delivered_pkgs >= 0) and (loaded_wt is null or loaded_wt >= 0)`,
     ),
     check("challan_lrs_freight_check", sql`freight_allocated >= 0`),
+    check(
+      "challan_lrs_delivered_check",
+      sql`delivered_pkgs is null or delivered_pkgs <= loaded_pkgs`,
+    ),
     check("challan_lrs_ewb_check", sql`ewb_no is null or ewb_no ~ '^[0-9]{12}$'`),
     index("challan_lrs_company_ewb_idx")
       .on(t.companyId, t.ewbValidUpto)
@@ -396,7 +410,8 @@ export const challanCharges = pgTable(
     companyId: companyId(),
     challanId: uuid("challan_id").notNull(),
     lrId: uuid("lr_id"),
-    chargeTypeId: uuid("charge_type_id").notNull(),
+    /** Null only on system lines (auto_kind set). */
+    chargeTypeId: uuid("charge_type_id"),
     stage: chargeStage("stage").notNull(),
     direction: chargeDirection("direction").notNull(),
     /** What the truck is paid (ADD) or charged (DEDUCT). */
@@ -407,9 +422,31 @@ export const challanCharges = pgTable(
     billedInFreightBillId: uuid("billed_in_freight_bill_id"),
     evidenceFile: text("evidence_file"),
     note: text("note"),
+    /** System POD line: late-POD fee (challan-level) or shortage (per LR). */
+    autoKind: podAutoKind("auto_kind"),
+    /** What the rule computed; `amount` differs only when override_reason is set. */
+    autoAmount: money("auto_amount"),
+    overrideReason: text("override_reason"),
   },
   (t) => [
     ...businessConstraints("challan_charges", t),
+    check("challan_charges_type_check", sql`charge_type_id is not null or auto_kind is not null`),
+    check(
+      "challan_charges_auto_check",
+      sql`(auto_kind is null) = (auto_amount is null) and (auto_amount is null or auto_amount >= 0) and (override_reason is null or auto_kind is not null) and (auto_kind is null or stage = 'pod')`,
+    ),
+    check("challan_charges_party_lr_check", sql`not bill_party or lr_id is not null`),
+    uniqueIndex("challan_charges_auto_key")
+      .on(
+        t.companyId,
+        t.challanId,
+        t.autoKind,
+        sql`coalesce(${t.lrId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      )
+      .where(sql`auto_kind is not null and cancelled_at is null`),
+    index("challan_charges_bill_idx")
+      .on(t.companyId, t.billedInFreightBillId)
+      .where(sql`billed_in_freight_bill_id is not null`),
     ...companyFk("challan_charges_challan", t.companyId, t.challanId, challans),
     ...companyFk("challan_charges_lr", t.companyId, t.lrId, lrs),
     ...companyFk("challan_charges_type", t.companyId, t.chargeTypeId, chargeTypes, false),

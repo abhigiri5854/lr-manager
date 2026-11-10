@@ -191,44 +191,52 @@ export async function createPod(
   v: z.output<typeof podFields>,
   role: Role,
 ): Promise<Pod> {
-  const paths = documentPaths(companyId, v.lrId, v.documentUrls ?? []);
-  return withUser(async (tx) => {
-    const [[lr], [existing]] = await Promise.all([
-      tx`select * from app.lr_pod_info(${companyId}, ${v.lrId})`,
-      tx`select 1 as x from pods where company_id = ${companyId} and lr_id = ${v.lrId}
-            and cancelled_at is null`,
-    ]);
-    if (!lr) {
-      if (can(role, "pod.upload")) fail("lrId", "LR not found in this company");
-      throw new ForbiddenError("Drivers can only record POD for their own trips.");
-    }
-    if (lr.cancelled_at) fail("lrId", "LR not found in this company");
-    if (!lr.booked_at) fail("lrId", "Book the LR before recording delivery");
-    if (existing) fail("lrId", "This LR already has a POD — edit it instead");
-    assertDeliveryRules(v.deliveredOn, v.condition ?? "good", v.remarks ?? null);
+  return withUser((tx) => createPodIn(tx, companyId, v, role));
+}
 
-    const delivery = setDelivered(tx, companyId, v.lrId, deliveredAtFrom(v.deliveredOn), lr as never);
-    const row = {
-      id: newId(),
-      company_id: companyId,
-      lr_id: v.lrId,
-      received_by: v.receivedBy ?? null,
-      receiver_phone: v.receiverPhone ?? null,
-      packages_received: v.packagesReceived ?? null,
-      condition: v.condition ?? "good",
-      remarks: v.remarks ?? null,
-      document_paths: paths,
-      received_at: v.receivedAt ?? (paths.length ? now() : null),
-    };
-    const [, [saved]] = await Promise.all([
-      delivery.done,
-      tx`insert into pods ${tx(row as never)} returning *`,
-    ]);
-    delivery.record();
-    const pod = toPod(saved);
-    audit(tx, companyId, "pods", pod.id, "create", null, pod);
-    return pod;
-  });
+/** createPod inside the caller's transaction (challan POD settlement records the LR POD here too). */
+export async function createPodIn(
+  tx: Tx,
+  companyId: string,
+  v: z.output<typeof podFields>,
+  role: Role,
+): Promise<Pod> {
+  const paths = documentPaths(companyId, v.lrId, v.documentUrls ?? []);
+  const [[lr], [existing]] = await Promise.all([
+    tx`select * from app.lr_pod_info(${companyId}, ${v.lrId})`,
+    tx`select 1 as x from pods where company_id = ${companyId} and lr_id = ${v.lrId}
+          and cancelled_at is null`,
+  ]);
+  if (!lr) {
+    if (can(role, "pod.upload")) fail("lrId", "LR not found in this company");
+    throw new ForbiddenError("Drivers can only record POD for their own trips.");
+  }
+  if (lr.cancelled_at) fail("lrId", "LR not found in this company");
+  if (!lr.booked_at) fail("lrId", "Book the LR before recording delivery");
+  if (existing) fail("lrId", "This LR already has a POD — edit it instead");
+  assertDeliveryRules(v.deliveredOn, v.condition ?? "good", v.remarks ?? null);
+
+  const delivery = setDelivered(tx, companyId, v.lrId, deliveredAtFrom(v.deliveredOn), lr as never);
+  const row = {
+    id: newId(),
+    company_id: companyId,
+    lr_id: v.lrId,
+    received_by: v.receivedBy ?? null,
+    receiver_phone: v.receiverPhone ?? null,
+    packages_received: v.packagesReceived ?? null,
+    condition: v.condition ?? "good",
+    remarks: v.remarks ?? null,
+    document_paths: paths,
+    received_at: v.receivedAt ?? (paths.length ? now() : null),
+  };
+  const [, [saved]] = await Promise.all([
+    delivery.done,
+    tx`insert into pods ${tx(row as never)} returning *`,
+  ]);
+  delivery.record();
+  const pod = toPod(saved);
+  audit(tx, companyId, "pods", pod.id, "create", null, pod);
+  return pod;
 }
 
 export async function updatePod(
@@ -237,56 +245,65 @@ export async function updatePod(
   expectedVersion: number,
   p: PodPatch,
 ): Promise<Pod> {
+  return withUser((tx) => updatePodIn(tx, companyId, id, expectedVersion, p));
+}
+
+/** updatePod inside the caller's transaction. */
+export async function updatePodIn(
+  tx: Tx,
+  companyId: string,
+  id: string,
+  expectedVersion: number,
+  p: PodPatch,
+): Promise<Pod> {
   const { deliveredOn, documentUrls, ...fields } = p;
-  return withUser(async (tx) => {
-    if (!isUuid(id)) throw new NotFoundError("POD");
-    const [cur] = await tx`
-      select p.*, (select row_to_json(i) from app.lr_pod_info(p.company_id, p.lr_id) i) as lr
-        from pods p where p.company_id = ${companyId} and p.id = ${id} for update of p`;
-    if (!cur) throw new NotFoundError("POD");
-    if (!cur.lr) throw new ForbiddenError("Drivers can only record POD for their own trips.");
-    if (cur.cancelled_at) fail("", "This POD is cancelled and can't be changed");
-    if (cur.version !== expectedVersion) throw new ConflictError();
-    assertDeliveryRules(
-      deliveredOn,
-      fields.condition ?? cur.condition,
-      fields.remarks !== undefined ? fields.remarks : cur.remarks,
-    );
+  if (!isUuid(id)) throw new NotFoundError("POD");
+  const [cur] = await tx`
+    select p.*, (select row_to_json(i) from app.lr_pod_info(p.company_id, p.lr_id) i) as lr
+      from pods p where p.company_id = ${companyId} and p.id = ${id} for update of p`;
+  if (!cur) throw new NotFoundError("POD");
+  if (!cur.lr) throw new ForbiddenError("Drivers can only record POD for their own trips.");
+  if (cur.cancelled_at) fail("", "This POD is cancelled and can't be changed");
+  if (cur.version !== expectedVersion) throw new ConflictError();
+  assertDeliveryRules(
+    deliveredOn,
+    fields.condition ?? cur.condition,
+    fields.remarks !== undefined ? fields.remarks : cur.remarks,
+  );
 
-    const before = toPod(cur);
-    const set: Row = {};
-    for (const [key, col] of Object.entries(POD_COLUMNS) as [keyof typeof POD_COLUMNS, string][]) {
-      if (key in fields) set[col] = (fields as Record<string, unknown>)[key] ?? null;
-    }
-    const paths = documentUrls ? documentPaths(companyId, cur.lr_id, documentUrls) : null;
-    if (paths) set.document_paths = paths;
-    const docs = paths ?? (cur.document_paths as string[]);
-    const receivedAt = "received_at" in set ? set.received_at : cur.received_at;
-    if (!receivedAt && docs.length) set.received_at = now();
+  const before = toPod(cur);
+  const set: Row = {};
+  for (const [key, col] of Object.entries(POD_COLUMNS) as [keyof typeof POD_COLUMNS, string][]) {
+    if (key in fields) set[col] = (fields as Record<string, unknown>)[key] ?? null;
+  }
+  const paths = documentUrls ? documentPaths(companyId, cur.lr_id, documentUrls) : null;
+  if (paths) set.document_paths = paths;
+  const docs = paths ?? (cur.document_paths as string[]);
+  const receivedAt = "received_at" in set ? set.received_at : cur.received_at;
+  if (!receivedAt && docs.length) set.received_at = now();
 
-    // A delivery-date-only edit has no POD columns to set: `update … set` with nothing is a syntax
-    // error, so just re-read the row (same as saveRow's empty set: no change, no version bump).
-    const write =
-      Object.keys(set).length === 0
-        ? tx`select * from pods
-              where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}`
-        : tx`update pods set ${tx(set as never)}
-              where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}
-              returning *`;
+  // A delivery-date-only edit has no POD columns to set: `update … set` with nothing is a syntax
+  // error, so just re-read the row (same as saveRow's empty set: no change, no version bump).
+  const write =
+    Object.keys(set).length === 0
+      ? tx`select * from pods
+            where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}`
+      : tx`update pods set ${tx(set as never)}
+            where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}
+            returning *`;
 
-    const delivery = deliveredOn
-      ? setDelivered(tx, companyId, cur.lr_id, deliveredAtFrom(deliveredOn), cur.lr)
-      : null;
-    const [, [saved]] = await Promise.all([
-      delivery?.done,
-      write,
-    ]);
-    if (!saved) throw new ConflictError();
-    delivery?.record();
-    const pod = toPod(saved);
-    audit(tx, companyId, "pods", id, "update", before, pod);
-    return pod;
-  });
+  const delivery = deliveredOn
+    ? setDelivered(tx, companyId, cur.lr_id, deliveredAtFrom(deliveredOn), cur.lr)
+    : null;
+  const [, [saved]] = await Promise.all([
+    delivery?.done,
+    write,
+  ]);
+  if (!saved) throw new ConflictError();
+  delivery?.record();
+  const pod = toPod(saved);
+  audit(tx, companyId, "pods", id, "update", before, pod);
+  return pod;
 }
 
 /** Cancelling a POD also clears the LR's delivery date (it was recorded by mistake). */

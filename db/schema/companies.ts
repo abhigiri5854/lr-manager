@@ -119,6 +119,8 @@ export const companies = pgTable(
     tdsBase: text("tds_base").notNull().default("gross_credit"),
     shortageAllowancePct: numeric("shortage_allowance_pct", { precision: 5, scale: 2 }),
     shortageRateSource: text("shortage_rate_source"),
+    /** Auto shortage deduction at POD settlement (off by default; 0020_pod_settlement.sql). */
+    shortageAuto: boolean("shortage_auto").notNull().default(false),
     detentionFreeDays: integer("detention_free_days"),
     detentionRatePerDay: money("detention_rate_per_day"),
     latePodDays: integer("late_pod_days"),

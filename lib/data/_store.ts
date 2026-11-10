@@ -220,6 +220,7 @@ export type TableName =
   | "branches"
   | "hire_number_series"
   | "challans"
+  | "challan_charges"
   | "truck_payments";
 
 // ---------- small utilities ----------

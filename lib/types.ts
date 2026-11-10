@@ -358,6 +358,103 @@ export type ChallanLrPick = {
   onChallanNos: string[];
 };
 
+// ---------- POD settlement (TIER1-MARKET-TRUCKS.md §6 screen 3) ----------
+export type PodAutoKind = "late_pod" | "shortage";
+
+/** One LR on the challan at POD: loaded vs delivered, and the LR's own POD (single storage). */
+export type ChallanPodLine = {
+  lrId: Uuid;
+  lrNo: string;
+  loadedPkgs: number;
+  deliveredPkgs: number | null;
+  freightAllocated: string;
+  /** The LR's live POD record, if any (pods table — shared with the LR's POD screen). */
+  podId: Uuid | null;
+  podVersion: number | null;
+  podDocumentUrls: string[];
+};
+
+/** A POD-stage charge: manual (charge type) or system (late-POD fee / shortage). Rupees as strings. */
+export type ChallanPodCharge = {
+  id: Uuid;
+  version: number;
+  chargeTypeId: Uuid | null;
+  label: string | null;
+  autoKind: PodAutoKind | null;
+  lrId: Uuid | null;
+  lrNo: string | null;
+  direction: ChargeDirection;
+  /** Paid to (add) or charged to (deduct) the truck. */
+  amount: string;
+  /** System lines: what the rule computed (amount differs only when overridden). */
+  autoAmount: string | null;
+  overrideReason: string | null;
+  billParty: boolean;
+  /** Blank unless the user filled it (party detention / unloading are never auto). */
+  partyAmount: string | null;
+  billedInFreightBillId: Uuid | null;
+  /** Bill no. while that bill is live (null for a draft or cancelled bill). */
+  billedBillNo: string | null;
+  /** Billed on a live (draft or final) freight bill: frozen. */
+  billed: boolean;
+  note: string | null;
+};
+
+export type ChallanSettlementState = {
+  id: Uuid;
+  version: number;
+  status: ChallanStatus;
+  settledAt: IsoDateTime | null;
+  reopenedAt: IsoDateTime | null;
+  reopenReason: string | null;
+};
+
+export type ChallanSettlement = ChallanSettlementState & {
+  challanNo: string;
+  vehicleNo: string | null;
+  payeeName: string | null;
+  reportedAt: IsoDateTime | null;
+  unloadedAt: IsoDateTime | null;
+  podReceivedAt: IsoDateTime | null;
+  lines: ChallanPodLine[];
+  charges: ChallanPodCharge[];
+  /** The rules in force (challan override, else company setting). */
+  rules: {
+    latePodDays: number | null;
+    latePodFee: string | null;
+    shortageAuto: boolean;
+    shortageAllowancePct: string | null;
+    shortageRateSource: string | null;
+  };
+  /** v_challan_balance after this save. Paid counts paid payments only; none is needed to settle. */
+  money: {
+    hireAmount: string;
+    additions: string;
+    deductions: string;
+    grossCredit: string;
+    tds: string;
+    netPayable: string;
+    paid: string;
+    balance: string;
+  };
+};
+
+/** A party-billable POD charge not on a live freight bill yet (New freight bill: add as line). */
+export type UnbilledChallanCharge = {
+  chargeId: Uuid;
+  version: number;
+  challanId: Uuid;
+  challanNo: string;
+  lrId: Uuid;
+  lrNo: string;
+  /** Billing party of the LR (billed-to, else consignee). */
+  partyId: Uuid | null;
+  label: string;
+  /** Bill line column it adds to. */
+  column: "detention" | "other";
+  partyAmountPaise: Paise;
+};
+
 export type TruckPaymentMode = "bank" | "upi" | "cash" | "cheque" | "diesel";
 export type TruckPaymentStatus = "draft" | "pending_approval" | "approved" | "paid" | "reversed";
 export type TruckPaymentAllocationKind = "advance" | "balance";
