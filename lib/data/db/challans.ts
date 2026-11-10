@@ -410,7 +410,7 @@ export async function saveChallan(
                               source, destination, vehicle_id, vehicle_type_id, driver_id, broker_id,
                               payee_party_id, payee_kind, rate_basis, rate, qty_tonnes, hire_amount,
                               remarks, status, dispatched_at)
-        select ${cid}::uuid, ${companyId}::uuid, n.prefix || lpad(n.no::text, n.padding::int, '0'),
+        select ${cid}::uuid, ${companyId}::uuid, app.format_hire_number(n.prefix, n.no, n.padding),
                ${fy}::text, n.no, ${challanAt}::timestamptz, ${v.branchId}::uuid,
                ${v.source ?? null}::text, ${v.destination ?? null}::text, ${v.vehicleId ?? null}::uuid,
                ${vehicleTypeId}::uuid, ${v.driverId ?? null}::uuid, ${v.brokerId ?? null}::uuid,

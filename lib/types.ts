@@ -356,6 +356,86 @@ export type ChallanLrPick = {
   onChallanNos: string[];
 };
 
+export type TruckPaymentMode = "bank" | "upi" | "cash" | "cheque" | "diesel";
+export type TruckPaymentStatus = "draft" | "pending_approval" | "approved" | "paid" | "reversed";
+export type TruckPaymentAllocationKind = "advance" | "balance";
+
+/** A safeguard warning stored on the payment (codes: lib/hire/payment.ts PaymentWarningCode). */
+export type TruckPaymentWarning = { code: string; message: string };
+
+/** One challan a truck payment settles. Rupees as numeric(14,2) strings. */
+export type TruckPaymentAllocation = {
+  id: Uuid;
+  challanId: Uuid;
+  challanNo: string;
+  kind: TruckPaymentAllocationKind;
+  /** Cash paid (net of TDS). */
+  amount: string;
+  /** Only on balance lines. */
+  tdsAmount: string;
+};
+
+/** Lorry-hire payment to a truck owner / broker (TIER1-MARKET-TRUCKS.md §6 screen 4). */
+export type TruckPayment = BaseRecord & {
+  branchId: Uuid;
+  /** Voucher number, given at approval; null while draft / pending approval. */
+  paymentNo: string | null;
+  paymentFy: string;
+  paidOn: IsoDate;
+  payeePartyId: Uuid;
+  payeeName: string | null;
+  mode: TruckPaymentMode;
+  pumpId: Uuid | null;
+  bankAccountId: Uuid | null;
+  upiId: string | null;
+  upiQrUrl: string | null;
+  /** UTR / cheque no. / slip no. */
+  refNo: string | null;
+  chequeDate: IsoDate | null;
+  /** Cash paid (Σ allocation amounts). */
+  amount: string;
+  tdsAmount: string;
+  /** amount + tdsAmount: what the approval limit is checked against. */
+  grossAmount: string;
+  tdsPercent: string;
+  narration: string | null;
+  status: TruckPaymentStatus;
+  approvedBy: Uuid | null;
+  approvedAt: IsoDateTime | null;
+  paidAt: IsoDateTime | null;
+  reversedAt: IsoDateTime | null;
+  reversalReason: string | null;
+  podOverrideReason: string | null;
+  warnings: TruckPaymentWarning[];
+  /** Payee details frozen at approval (voucher). */
+  payeeSnapshot: Record<string, unknown> | null;
+  allocations: TruckPaymentAllocation[];
+};
+
+/** A payee's challan that still has room for payment (pay-truck picker). Paise. */
+export type PayableChallan = {
+  challanId: Uuid;
+  challanNo: string;
+  challanDate: IsoDate;
+  status: ChallanStatus;
+  source: string | null;
+  destination: string | null;
+  vehicleNo: string | null;
+  podReceived: boolean;
+  /** hire + additions: the TDS base. */
+  tdsBasePaise: Paise;
+  /** hire + additions − deductions. */
+  payablePaise: Paise;
+  /** Paid payments only (v_challan_balance). */
+  paidPaise: Paise;
+  balancePaise: Paise;
+  /** Gross of all live allocations (draft / pending / approved / paid). */
+  committedPaise: Paise;
+  /** payable − committed: the most a new payment can settle. */
+  roomPaise: Paise;
+  tdsTaken: boolean;
+};
+
 export type Truck = BaseRecord & {
   /** Normalised "BR01GN8331", unique per company. */
   number: string;

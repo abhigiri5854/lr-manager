@@ -32,8 +32,11 @@ import type {
   TdsDeclaration,
   Truck,
   TruckParty,
+  TruckPayment,
+  TruckPaymentAllocation,
   User,
 } from "@/lib/types";
+import { fromPaise, toPaise } from "@/lib/hire";
 import { deriveLrStatus } from "@/lib/lr-status";
 import { auditChanges, type TableName } from "../_store";
 import { withCommit, type Tx } from "./conn";
@@ -313,6 +316,53 @@ export function toChallanView(
     driverName: r.driver_name ?? null,
     brokerName: r.broker_name ?? null,
     payeeName: r.payee_name ?? null,
+  });
+}
+
+/** truck_payment_allocations row + challan_no. */
+export function toTruckPaymentAllocation(r: Row): TruckPaymentAllocation {
+  return {
+    id: r.id,
+    challanId: r.challan_id,
+    challanNo: r.challan_no,
+    kind: r.kind,
+    amount: String(r.amount),
+    tdsAmount: String(r.tds_amount),
+  };
+}
+
+/** truck_payments row (+ payee_name) with its allocations. */
+export function toTruckPayment(r: Row, allocations: TruckPaymentAllocation[]): TruckPayment {
+  return clean({
+    ...base(r),
+    branchId: r.branch_id,
+    paymentNo: r.payment_no ?? null,
+    paymentFy: r.payment_fy,
+    paidOn: r.paid_on,
+    payeePartyId: r.payee_party_id,
+    payeeName: r.payee_name ?? null,
+    mode: r.mode,
+    pumpId: r.pump_id ?? null,
+    bankAccountId: r.bank_account_id ?? null,
+    upiId: r.upi_id ?? null,
+    upiQrUrl: truckDocUrlFromPath(r.upi_qr_file),
+    refNo: r.ref_no ?? null,
+    chequeDate: r.cheque_date ?? null,
+    amount: String(r.amount),
+    tdsAmount: String(r.tds_amount),
+    grossAmount: fromPaise(toPaise(String(r.amount)) + toPaise(String(r.tds_amount))),
+    tdsPercent: String(r.tds_percent),
+    narration: r.narration ?? null,
+    status: r.status,
+    approvedBy: r.approved_by ?? null,
+    approvedAt: r.approved_at ?? null,
+    paidAt: r.paid_at ?? null,
+    reversedAt: r.reversed_at ?? null,
+    reversalReason: r.reversal_reason ?? null,
+    podOverrideReason: r.pod_override_reason ?? null,
+    warnings: (r.warnings as TruckPayment["warnings"] | null) ?? [],
+    payeeSnapshot: r.payee_snapshot ?? null,
+    allocations,
   });
 }
 

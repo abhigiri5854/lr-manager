@@ -31,7 +31,12 @@ export type Action =
    * Change a truck party's bank details, UPI ID, UPI QR, verified flag or blacklist status
    * (TIER1-MARKET-TRUCKS.md fraud controls). Owner and Accountant only; booking staff see them read-only.
    */
-  | "payee.bank";
+  | "payee.bank"
+  /**
+   * Approve truck payments above the maker-checker limit, reverse approved / paid ones, override
+   * the bank-change cooling period (TIER1-MARKET-TRUCKS.md §9 decision 5). Owner only.
+   */
+  | "payment.approve";
 
 export const PERMISSIONS: Record<Role, readonly Action[]> = {
   owner: [
@@ -45,6 +50,7 @@ export const PERMISSIONS: Record<Role, readonly Action[]> = {
     "freight.view",
     "master.edit",
     "payee.bank",
+    "payment.approve",
   ],
   accountant: [
     "invoice.edit",
@@ -90,6 +96,7 @@ export const ACTION_LABEL: Record<Action, string> = {
   "freight.view": "see freight amounts",
   "master.edit": "add or edit parties, trucks, drivers and items",
   "payee.bank": "change bank / UPI details, verification or blacklist of truck parties",
+  "payment.approve": "approve or reverse truck payments",
 };
 
 export function deniedMessage(role: Role | null | undefined, action: Action): string {
@@ -121,6 +128,7 @@ export const PERMISSION_ROWS: Array<{
   { label: "See freight amounts", action: "freight.view" },
   { label: "Parties, trucks & items", action: "master.edit" },
   { label: "Truck party bank, UPI & blacklist", action: "payee.bank" },
+  { label: "Approve / reverse truck payments", action: "payment.approve" },
 ];
 
 /** What a cell of that table says: "✓", "✓ own trips" or "—". */

@@ -17,6 +17,7 @@ import * as hireSettings from "./hire-settings";
 import * as marketDrivers from "./market-drivers";
 import * as marketVehicles from "./market-vehicles";
 import * as truckParties from "./truck-parties";
+import * as truckPayments from "./truck-payments";
 import * as imports from "./import";
 import * as invoices from "./invoices";
 import * as items from "./items";
@@ -138,6 +139,15 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   createTruckParty: ["master.edit", () => truckParties.createTruckParty(c(), {} as never)],
   updateTruckParty: ["master.edit", () => truckParties.updateTruckParty(c(), X, 1, {})],
   saveChallan: ["lr.edit", () => challans.saveChallan(c(), null, null, {} as never)],
+  // Truck payments: making / submitting / paying = bill.edit; approving / reversing = payment.approve.
+  createTruckPayment: ["bill.edit", () => truckPayments.createTruckPayment(c(), {} as never)],
+  submitTruckPayment: ["bill.edit", () => truckPayments.submitTruckPayment(c(), X, 1, {})],
+  approveTruckPayment: ["payment.approve", () => truckPayments.approveTruckPayment(c(), X, 1, {})],
+  markTruckPaymentPaid: ["bill.edit", () => truckPayments.markTruckPaymentPaid(c(), X, 1, {})],
+  reverseTruckPayment: [
+    "payment.approve",
+    () => truckPayments.reverseTruckPayment(c(), X, 1, { reason: "x" }),
+  ],
 };
 
 /** Resolves to true when the call was refused for permissions. */
@@ -155,7 +165,7 @@ describe("every lib/data write checks lib/permissions", () => {
       .flatMap((f) =>
         [
           ...readFileSync(join(dir, f), "utf8").matchAll(
-            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit)\w*)/g,
+            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit|submit|approve|mark|reverse)\w*)/g,
           ),
         ].map((m) => m[1]),
       );
@@ -202,6 +212,13 @@ describe("every lib/data write checks lib/permissions", () => {
       expect(await refused(() => truckParties.updateTruckParty(c(), X, 1, { notes: "x" }))).toBe(false);
     });
   }
+
+  it("payment.approve is Owner only", () => {
+    expect(can("owner", "payment.approve")).toBe(true);
+    expect(can("accountant", "payment.approve")).toBe(false);
+    expect(can("booking_staff", "payment.approve")).toBe(false);
+    expect(can("driver", "payment.approve")).toBe(false);
+  });
 
   it("payee.bank is Owner + Accountant only", () => {
     expect(can("owner", "payee.bank")).toBe(true);

@@ -120,6 +120,13 @@
       "when": 1793849742000,
       "tag": "0016_lr_challan",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793936142000,
+      "tag": "0017_truck_payments",
+      "breakpoints": true
     }
   ]
 }

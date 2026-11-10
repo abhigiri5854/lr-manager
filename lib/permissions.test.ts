@@ -34,8 +34,17 @@ describe("PERMISSIONS", () => {
     expect(ROLES.map((r) => can(r, "master.edit"))).toEqual([true, true, true, false]);
   });
 
-  it("has no action outside the table plus master.edit", () => {
-    const known = new Set<Action>([...DESIGN_TABLE.map((r) => r[1]), "master.edit"]);
+  it("gives truck payment approval (maker-checker) to Owner only", () => {
+    expect(ROLES.map((r) => can(r, "payment.approve"))).toEqual([true, false, false, false]);
+  });
+
+  it("has no action outside the table plus master.edit and the Tier-1 payee / payment actions", () => {
+    const known = new Set<Action>([
+      ...DESIGN_TABLE.map((r) => r[1]),
+      "master.edit",
+      "payee.bank",
+      "payment.approve",
+    ]);
     for (const role of ROLES) for (const a of PERMISSIONS[role]) expect(known).toContain(a);
   });
 
@@ -54,6 +63,8 @@ describe("PERMISSIONS", () => {
       ["Upload POD photo", "✓", "—", "✓", "✓ own trips"],
       ["See freight amounts", "✓", "✓", "✓", "—"],
       ["Parties, trucks & items", "✓", "✓", "✓", "—"],
+      ["Truck party bank, UPI & blacklist", "✓", "✓", "—", "—"],
+      ["Approve / reverse truck payments", "✓", "—", "—", "—"],
     ]);
   });
 

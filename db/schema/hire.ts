@@ -439,7 +439,8 @@ export const truckPayments = pgTable(
     ...businessColumns(byUser),
     companyId: companyId(),
     branchId: uuid("branch_id").notNull(),
-    paymentNo: text("payment_no").notNull(),
+    /** Voucher number, allocated at approval (null while draft / pending approval). */
+    paymentNo: text("payment_no"),
     paymentFy: text("payment_fy").notNull(),
     paymentSeq: bigint("payment_seq", { mode: "number" }),
     paidOn: date("paid_on", { mode: "string" }).notNull(),
@@ -452,10 +453,24 @@ export const truckPayments = pgTable(
     chequeDate: date("cheque_date", { mode: "string" }),
     amount: money("amount").notNull(),
     tdsAmount: money("tds_amount").notNull().default("0"),
+    /** Manual TDS %, default 0, balance lines only (0017_truck_payments.sql). */
+    tdsPercent: numeric("tds_percent", { precision: 6, scale: 3 }).notNull().default("0"),
+    upiId: text("upi_id"),
+    upiQrFile: text("upi_qr_file"),
+    /** Payee details frozen at approval (voucher). */
+    payeeSnapshot: jsonb("payee_snapshot"),
+    /** Safeguard warnings shown / confirmed when the payment was saved. */
+    warnings: jsonb("warnings").notNull().default(sql`'[]'::jsonb`),
+    podOverrideReason: text("pod_override_reason"),
     narration: text("narration"),
     status: truckPaymentStatus("status").notNull().default("draft"),
     approvedBy: uuid("approved_by").references(byUser),
     approvedAt: ts("approved_at"),
+    paidAt: ts("paid_at"),
+    paidBy: uuid("paid_by").references(byUser),
+    reversedAt: ts("reversed_at"),
+    reversedBy: uuid("reversed_by").references(byUser),
+    reversalReason: text("reversal_reason"),
   },
   (t) => [
     ...businessConstraints("truck_payments", t),
@@ -472,6 +487,20 @@ export const truckPayments = pgTable(
     check(
       "truck_payments_approval_check",
       sql`(approved_by is null) = (approved_at is null)`,
+    ),
+    check("truck_payments_tds_percent_check", sql`tds_percent >= 0 and tds_percent <= 100`),
+    check(
+      "truck_payments_number_check",
+      sql`(payment_no is null) = (status in ('draft', 'pending_approval'))`,
+    ),
+    check(
+      "truck_payments_cheque_check",
+      sql`mode <> 'cheque' or (ref_no is not null and cheque_date is not null)`,
+    ),
+    check("truck_payments_paid_check", sql`status <> 'paid' or paid_at is not null`),
+    check(
+      "truck_payments_reversed_check",
+      sql`(status = 'reversed') = (reversed_at is not null) and (reversed_at is null or reversal_reason is not null)`,
     ),
     index("truck_payments_payee_idx").on(t.companyId, t.payeePartyId, t.paidOn.desc()),
     index("truck_payments_company_status_idx").on(t.companyId, t.status),
