@@ -993,3 +993,132 @@ export type Dashboard = {
   attention: AttentionItem[];
   repeatRoutes: RepeatRoute[];
 };
+
+// ---------- driver links (market drivers, no login) ----------
+export type TripEventType = "loaded" | "en_route" | "reached";
+export type TripEventSource = "staff" | "driver_link";
+
+/** A trip milestone on a challan, from office staff or the driver's link. */
+export type TripEvent = {
+  id: Uuid;
+  challanId: Uuid;
+  type: TripEventType;
+  at: IsoDateTime;
+  lat: number | null;
+  lng: number | null;
+  accuracyM: number | null;
+  source: TripEventSource;
+  driverLinkId: Uuid | null;
+  createdBy: Uuid | null;
+  note: string | null;
+};
+
+/** The owner's view of a driver's link (the token itself only ever appears inside `url`). */
+export type DriverLinkView = {
+  driverId: Uuid;
+  /** Full link to send on WhatsApp: <APP_BASE_URL>/d/<token>. */
+  url: string;
+  createdAt: IsoDateTime;
+  lastOpenedAt: IsoDateTime | null;
+  expiresAt: IsoDateTime | null;
+};
+
+/** What the driver's link page shows at the top. */
+export type DriverLinkInfo = {
+  driverName: string;
+  companyName: string;
+  officePhone: string | null;
+};
+
+export type DriverTripParty = {
+  name: string | null;
+  address: string | null;
+  place: string | null;
+  pincode: string | null;
+  phone: string | null;
+};
+
+/** One LR on the driver's challan. Trip facts only: no freight, rates or invoice values. */
+export type DriverTripLr = {
+  lrId: Uuid;
+  lrNo: string;
+  lrDate: IsoDate | null;
+  fromPlace: string | null;
+  toPlace: string | null;
+  consignor: DriverTripParty;
+  consignee: DriverTripParty;
+  goods: Array<{ description: string; packages: number; weight: string | null }>;
+  /** Packages loaded on this challan. */
+  packages: number;
+  /** Weight loaded on this challan (else the LR's actual weight). */
+  weight: string | null;
+  ewayBillNo: string | null;
+  ewayExpiresAt: IsoDateTime | null;
+  deliveredOn: IsoDate | null;
+  deliveredPkgs: number | null;
+  podFiles: number;
+  podReceivedAt: IsoDateTime | null;
+};
+
+export type DriverTripPodStatus = "pending" | "partial" | "uploaded" | "received" | "settled";
+
+/** A challan as the driver sees it. Never hire, freight, margin or balance. */
+export type DriverTrip = {
+  challanId: Uuid;
+  challanNo: string;
+  challanDate: IsoDate;
+  vehicleNo: string | null;
+  source: string | null;
+  destination: string | null;
+  status: ChallanStatus;
+  /** Settled in the last 3 days: shown, but no events or POD. */
+  readOnly: boolean;
+  /** Advance actually paid to the truck (rupees). */
+  advancePaid: string;
+  podStatus: DriverTripPodStatus;
+  lrs: DriverTripLr[];
+  events: Array<{ type: TripEventType; at: IsoDateTime; source: TripEventSource }>;
+};
+
+/** Owner side: is the driver's link live, and where the phone was last seen. Never the token. */
+export type DriverLinkStatus = {
+  /** "revoked" also covers an expired link. */
+  status: "active" | "revoked";
+  lastOpenedAt: IsoDateTime | null;
+  lastLat: number | null;
+  lastLng: number | null;
+  lastAccuracyM: number | null;
+  lastLocatedAt: IsoDateTime | null;
+};
+
+/** One finished challan on the driver's history page. Read-only trip facts, no money. */
+export type DriverHistoryTrip = {
+  challanNo: string;
+  challanDate: IsoDate;
+  vehicleNo: string | null;
+  source: string | null;
+  destination: string | null;
+  status: "settled" | "cancelled";
+  podDone: boolean;
+};
+
+export type DriverHistory = {
+  /** Newest first; to page, pass the last trip's challanDate as `before`. Empty = no more. */
+  trips: DriverHistoryTrip[];
+  /** Company setting: how many days back this page goes. */
+  historyDays: number;
+  tripsThisMonth: number;
+  /** The driver's live trips still waiting for a POD. */
+  podsPending: number;
+};
+
+/** The driver's POD for one LR, as saved. */
+export type DriverPodResult = {
+  podId: Uuid;
+  lrId: Uuid;
+  documentUrls: string[];
+  packagesReceived: number | null;
+  receivedAt: IsoDateTime | null;
+  deliveredOn: IsoDate;
+  challanStatus: ChallanStatus;
+};

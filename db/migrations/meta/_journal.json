@@ -162,6 +162,13 @@
       "when": 1794368142000,
       "tag": "0022_series_owner_only",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794454542000,
+      "tag": "0023_driver_links",
+      "breakpoints": true
     }
   ]
 }

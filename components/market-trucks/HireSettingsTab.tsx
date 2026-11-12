@@ -89,6 +89,7 @@ export function HireSettingsTab({ settings }: { settings: HireSettings }) {
         ewbAlertHours: num(d, "ewbAlertHours"),
         ewbKmPerDay: num(d, "ewbKmPerDay") as number,
         ewbOdcKmPerDay: num(d, "ewbOdcKmPerDay") as number,
+        driverHistoryDays: num(d, "driverHistoryDays") as number,
       });
       if (result.ok) {
         version.current = result.row.version;
@@ -178,6 +179,12 @@ export function HireSettingsTab({ settings }: { settings: HireSettings }) {
           {numberField("ewbAlertHours", "Alert before expiry (hours)", "Dashboard alert starts this long before the e-way bill runs out.", { step: "1" })}
           {numberField("ewbKmPerDay", "Distance per day (km)", "Normal cargo; the standard rule is 200 km per day.", { step: "1" })}
           {numberField("ewbOdcKmPerDay", "Distance per day, ODC (km)", "Over-dimensional cargo; the standard rule is 20 km per day.", { step: "1" })}
+        </Grid>
+      </Card>
+
+      <Card title="Driver link" description="What a driver sees on the personal link.">
+        <Grid>
+          {numberField("driverHistoryDays", "History shown (days)", "Settled and cancelled trips stay on the driver's history page this long.", { step: "1" })}
         </Grid>
       </Card>
 

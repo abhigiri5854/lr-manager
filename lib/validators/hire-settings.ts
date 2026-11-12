@@ -49,6 +49,8 @@ export const hireSettingsFields = z.object({
   ewbAlertHours: whole(168),
   ewbKmPerDay: z.number("Enter a whole number").int().min(1, "At least 1").max(2000),
   ewbOdcKmPerDay: z.number("Enter a whole number").int().min(1, "At least 1").max(2000),
+  /** Days of settled / cancelled trips on the driver's history page. */
+  driverHistoryDays: z.number("Enter a whole number").int("Whole number only").min(1, "At least 1").max(3650),
 });
 export type HireSettingsInput = z.input<typeof hireSettingsFields>;
 export type HireSettingsValues = z.output<typeof hireSettingsFields>;
@@ -79,6 +81,7 @@ export type HireSettings = {
   ewbAlertHours: number | null;
   ewbKmPerDay: number;
   ewbOdcKmPerDay: number;
+  driverHistoryDays: number;
 };
 
 /** Field → column. */
@@ -106,4 +109,5 @@ export const HIRE_SETTING_COLUMNS: Record<keyof Omit<HireSettings, "version">, s
   ewbAlertHours: "ewb_alert_hours",
   ewbKmPerDay: "ewb_km_per_day",
   ewbOdcKmPerDay: "ewb_odc_km_per_day",
+  driverHistoryDays: "driver_history_days",
 };

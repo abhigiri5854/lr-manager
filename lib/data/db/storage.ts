@@ -166,6 +166,18 @@ export async function putObject(
   }
 }
 
+/** Removes the object at bucket/path (used to clean up a file whose database write was refused). */
+export async function deleteObject(bucket: Bucket, path: string): Promise<void> {
+  const { base, key } = config();
+  const res = await fetch(`${base}/object/${bucket}/${encodePath(path)}`, {
+    method: "DELETE",
+    headers: { apikey: key },
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Storage delete failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+  }
+}
+
 /** A signed URL for reading the object for `seconds`. */
 export async function signedUrl(
   bucket: Bucket,

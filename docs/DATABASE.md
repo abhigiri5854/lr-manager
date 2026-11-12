@@ -446,6 +446,8 @@ printed. All come from the Supabase dashboard.
 | `DATABASE_URL_DIRECT`                  | migrations, seed, reset, drizzle-kit                                                                     | Connect → Session pooler / direct (port 5432)                                         |
 | `DATA_SOURCE`                          | `db` (default) or `mock` — where `lib/data` reads and writes                                             | not a secret                                                                          |
 | `ANTHROPIC_API_KEY`                    | Smart import reader (when the mock reader is replaced)                                                   | console.anthropic.com                                                                 |
+| `DRIVER_LINK_SECRET`                   | server only: encrypts driver-link tokens so the owner can resend the same link (`lib/driver-link.ts`). ≥ 32 chars; missing = driver links refuse to work. Changing it breaks resend of existing links (revoke + new link) | generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. **Never** `NEXT_PUBLIC_`; different per environment |
+| `APP_BASE_URL`                         | server only: base of the driver links sent on WhatsApp (`<APP_BASE_URL>/d/<token>`); never taken from the request's Host header | the app's public URL, e.g. `https://lr.example.com` (dev: `http://localhost:3000`)     |
 
 `SESSION_SECRET` (today's mock login) is removed once Supabase Auth is in.
 

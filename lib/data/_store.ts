@@ -221,7 +221,9 @@ export type TableName =
   | "hire_number_series"
   | "challans"
   | "challan_charges"
-  | "truck_payments";
+  | "truck_payments"
+  | "driver_links"
+  | "trip_events";
 
 // ---------- small utilities ----------
 export const now = () => new Date().toISOString();

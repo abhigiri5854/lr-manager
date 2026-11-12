@@ -130,7 +130,10 @@ export async function asAnon<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   return run("anon", JSON.stringify({ role: "anon" }), null, fn, "read");
 }
 
-/** Company registration (nobody is signed in yet): the server's own role, not a user's. */
+/**
+ * Company registration and driver links (nobody is signed in): the server's own role, not a user's.
+ * Driver links only call app.driver_* functions, which check the token hash themselves.
+ */
 export async function asService<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   return run("service_role", JSON.stringify({ role: "service_role" }), null, fn, "write");
 }

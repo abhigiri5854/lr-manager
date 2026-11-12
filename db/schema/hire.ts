@@ -15,6 +15,7 @@ import {
   primaryKey,
   smallint,
   text,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -37,6 +38,8 @@ import {
   truckPartyStatus,
   truckPaymentMode,
   truckPaymentStatus,
+  tripEventSource,
+  tripEventType,
   ts,
 } from "./_common";
 import { freightBills } from "./bills";
@@ -591,5 +594,82 @@ export const shareLinks = pgTable(
   (t) => [
     ...companyFk("share_links_party", t.companyId, t.partyId, truckParties),
     uniqueIndex("share_links_token_key").on(t.tokenHash),
+  ],
+).enableRLS();
+
+/**
+ * A market driver's personal link (no login). Only the SHA-256 of the token is matched; the token is
+ * kept AES-GCM encrypted (DRIVER_LINK_SECRET) so the owner can resend it. RLS, guards and the
+ * app.driver_* functions are hand-written in db/migrations/0023_driver_links.sql.
+ */
+export const driverLinks = pgTable(
+  "driver_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: companyId(),
+    marketDriverId: uuid("market_driver_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    tokenEnc: text("token_enc").notNull(),
+    /** Null = no expiry. */
+    expiresAt: ts("expires_at"),
+    revokedAt: ts("revoked_at"),
+    lastOpenedAt: ts("last_opened_at"),
+    /** Last seen: the phone's last ping (app.driver_ping, at most one per 5 minutes). */
+    lastLat: numeric("last_lat", { precision: 9, scale: 6 }),
+    lastLng: numeric("last_lng", { precision: 9, scale: 6 }),
+    lastAccuracyM: numeric("last_accuracy_m", { precision: 9, scale: 1 }),
+    lastLocatedAt: ts("last_located_at"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    createdBy: uuid("created_by").references(byUser),
+  },
+  (t) => [
+    unique("driver_links_company_id_id_key").on(t.companyId, t.id),
+    check(
+      "driver_links_last_geo_check",
+      sql`(last_lat is null) = (last_lng is null) and (last_lat is null) = (last_located_at is null) and (last_lat is null or (last_lat between -90 and 90 and last_lng between -180 and 180)) and (last_accuracy_m is null or last_accuracy_m >= 0)`,
+    ),
+    ...companyFk("driver_links_driver", t.companyId, t.marketDriverId, marketDrivers, false),
+    uniqueIndex("driver_links_token_key").on(t.tokenHash),
+    // Max one active link per driver.
+    uniqueIndex("driver_links_active_key")
+      .on(t.companyId, t.marketDriverId)
+      .where(sql`revoked_at is null`),
+    check("driver_links_hash_check", sql`token_hash ~ '^[0-9a-f]{64}$'`),
+    check("driver_links_enc_check", sql`token_enc ~ '^v1\\.'`),
+  ],
+).enableRLS();
+
+/** Loaded / en route / reached per challan: one row per challan + type + source. */
+export const tripEvents = pgTable(
+  "trip_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: companyId(),
+    challanId: uuid("challan_id").notNull(),
+    type: tripEventType("type").notNull(),
+    at: ts("at").notNull().defaultNow(),
+    lat: numeric("lat", { precision: 9, scale: 6 }),
+    lng: numeric("lng", { precision: 9, scale: 6 }),
+    accuracyM: numeric("accuracy_m", { precision: 9, scale: 1 }),
+    source: tripEventSource("source").notNull(),
+    driverLinkId: uuid("driver_link_id"),
+    createdBy: uuid("created_by").references(byUser),
+    note: text("note"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    ...companyFk("trip_events_challan", t.companyId, t.challanId, challans, false),
+    ...companyFk("trip_events_link", t.companyId, t.driverLinkId, driverLinks, false),
+    uniqueIndex("trip_events_one_key").on(t.companyId, t.challanId, t.type, t.source),
+    index("trip_events_link_idx")
+      .on(t.companyId, t.driverLinkId)
+      .where(sql`driver_link_id is not null`),
+    check(
+      "trip_events_geo_check",
+      sql`(lat is null) = (lng is null) and (lat is null or (lat between -90 and 90 and lng between -180 and 180)) and (accuracy_m is null or accuracy_m >= 0)`,
+    ),
+    check("trip_events_source_check", sql`(source = 'driver_link') = (driver_link_id is not null)`),
+    check("trip_events_note_check", sql`note is null or length(note) <= 500`),
   ],
 ).enableRLS();

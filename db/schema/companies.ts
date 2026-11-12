@@ -132,6 +132,8 @@ export const companies = pgTable(
     ewbAlertHours: integer("ewb_alert_hours"),
     ewbKmPerDay: integer("ewb_km_per_day").notNull().default(200),
     ewbOdcKmPerDay: integer("ewb_odc_km_per_day").notNull().default(20),
+    /** How far back a market driver's history page goes (0023_driver_links.sql). */
+    driverHistoryDays: integer("driver_history_days").notNull().default(90),
     bankFileTemplate: jsonb("bank_file_template"),
     ledgerMapping: jsonb("ledger_mapping"),
   },
@@ -148,6 +150,7 @@ export const companies = pgTable(
     ),
     check("companies_gst_rate_check", sql`freight_gst_rate_bp between 0 and 2800`),
     check("companies_pod_days_check", sql`pod_days is null or pod_days >= 0`),
+    check("companies_driver_history_days_check", sql`driver_history_days between 1 and 3650`),
     check(
       "companies_pod_penalty_check",
       sql`pod_penalty_per_day_paise is null or pod_penalty_per_day_paise >= 0`,

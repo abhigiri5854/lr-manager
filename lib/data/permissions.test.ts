@@ -12,6 +12,7 @@ import * as bills from "./bills";
 import * as challanPod from "./challan-pod";
 import * as challans from "./challans";
 import * as companies from "./companies";
+import * as driverLinks from "./driver-links";
 import { ForbiddenError } from "./errors";
 import * as hireMasters from "./hire-masters";
 import * as hireSettings from "./hire-settings";
@@ -155,6 +156,22 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   saveChallanPodCharges: ["bill.edit", () => challanPod.saveChallanPodCharges(c(), X, 1, {})],
   settleChallan: ["bill.edit", () => challanPod.settleChallan(c(), X, 1)],
   reopenChallan: ["record.cancel", () => challanPod.reopenChallan(c(), X, 1, { reason: "x" })],
+  // Driver links, owner side: master.edit.
+  getOrCreateDriverLink: ["master.edit", () => driverLinks.getOrCreateDriverLink(c(), X)],
+  revokeDriverLink: ["master.edit", () => driverLinks.revokeDriverLink(c(), X)],
+  addStaffTripEvent: ["master.edit", () => driverLinks.addStaffTripEvent(c(), X, "loaded")],
+};
+
+// SESSION-LESS writes: the driver's link token is the credential (no login, no role). They must
+// never ask for a session; a bad token is refused with DriverLinkError (lib/data/driver-links.ts).
+const BAD_TOKEN = "not-a-driver-link-token";
+const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]);
+const SESSIONLESS: Record<string, () => Promise<unknown>> = {
+  recordDriverEvent: () =>
+    driverLinks.recordDriverEvent(BAD_TOKEN, { challanId: X, type: "loaded", lat: 25.6, lng: 85.1 }),
+  recordDriverPing: () => driverLinks.recordDriverPing(BAD_TOKEN, 25.6, 85.1, null),
+  uploadDriverPod: () =>
+    driverLinks.uploadDriverPod(BAD_TOKEN, X, X, { name: "pod.png", type: "image/png", bytes: pngBytes }),
 };
 
 /** Resolves to true when the call was refused for permissions. */
@@ -172,11 +189,20 @@ describe("every lib/data write checks lib/permissions", () => {
       .flatMap((f) =>
         [
           ...readFileSync(join(dir, f), "utf8").matchAll(
-            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit|submit|approve|mark|reverse|record|settle|reopen)\w*)/g,
+            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit|submit|approve|mark|reverse|record|settle|reopen|getOrCreate|revoke|addStaff)\w*)/g,
           ),
         ].map((m) => m[1]),
       );
-    expect(found.sort()).toEqual(Object.keys(WRITES).sort());
+    expect(found.sort()).toEqual([...Object.keys(WRITES), ...Object.keys(SESSIONLESS)].sort());
+  });
+
+  it.each(Object.entries(SESSIONLESS))("session-less %s: no sign-in needed, bad token refused", async (_n, call) => {
+    await setTestUser(null);
+    const e = await call().then(
+      () => null,
+      (err: unknown) => err,
+    );
+    expect(e).toBeInstanceOf(driverLinks.DriverLinkError);
   });
 
   const roles: Role[] = ["owner", "accountant", "booking_staff"];
