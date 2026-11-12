@@ -90,6 +90,14 @@ Put these in `tailwind.config` / CSS variables once; never use raw hex in compon
 - Server Components by default; Client Components only for interactive forms.
 - Lists are paginated (50/page) and searchable server-side.
 
+## Databases
+- **Dev** = `.env.local` (Supabase project `stgglmvefcpvstbofozx`). **Prod** = `PROD_PROJECT_ID`
+  (`nemywufhizyputxyocye`) via `.env.prod`.
+- Prod migrations only through `pnpm db:migrate:prod` (backs up with pg_dump first).
+- Never run `test:db`, `db:setup-dev` or `db:reset` against prod (the scripts refuse, via
+  `db/scripts/env-guard.ts`). Never suggest `db:reset`.
+- New empty dev DB: `pnpm db:migrate` then `pnpm db:setup-dev`.
+
 ## Tests — which to run when
 | Command | What | Needs | Run it |
 |---|---|---|---|

@@ -4,11 +4,13 @@
 import postgres from "postgres";
 import type { Role } from "@/lib/types";
 import { createSql } from "../client";
+import { assertNotProd } from "../scripts/env-guard";
 
 export type Sql = postgres.Sql;
 export type TxSql = postgres.TransactionSql;
 
 export function connect(max = 5): Sql {
+  assertNotProd("DB tests"); // no override, ever
   return createSql({ max });
 }
 

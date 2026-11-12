@@ -53,3 +53,7 @@ DEV-LOGINS.md
 final-check/
 
 scripts/dev-reset-passwords.ts
+
+.env.prod
+.vercel
+.env*

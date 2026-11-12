@@ -15,6 +15,8 @@
     "test:db:slow": "vitest run --config vitest.db.config.mts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env.local db/scripts/migrate.ts",
+    "db:migrate:prod": "tsx --env-file=.env.prod db/scripts/backup-prod.ts && tsx --env-file=.env.prod db/scripts/migrate.ts --prod",
+    "db:setup-dev": "tsx --env-file-if-exists=.env.local scripts/setup-dev.ts",
     "db:seed": "tsx --env-file-if-exists=.env.local db/scripts/seed.ts",
     "db:reset": "tsx --env-file-if-exists=.env.local db/scripts/reset.ts",
     "test:readers": "tsx --env-file-if-exists=.env.local scripts/test-readers.ts"
