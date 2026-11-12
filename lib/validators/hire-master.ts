@@ -30,6 +30,7 @@ export const chargeTypeFields = z.object({
   defaultBillParty: z.boolean(),
   stage: z.enum(["hire", "pod"]),
   active: z.boolean(),
+  billColumn: z.enum(["detention", "unloading", "other"], "Choose the bill column"),
 });
 export const chargeTypePatchSchema = chargeTypeFields.partial();
 export type ChargeTypeInput = z.input<typeof chargeTypeFields>;

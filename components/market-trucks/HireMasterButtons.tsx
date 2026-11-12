@@ -24,6 +24,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Field, Select } from "@/components/ui/Field";
 import type {
   Branch,
+  ChargeBillColumn,
   ChargeType,
   HireNumberSeries,
   Pump,
@@ -257,6 +258,7 @@ export function ChargeTypeButton({ row }: { row?: ChargeType }) {
             defaultBillParty: d.get("defaultBillParty") === "on",
             stage: str(d, "stage") as "hire" | "pod",
             active: d.get("active") === "on",
+            billColumn: str(d, "billColumn") as ChargeBillColumn,
           })}
           save={(input, v) => (row ? updateChargeTypeAction(row.id, v, input) : addChargeTypeAction(input))}
         >
@@ -271,6 +273,11 @@ export function ChargeTypeButton({ row }: { row?: ChargeType }) {
               <Select label="Stage" name="stage" defaultValue={row?.stage ?? "pod"} error={e.stage} className="col-span-2 sm:col-span-1">
                 <option value="hire">At hire (challan)</option>
                 <option value="pod">At POD settlement</option>
+              </Select>
+              <Select label="Bill column (when billed to party)" name="billColumn" defaultValue={row?.billColumn ?? "other"} error={e.billColumn} className="col-span-2">
+                <option value="detention">Detention</option>
+                <option value="unloading">Unloading (billed under Other for now)</option>
+                <option value="other">Other</option>
               </Select>
               <div className="col-span-2 sm:col-span-1">
                 <Checkbox name="defaultBillParty" label="Bill party by default" defaultChecked={row?.defaultBillParty ?? false} />
@@ -305,6 +312,7 @@ export function AddLatePodFeeButton() {
               defaultBillParty: false,
               stage: "pod",
               active: true,
+              billColumn: "other",
             });
             if (result.ok) router.refresh();
             else setError(result.message);

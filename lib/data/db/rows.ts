@@ -236,6 +236,7 @@ export function toChargeType(r: Row): ChargeType {
     defaultBillParty: r.default_bill_party,
     stage: r.stage,
     active: r.active,
+    billColumn: r.bill_column ?? "other",
   });
 }
 

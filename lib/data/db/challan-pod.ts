@@ -18,7 +18,6 @@
 // record.cancel + a reason.
 import {
   appliedAutoPaise,
-  billColumnFor,
   fromPaise,
   latePodAutoPaise,
   latePodRule,
@@ -42,6 +41,7 @@ import type {
   UnbilledChallanCharge,
 } from "@/lib/types";
 import type { ChallanPodChargesValues, ChallanPodValues } from "@/lib/validators/challan-pod";
+import { can } from "@/lib/permissions";
 import { podFields } from "@/lib/validators/pod";
 import { fail, newId, parseInput } from "../_store";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
@@ -230,6 +230,43 @@ export async function getChallanSettlement(
 // ---------- system lines (late-POD fee, shortage) ----------
 type Auto = { kind: "late_pod" | "shortage"; lrId: string | null; paise: number };
 
+/** The late-POD fee and per-LR shortage from the rules in force, these dates and delivered packages. */
+function computeAutos(s: Loaded, dates: PodDates, delivered: Map<string, number | null>): Auto[] {
+  const { c } = s;
+  const rule = latePodRule(
+    { allowedDays: s.co.late_pod_days, fee: str(s.co.late_pod_fee) },
+    { allowedDays: c.late_pod_days, fee: str(c.late_pod_fee) },
+  );
+  const shortage = {
+    enabled: !!s.co.shortage_auto,
+    allowancePct: str(s.co.shortage_allowance_pct),
+    rateSource: s.co.shortage_rate_source as string | null,
+  };
+  const totalLoadedPkgs = s.lines.reduce((t, l) => t + (l.loaded_pkgs as number), 0);
+  return [
+    {
+      kind: "late_pod",
+      lrId: null,
+      paise: latePodAutoPaise(dates.unloadedAt, dates.podReceivedAt, rule),
+    },
+    ...s.lines.map(
+      (l): Auto => ({
+        kind: "shortage",
+        lrId: l.lr_id,
+        paise: lineShortage(
+          {
+            loadedPkgs: l.loaded_pkgs,
+            deliveredPkgs: delivered.get(l.lr_id) ?? null,
+            freightAllocated: String(l.freight_allocated),
+          },
+          shortage,
+          { hireAmount: String(c.hire_amount), totalLoadedPkgs },
+        ).amountPaise,
+      }),
+    ),
+  ];
+}
+
 /** Updates / inserts that bring the system lines to the computed amounts (overrides keep their amount). */
 function planAutoLines(charges: Row[], autos: Auto[]) {
   const byKey = new Map(
@@ -332,11 +369,28 @@ export async function recordChallanPod(
   role: Role,
 ): Promise<ChallanSettlement> {
   if (!UUID.test(id)) throw new NotFoundError("Challan");
-  return withUser(async (tx) => {
+  return withUser((tx) => recordChallanPodIn(tx, companyId, id, expectedVersion, v, role, true));
+}
+
+/**
+ * recordChallanPod inside the caller's transaction. expectedVersion null = the locked current version
+ * (the LR POD → challan sync). lrPods false = don't write the LR PODs (the caller just wrote it).
+ */
+async function recordChallanPodIn(
+  tx: Tx,
+  companyId: string,
+  id: string,
+  expectedVersion: number | null,
+  v: ChallanPodValues,
+  role: Role,
+  lrPods: boolean,
+): Promise<ChallanSettlement> {
+  {
     const s = await load(tx, companyId, id, true);
     if (!s) throw new NotFoundError("Challan");
     const { c } = s;
     assertOpen(c, expectedVersion);
+    const version = expectedVersion ?? (c.version as number);
 
     const pick = (given: string | null | undefined, cur: unknown) =>
       given === undefined ? isoOrNull(cur) : given;
@@ -384,40 +438,7 @@ export async function recordChallanPod(
       });
     if (issues.length) throw new ValidationError(issues);
 
-    // System lines from the rules in force.
-    const rule = latePodRule(
-      { allowedDays: s.co.late_pod_days, fee: str(s.co.late_pod_fee) },
-      { allowedDays: c.late_pod_days, fee: str(c.late_pod_fee) },
-    );
-    const shortage = {
-      enabled: !!s.co.shortage_auto,
-      allowancePct: str(s.co.shortage_allowance_pct),
-      rateSource: s.co.shortage_rate_source as string | null,
-    };
-    const totalLoadedPkgs = s.lines.reduce((t, l) => t + (l.loaded_pkgs as number), 0);
-    const autos: Auto[] = [
-      {
-        kind: "late_pod",
-        lrId: null,
-        paise: latePodAutoPaise(dates.unloadedAt, dates.podReceivedAt, rule),
-      },
-      ...s.lines.map(
-        (l): Auto => ({
-          kind: "shortage",
-          lrId: l.lr_id,
-          paise: lineShortage(
-            {
-              loadedPkgs: l.loaded_pkgs,
-              deliveredPkgs: delivered.get(l.lr_id),
-              freightAllocated: String(l.freight_allocated),
-            },
-            shortage,
-            { hireAmount: String(c.hire_amount), totalLoadedPkgs },
-          ).amountPaise,
-        }),
-      ),
-    ];
-    const plan = planAutoLines(s.charges, autos);
+    const plan = planAutoLines(s.charges, computeAutos(s, dates, delivered));
 
     // The LR PODs (single storage), through the LR POD functions in this transaction. Inputs are
     // parsed here first, so nothing is sent before every check has passed.
@@ -426,7 +447,7 @@ export async function recordChallanPod(
       dates.podReceivedAt !== isoOrNull(c.pod_received_at);
     const podWrites: (() => Promise<Pod>)[] = [];
     const podLrs: string[] = [];
-    if (dates.unloadedAt) {
+    if (lrPods && dates.unloadedAt) {
       const deliveredOn = indiaDate(dates.unloadedAt);
       for (const l of s.lines) {
         const x = given.get(l.lr_id);
@@ -465,7 +486,7 @@ export async function recordChallanPod(
       "challans",
       companyId,
       id,
-      expectedVersion,
+      version,
       {
         reported_at: dates.reportedAt,
         unloaded_at: dates.unloadedAt,
@@ -500,7 +521,95 @@ export async function recordChallanPod(
       s.lines.map((l) => toLine(l, delivered.get(l.lr_id) ?? null, podByLr.get(l.lr_id))),
       plan.after,
     );
-  });
+  }
+}
+
+// ---------- LR POD → challan (two-way sync) ----------
+/** Live, dispatched challans carrying this LR (app.lr_live_challans works for drivers too). */
+export function liveChallansForLr(tx: Tx, companyId: string, lrId: Fragment | string) {
+  return tx`select * from app.lr_live_challans(${companyId}::uuid, ${lrId}::uuid)`;
+}
+
+/** What the LR POD screen just saved. deliveredOn undefined = delivery date not changed. */
+export type LrPodFacts = {
+  lrId: string;
+  deliveredOn: string | undefined;
+  receivedAt: string | null;
+  packagesReceived: number | null;
+};
+
+const indiaMidnight = (date: string) => new Date(`${date}T00:00:00+05:30`).toISOString();
+
+/**
+ * After an LR POD save (LR POD screen or driver app), brings the LR's challan in line, in the same
+ * transaction: unloading date = delivery date, POD received = the POD's received date, delivered
+ * packages = packages received − what the LR's other challans delivered. A settled challan refuses.
+ * An LR split over several challans is left alone (each truck's challan has its own dates / count;
+ * record those on the challan's POD screen).
+ * Office users go through recordChallanPodIn (late-POD fee and shortage recomputed). A driver can't
+ * read or write challans, so app.sync_challan_pod_from_lr writes the dates / status / packages only.
+ */
+export async function syncChallanFromLrPod(
+  tx: Tx,
+  companyId: string,
+  challans: Row[],
+  pod: LrPodFacts,
+  role: Role,
+): Promise<void> {
+  if (!challans.length) return;
+  const settled = challans.find((c) => c.status === "settled");
+  if (settled) fail("", `Challan ${settled.challan_no} is settled; reopen it to change POD`);
+  if (challans.length > 1) return;
+  const c = challans[0];
+
+  const unloadedAt =
+    pod.deliveredOn === undefined ||
+    (c.unloaded_at && indiaDate(new Date(c.unloaded_at).toISOString()) === pod.deliveredOn)
+      ? undefined
+      : indiaMidnight(pod.deliveredOn);
+  let deliveredPkgs: number | undefined;
+  if (pod.packagesReceived !== null) {
+    const d = pod.packagesReceived - Number(c.other_delivered ?? 0);
+    if (d < 0 || d > c.loaded_pkgs)
+      fail(
+        "packagesReceived",
+        `Challan ${c.challan_no} loaded ${c.loaded_pkgs} packages of this LR` +
+          (Number(c.other_delivered) ? ` (other challans delivered ${c.other_delivered})` : ""),
+      );
+    if (d !== c.delivered_pkgs) deliveredPkgs = d;
+  }
+  const receivedChanged = pod.receivedAt !== isoOrNull(c.pod_received_at);
+  if (unloadedAt === undefined && deliveredPkgs === undefined && !receivedChanged) return;
+
+  if (can(role, "freight.view") && (can(role, "lr.edit") || can(role, "bill.edit"))) {
+    await recordChallanPodIn(
+      tx,
+      companyId,
+      c.id,
+      null,
+      {
+        reportedAt: undefined,
+        unloadedAt,
+        podReceivedAt: pod.receivedAt,
+        lrs: deliveredPkgs === undefined ? [] : [{ lrId: pod.lrId, deliveredPkgs }],
+      },
+      role,
+      false,
+    );
+    return;
+  }
+  const [after] = await tx`
+    select * from app.sync_challan_pod_from_lr(${companyId}::uuid, ${pod.lrId}::uuid, ${c.id}::uuid)`;
+  if (after?.changed)
+    audit(
+      tx,
+      companyId,
+      "challans",
+      c.id,
+      "update",
+      podAuditView(c, new Map([[pod.lrId, c.delivered_pkgs ?? null]])),
+      podAuditView(after, new Map([[pod.lrId, after.delivered_pkgs ?? null]])),
+    );
 }
 
 /**
@@ -732,7 +841,11 @@ export async function saveChallanPodCharges(
   });
 }
 
-/** pod_received → settled. Payments are not required (owner decision). Locks the POD fields. */
+/**
+ * pod_received → settled. Payments are not required (owner decision). Locks the POD fields.
+ * First brings the late-POD fee and shortage lines to the current dates / delivered packages (a
+ * driver's POD sync writes those without recomputing); a manual late-POD override keeps its amount.
+ */
 export async function settleChallan(
   companyId: string,
   id: string,
@@ -740,6 +853,26 @@ export async function settleChallan(
 ): Promise<ChallanSettlementState> {
   if (!UUID.test(id)) throw new NotFoundError("Challan");
   return withUser(async (tx) => {
+    const s = await load(tx, companyId, id, true);
+    if (!s) throw new NotFoundError("Challan");
+    const { c } = s;
+    if (c.cancelled_at) fail("", "This challan is cancelled");
+    if (c.version !== expectedVersion) throw new ConflictError();
+    const p = settleProblem(c.status, c.pod_received_at);
+    if (p) fail("", p);
+
+    const delivered = new Map(
+      s.lines.map((l) => [l.lr_id as string, (l.delivered_pkgs as number | null) ?? null]),
+    );
+    const dates: PodDates = {
+      reportedAt: isoOrNull(c.reported_at),
+      unloadedAt: isoOrNull(c.unloaded_at),
+      podReceivedAt: isoOrNull(c.pod_received_at),
+    };
+    // Sent now (before the status change below, on the same connection), so the settled lock on
+    // challan_charges doesn't see them; they still leave without an extra round trip.
+    writeAutoLines(tx, companyId, id, planAutoLines(s.charges, computeAutos(s, dates, delivered)));
+
     const { before, after } = await saveRow(
       tx,
       "challans",
@@ -802,7 +935,7 @@ export async function listUnbilledChallanCharges(
   return withUserRead(async (tx) => {
     const rows = await tx`
       select g.id, g.version, g.challan_id, c.challan_no, g.lr_id, l.lr_no, g.party_amount,
-             t.code, coalesce(t.label, g.auto_kind::text) as label,
+             t.code, t.bill_column, coalesce(t.label, g.auto_kind::text) as label,
              coalesce(l.billed_to_id, l.consignee_id) as party_id
         from challan_charges g
         join challans c on c.company_id = g.company_id and c.id = g.challan_id
@@ -824,7 +957,7 @@ export async function listUnbilledChallanCharges(
       lrNo: r.lr_no,
       partyId: r.party_id ?? null,
       label: r.label ?? "",
-      column: billColumnFor(r.code ?? null, r.label ?? null),
+      column: lineColumn(r.bill_column),
       partyAmountPaise: toPaise(String(r.party_amount)),
     }));
   });
@@ -834,7 +967,7 @@ export async function listUnbilledChallanCharges(
 export function lockChargesForBill(tx: Tx, companyId: string, ids: string[]) {
   return tx`
     select g.id, g.lr_id, g.bill_party, g.party_amount, g.cancelled_at, g.billed_in_freight_bill_id,
-           l.lr_no, t.code, coalesce(t.label, g.auto_kind::text) as label,
+           l.lr_no, t.code, t.bill_column, coalesce(t.label, g.auto_kind::text) as label,
            c.cancelled_at as challan_cancelled, b.bill_no,
            (b.id is not null and b.cancelled_at is null) as billed_live
       from challan_charges g
@@ -845,6 +978,13 @@ export function lockChargesForBill(tx: Tx, companyId: string, ids: string[]) {
      where g.company_id = ${companyId} and g.id in ${uuidsIn(tx, ids)}
        for update of g`;
 }
+
+/**
+ * The bill line column for a charge type's bill_column (0021). The freight bill has only detention
+ * and other columns, so unloading (and system lines with no charge type) are billed under other.
+ */
+const lineColumn = (billColumn: unknown): "detention" | "other" =>
+  billColumn === "detention" ? "detention" : "other";
 
 /** Adds each charge's party amount to its LR's bill line (detention or other column). */
 export function addChargesToLines<
@@ -866,7 +1006,7 @@ export function addChargesToLines<
     if (idx === undefined) fail(path, `Add LR ${g.lr_no ?? ""} to this bill to bill ${g.label ?? "this charge"}`);
     const paise = toPaise(String(g.party_amount));
     const line = out[idx];
-    if (billColumnFor(g.code ?? null, g.label ?? null) === "detention")
+    if (lineColumn(g.bill_column) === "detention")
       line.detentionPaise = (line.detentionPaise ?? 0) + paise;
     else line.otherPaise = (line.otherPaise ?? 0) + paise;
   });

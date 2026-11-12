@@ -136,6 +136,7 @@ export const chargeTypes = master<ChargeTypeValues, ChargeType>({
     defaultBillParty: "default_bill_party",
     stage: "stage",
     active: "active",
+    billColumn: "bill_column",
   },
   toRecord: toChargeType,
   order: (tx) => tx`stage, lower(code)`,

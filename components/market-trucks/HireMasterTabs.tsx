@@ -172,7 +172,16 @@ function nextExample(s: HireNumberSeries) {
   return `${s.prefix}${s.padding > 0 ? String(s.nextNo).padStart(s.padding, "0") : s.nextNo}`;
 }
 
-export function SeriesTab({ rows, branches }: { rows: HireNumberSeries[]; branches: Branch[] }) {
+export function SeriesTab({
+  rows,
+  branches,
+  canManage,
+}: {
+  rows: HireNumberSeries[];
+  branches: Branch[];
+  /** company.manage (Owner): only they can add / edit a series. */
+  canManage: boolean;
+}) {
   const options = branches.map((b) => ({ id: b.id, name: b.name, code: b.code }));
   const columns: Column<HireNumberSeries>[] = [
     { key: "branch", header: "Branch", cell: (r) => r.branchName, wrap: true, sticky: true },
@@ -182,19 +191,23 @@ export function SeriesTab({ rows, branches }: { rows: HireNumberSeries[]; branch
     { key: "next", header: "Next number", cell: (r) => r.nextNo },
     { key: "pad", header: "Padding", cell: (r) => r.padding },
     { key: "ex", header: "Next will be", cell: (r) => nextExample(r), mono: true },
-    { key: "edit", header: "", cell: (r) => <SeriesButton row={r} />, align: "right" },
+    ...(canManage
+      ? [{ key: "edit", header: "", cell: (r: HireNumberSeries) => <SeriesButton row={r} />, align: "right" as const }]
+      : []),
   ];
   return (
     <Panel
-      action={<SeriesButton branches={options} />}
+      action={canManage ? <SeriesButton branches={options} /> : null}
       label="Number series"
       columns={columns}
       rows={rows}
       rowKey={(r) => `${r.docType}|${r.branchId}|${r.fy}`}
       empty={
-        branches.length === 0
-          ? "Add a branch first, then create its number series."
-          : "No number series yet. Use + Add number series."
+        !canManage
+          ? "No number series yet. The Owner can add them."
+          : branches.length === 0
+            ? "Add a branch first, then create its number series."
+            : "No number series yet. Use + Add number series."
       }
     />
   );

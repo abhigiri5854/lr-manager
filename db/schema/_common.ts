@@ -57,6 +57,8 @@ export const truckPartyRole = pgEnum("truck_party_role", ["owner", "broker", "bo
 export const truckPartyStatus = pgEnum("truck_party_status", ["active", "blacklisted"]);
 export const chargeDirection = pgEnum("charge_direction", ["add", "deduct"]);
 export const chargeStage = pgEnum("charge_stage", ["hire", "pod"]);
+/** Freight-bill line column a party-billable charge lands in (0021). */
+export const chargeBillColumn = pgEnum("charge_bill_column", ["detention", "unloading", "other"]);
 export const rateBasis = pgEnum("rate_basis", ["trip", "per_tonne"]);
 export const payeeKind = pgEnum("payee_kind", ["owner", "broker"]);
 export const challanStatus = pgEnum("challan_status", [

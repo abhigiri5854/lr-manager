@@ -12,8 +12,9 @@ beforeAll(() => {
 afterEach(() => fx.cleanup());
 afterAll(() => sql.end());
 
-async function branch(companyId: string): Promise<string> {
-  const [b] = await sql`insert into branches (company_id, name) values (${companyId}, 'Main') returning id`;
+// Branch names are unique per company, so a second branch needs its own name.
+async function branch(companyId: string, name = "Main"): Promise<string> {
+  const [b] = await sql`insert into branches (company_id, name) values (${companyId}, ${name}) returning id`;
   return b.id as string;
 }
 
@@ -39,17 +40,28 @@ describe("hire_number_series privileges", () => {
     expect(Number(row.next_no)).toBe(10);
   });
 
-  it("staff in the same company can read but not create or edit", async () => {
+  it("staff in the same company can read but not create or edit (Owner-only, company.manage)", async () => {
     const t = await fx.team();
     const branchId = await branch(t.companyId);
     await sql`insert into hire_number_series (company_id, doc_type, branch_id, fy)
               values (${t.companyId}, 'challan', ${branchId}, '2026-27')`;
     const seen = await as(sql, t.staff, (tx) => tx`select 1 from hire_number_series where company_id = ${t.companyId}`);
     expect(seen.length).toBe(1);
-    const e = await pgError(
-      as(sql, t.staff, (tx) => tx`update hire_number_series set prefix = 'X/' where company_id = ${t.companyId}`),
+    const [before] = await sql`select prefix, next_no from hire_number_series where company_id = ${t.companyId}`;
+    // RLS blocks the update silently: 0 rows affected, no error
+    const upd = await as(
+      sql,
+      t.staff,
+      (tx) => tx`update hire_number_series set prefix = 'X/' where company_id = ${t.companyId} returning 1`,
     );
-    expect(e.code).toBe("42501");
+    expect(upd.length).toBe(0);
+    const [after] = await as(
+      sql,
+      t.owner,
+      (tx) => tx`select prefix, next_no from hire_number_series where company_id = ${t.companyId}`,
+    );
+    expect(after.prefix).toBe(before.prefix);
+    expect(Number(after.next_no)).toBe(Number(before.next_no));
     const e2 = await pgError(
       as(
         sql,
@@ -72,7 +84,12 @@ describe("hire_number_series privileges", () => {
     expect(seen.length).toBe(0);
 
     // RLS hides the row, so the update matches nothing
-    await as(sql, b.owner, (tx) => tx`update hire_number_series set prefix = 'HACK/' where company_id = ${a.companyId}`);
+    const upd = await as(
+      sql,
+      b.owner,
+      (tx) => tx`update hire_number_series set prefix = 'HACK/' where company_id = ${a.companyId} returning 1`,
+    );
+    expect(upd.length).toBe(0);
     const [row] = await sql`select prefix from hire_number_series where company_id = ${a.companyId} and branch_id = ${branchId}`;
     expect(row.prefix).toBe("A/");
 
@@ -108,7 +125,7 @@ describe("hire_number_series update guard", () => {
 
   it("changing branch, financial year or document type fails", async () => {
     const { t, upd } = await seeded();
-    const other = await branch(t.companyId);
+    const other = await branch(t.companyId, "Second");
     for (const [col, val] of [
       ["branch_id", other],
       ["fy", "2027-28"],

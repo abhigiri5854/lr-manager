@@ -233,6 +233,8 @@ export type VehicleType = BaseRecord & {
 
 export type ChargeDirection = "add" | "deduct";
 export type ChargeStage = "hire" | "pod";
+/** Freight-bill line column a party-billable charge lands in (unloading is billed under other for now). */
+export type ChargeBillColumn = "detention" | "unloading" | "other";
 
 /** A pass-through charge / deduction on a challan (detention, late-POD fee…). */
 export type ChargeType = BaseRecord & {
@@ -243,6 +245,7 @@ export type ChargeType = BaseRecord & {
   defaultBillParty: boolean;
   stage: ChargeStage;
   active: boolean;
+  billColumn: ChargeBillColumn;
 };
 
 /** A diesel pump we hold an advance account with. */

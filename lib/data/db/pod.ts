@@ -18,6 +18,8 @@ import { getLrById, isUuid, listLrs } from "./lrs";
 import { audit, toPod, type Row } from "./rows";
 import { cancelRow } from "./write";
 import { podPathFromUrl } from "./storage";
+// Circular with ./challan-pod (it writes LR PODs through createPodIn / updatePodIn); only used at call time.
+import { liveChallansForLr, syncChallanFromLrPod } from "./challan-pod";
 
 // ---------- pending list ----------
 function pendingWhere(
@@ -191,7 +193,20 @@ export async function createPod(
   v: z.output<typeof podFields>,
   role: Role,
 ): Promise<Pod> {
-  return withUser((tx) => createPodIn(tx, companyId, v, role));
+  return withUser(async (tx) => {
+    // The LR's challan is looked up alongside the POD write; the sync refuses a settled challan.
+    const [pod, challans] = await Promise.all([
+      createPodIn(tx, companyId, v, role),
+      liveChallansForLr(tx, companyId, v.lrId),
+    ]);
+    await syncChallanFromLrPod(tx, companyId, challans, {
+      lrId: v.lrId,
+      deliveredOn: v.deliveredOn,
+      receivedAt: pod.receivedAt,
+      packagesReceived: pod.packagesReceived,
+    }, role);
+    return pod;
+  });
 }
 
 /** createPod inside the caller's transaction (challan POD settlement records the LR POD here too). */
@@ -244,8 +259,23 @@ export async function updatePod(
   id: string,
   expectedVersion: number,
   p: PodPatch,
+  role: Role,
 ): Promise<Pod> {
-  return withUser((tx) => updatePodIn(tx, companyId, id, expectedVersion, p));
+  if (!isUuid(id)) throw new NotFoundError("POD");
+  return withUser(async (tx) => {
+    const lrOfPod = tx`(select lr_id from pods where company_id = ${companyId} and id = ${id})`;
+    const [pod, challans] = await Promise.all([
+      updatePodIn(tx, companyId, id, expectedVersion, p),
+      liveChallansForLr(tx, companyId, lrOfPod),
+    ]);
+    await syncChallanFromLrPod(tx, companyId, challans, {
+      lrId: pod.lrId,
+      deliveredOn: p.deliveredOn,
+      receivedAt: pod.receivedAt,
+      packagesReceived: pod.packagesReceived,
+    }, role);
+    return pod;
+  });
 }
 
 /** updatePod inside the caller's transaction. */

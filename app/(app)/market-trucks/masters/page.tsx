@@ -36,7 +36,7 @@ async function TabLoader({ searchParams }: Pick<PageProps<"/market-trucks/master
       {tab === "charge-types" && <ChargeTypesTab rows={await listChargeTypes(companyId)} />}
       {tab === "pumps" && <PumpsTab rows={await listPumps(companyId)} />}
       {tab === "branches" && <BranchesTab rows={await listBranches(companyId)} />}
-      {tab === "series" && <SeriesTabLoader companyId={companyId} />}
+      {tab === "series" && <SeriesTabLoader companyId={companyId} canManage={isOwner} />}
       {tab === "settings" &&
         (isOwner ? (
           <HireSettingsTab settings={await getHireSettings(companyId)} />
@@ -47,9 +47,9 @@ async function TabLoader({ searchParams }: Pick<PageProps<"/market-trucks/master
   );
 }
 
-async function SeriesTabLoader({ companyId }: { companyId: string }) {
+async function SeriesTabLoader({ companyId, canManage }: { companyId: string; canManage: boolean }) {
   const [rows, branches] = await Promise.all([listHireSeries(companyId), listBranches(companyId)]);
-  return <SeriesTab rows={rows} branches={branches} />;
+  return <SeriesTab rows={rows} branches={branches} canManage={canManage} />;
 }
 
 export default function HireMastersPage({ searchParams }: PageProps<"/market-trucks/masters">) {

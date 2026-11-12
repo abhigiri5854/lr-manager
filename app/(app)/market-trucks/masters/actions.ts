@@ -1,7 +1,7 @@
 "use server";
 
 // Server actions for the hire masters screen. Role checks happen in lib/data (master.edit).
-import { getActiveCompanyId } from "@/lib/data/session";
+import { assertCan, getActiveCompanyId } from "@/lib/data/session";
 import {
   createBranch,
   createChargeType,
@@ -93,12 +93,20 @@ async function runSeries<T>(fn: (companyId: string) => Promise<T>): Promise<Save
   }
 }
 
+// Number series are Owner-only (company.manage, same as the Settings tab); RLS enforces it too (0022).
 export const addSeriesAction = async (input: SeriesInput): Promise<Saved<HireNumberSeries>> =>
-  runSeries((c) => createHireSeries(c, input));
+  runSeries(async (c) => {
+    await assertCan(c, "company.manage");
+    return createHireSeries(c, input);
+  });
 export const updateSeriesAction = async (
   key: SeriesKey,
   input: SeriesCounterInput,
-): Promise<Saved<HireNumberSeries>> => runSeries((c) => updateHireSeries(c, key, input));
+): Promise<Saved<HireNumberSeries>> =>
+  runSeries(async (c) => {
+    await assertCan(c, "company.manage");
+    return updateHireSeries(c, key, input);
+  });
 
 export const updateHireSettingsAction = async (
   version: number,

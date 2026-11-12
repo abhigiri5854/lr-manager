@@ -148,6 +148,20 @@
       "when": 1794195342000,
       "tag": "0020_pod_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794281742000,
+      "tag": "0021_hire_series_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794368142000,
+      "tag": "0022_series_owner_only",
+      "breakpoints": true
     }
   ]
 }

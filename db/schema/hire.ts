@@ -23,6 +23,7 @@ import {
   businessColumns,
   businessConstraints,
   challanStatus,
+  chargeBillColumn,
   chargeDirection,
   chargeStage,
   companyFk,
@@ -95,6 +96,7 @@ export const chargeTypes = pgTable(
     defaultBillParty: boolean("default_bill_party").notNull().default(false),
     stage: chargeStage("stage").notNull(),
     active: boolean("active").notNull().default(false),
+    billColumn: chargeBillColumn("bill_column").notNull().default("other"),
   },
   (t) => [
     ...businessConstraints("charge_types", t),

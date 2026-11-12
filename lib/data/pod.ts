@@ -231,9 +231,9 @@ export async function updatePod(
   expectedVersion: number,
   patch: PodPatch,
 ): Promise<Pod> {
-  await assertCan(companyId, "pod.upload", "pod.upload_own");
+  const role = await assertCan(companyId, "pod.upload", "pod.upload_own");
   const p = parseInput(podPatchSchema, patch);
-  if (onDatabase()) return dbp.updatePod(companyId, id, expectedVersion, p);
+  if (onDatabase()) return dbp.updatePod(companyId, id, expectedVersion, p, role);
   const { deliveredOn, ...fields } = p;
   // Check the POD first so a conflict can't leave the LR half-updated (one transaction in Postgres).
   const existing = getOrThrow(db.pods, companyId, id, "POD");
