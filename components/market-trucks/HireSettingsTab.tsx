@@ -8,6 +8,7 @@ import { updateHireSettingsAction } from "@/app/(app)/market-trucks/masters/acti
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Field, Select } from "@/components/ui/Field";
 import {
   SHORTAGE_RATE_SOURCES,
@@ -35,6 +36,7 @@ export function HireSettingsTab({ settings }: { settings: HireSettings }) {
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
   const version = useRef(settings.version);
+  const [shortageAuto, setShortageAuto] = useState(settings.shortageAuto);
 
   const n = (v: number | null) => (v === null ? "" : String(v));
   const numberField = (
@@ -74,6 +76,7 @@ export function HireSettingsTab({ settings }: { settings: HireSettings }) {
         tdsNilMaxVehicles: num(d, "tdsNilMaxVehicles"),
         tdsTiming: str(d, "tdsTiming") as never,
         tdsBase: str(d, "tdsBase") as never,
+        shortageAuto,
         shortageAllowancePct: num(d, "shortageAllowancePct"),
         shortageRateSource: txt(d, "shortageRateSource") as never,
         detentionFreeDays: num(d, "detentionFreeDays"),
@@ -142,6 +145,14 @@ export function HireSettingsTab({ settings }: { settings: HireSettings }) {
 
       <Card title="Shortage, detention & late POD" description="Defaults filled into the POD screen; each can be edited per challan.">
         <Grid>
+          <div className="md:col-span-2">
+            <Checkbox checked={shortageAuto} onChange={setShortageAuto}>
+              Auto shortage — deduct missing goods from the truck at POD settlement
+            </Checkbox>
+            <p className="m-0 text-[13px] text-muted">
+              Off: shortage is not deducted automatically; add a POD charge by hand if needed.
+            </p>
+          </div>
           {numberField("shortageAllowancePct", "Shortage allowance (%)", "Weight loss allowed before a shortage is charged.")}
           <Select name="shortageRateSource" label="Shortage is charged at" hint="Which rate values the missing goods." defaultValue={settings.shortageRateSource ?? ""} error={errors.shortageRateSource}>
             <option value="">Not set</option>

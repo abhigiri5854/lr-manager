@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ChallanForm } from "@/components/market-trucks/ChallanForm";
 import { ChallanPayments } from "@/components/market-trucks/ChallanPayments";
+import { ChallanPod } from "@/components/market-trucks/ChallanPod";
 import { Chip } from "@/components/ui/Chip";
 import { NoAccess } from "@/components/ui/NoAccess";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { getChallanSettlement } from "@/lib/data/challan-pod";
 import { getChallan, getChallanLrPicks } from "@/lib/data/challans";
 import { listBranches, listChargeTypes } from "@/lib/data/hire-masters";
 import { getActiveCompanyId, getActiveRole } from "@/lib/data/session";
@@ -33,11 +35,12 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
   const companyId = await getActiveCompanyId();
   const challan = await getChallan(companyId, id);
   if (!challan || challan.cancelledAt) notFound();
-  const [picks, branches, chargeTypes, payments] = await Promise.all([
+  const [picks, branches, chargeTypes, payments, settlement] = await Promise.all([
     getChallanLrPicks(companyId, challan.id, challan.lrs.map((l) => l.lrId)),
     listBranches(companyId),
     listChargeTypes(companyId),
     listPaymentsForChallan(companyId, challan.id),
+    getChallanSettlement(companyId, challan.id),
   ]);
   return (
     <>
@@ -64,6 +67,19 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
         )}
         today={todayInIndia()}
       />
+      {settlement && (
+        <ChallanPod
+          initial={settlement}
+          chargeTypes={chargeTypes.filter(
+            (t) =>
+              t.stage === "pod" &&
+              (t.active || settlement.charges.some((c) => c.chargeTypeId === t.id)),
+          )}
+          canPod={can(role, "pod.upload")}
+          canBill={can(role, "bill.edit")}
+          canCancel={can(role, "record.cancel")}
+        />
+      )}
       <div className="mt-5">
         <ChallanPayments challanId={challan.id} payments={payments} canRecord={can(role, "bill.edit")} />
       </div>

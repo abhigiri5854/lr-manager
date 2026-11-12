@@ -73,7 +73,7 @@ const columns: Column<ChallanRegisterRow>[] = [
         <Button href={`/market-trucks/payments/new?challanId=${r.id}`} variant="secondary" className="px-3">
           Pay
         </Button>
-        <Button variant="secondary" className="px-3" disabled title="Coming soon">
+        <Button href={`${BASE}/${r.id}#pod`} variant="secondary" className="px-3">
           POD
         </Button>
       </div>

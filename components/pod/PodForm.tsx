@@ -68,7 +68,7 @@ const STATUS_NOTE: Record<string, string> = {
   Delivered: "add the signed copy to mark POD received",
 };
 
-const isImage = (url: string) => /\.(jpe?g|png|webp|gif|heic)$/i.test(uploadName(url));
+export const isImage = (url: string) => /\.(jpe?g|png|webp|gif|heic)$/i.test(uploadName(url));
 
 export function PodForm({
   lr,
@@ -503,7 +503,7 @@ export function PodForm({
   );
 }
 
-function FileTile({
+export function FileTile({
   name,
   src,
   href,

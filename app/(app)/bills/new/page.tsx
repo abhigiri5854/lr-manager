@@ -4,6 +4,7 @@ import { BillForm } from "@/components/bills/BillForm";
 import { BillFormSkeleton } from "@/components/bills/BillFormSkeleton";
 import { NoAccess } from "@/components/ui/NoAccess";
 import type { BillFormValues } from "@/lib/bill-form";
+import { listUnbilledChallanCharges } from "@/lib/data/bills";
 import { getCompany } from "@/lib/data/companies";
 import { listPartyOptions } from "@/lib/data/parties";
 import { getActiveCompanyId, getActiveRole } from "@/lib/data/session";
@@ -35,7 +36,10 @@ async function NewFreightBill({ searchParams }: Pick<PageProps<"/bills/new">, "s
   const [parties, company] = await Promise.all([listPartyOptions(companyId), getCompany(companyId)]);
   if (!company) return null;
   const partyId = parties.find((p) => p.id === one(params.party))?.id ?? "";
-  const data = partyId ? await loadBillParty(companyId, partyId) : null;
+  const [data, unbilledCharges] = await Promise.all([
+    partyId ? loadBillParty(companyId, partyId) : null,
+    partyId ? listUnbilledChallanCharges(companyId, partyId) : [],
+  ]);
   const initial: BillFormValues = {
     partyId,
     billDate: todayInIndia(),
@@ -49,6 +53,7 @@ async function NewFreightBill({ searchParams }: Pick<PageProps<"/bills/new">, "s
       bill={null}
       initial={initial}
       data={data}
+      unbilledCharges={unbilledCharges}
       parties={parties}
       company={{
         label: company.label,

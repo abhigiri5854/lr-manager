@@ -10,13 +10,14 @@ import {
   finaliseFreightBill,
   getPaymentById,
   listOpenBills,
+  listUnbilledChallanCharges,
   updateFreightBill,
   updatePayment,
   type OpenBill,
 } from "@/lib/data/bills";
 import { toActionFailure, type ActionFailure } from "@/lib/data/errors";
 import { getActiveCompanyId } from "@/lib/data/session";
-import type { Payment } from "@/lib/types";
+import type { Payment, UnbilledChallanCharge } from "@/lib/types";
 import type { FreightBillInput, FreightBillPatch, PaymentInput } from "@/lib/validators/bill";
 import { loadBillParty, type BillPartyData } from "./load-form";
 
@@ -27,12 +28,16 @@ export async function saveBillAction(args: {
   id?: string;
   expectedVersion?: number;
   input: FreightBillInput | FreightBillPatch;
+  /** New bills only: party-billable POD charges (listUnbilledChallanCharges) to add to their LR's line. */
+  chargeIds?: string[];
 }): Promise<Saved> {
   const companyId = await getActiveCompanyId();
   try {
     const bill = args.id
       ? await updateFreightBill(companyId, args.id, args.expectedVersion ?? -1, args.input)
-      : await createFreightBill(companyId, args.input as FreightBillInput);
+      : await createFreightBill(companyId, args.input as FreightBillInput, {
+          chargeIds: args.chargeIds,
+        });
     refresh();
     return { ok: true, id: bill.id, version: bill.version };
   } catch (e) {
@@ -110,6 +115,13 @@ export async function loadPaymentAction(id: string): Promise<Payment | null> {
 /** New bill form: the party's unbilled LRs, once a party is picked. */
 export async function loadBillPartyAction(partyId: string): Promise<BillPartyData> {
   return loadBillParty(await getActiveCompanyId(), partyId);
+}
+
+/** New bill form: the party's party-billable challan charges not on a live bill yet. */
+export async function loadUnbilledChallanChargesAction(
+  partyId: string,
+): Promise<UnbilledChallanCharge[]> {
+  return listUnbilledChallanCharges(await getActiveCompanyId(), partyId);
 }
 
 /** Payment form: the party's bills with something due, oldest first. */

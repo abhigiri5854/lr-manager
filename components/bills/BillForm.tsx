@@ -7,6 +7,7 @@ import {
   cancelBillAction,
   finaliseBillAction,
   loadBillPartyAction,
+  loadUnbilledChallanChargesAction,
   saveBillAction,
 } from "@/app/(app)/bills/actions";
 import type { BillPartyData } from "@/app/(app)/bills/load-form";
@@ -34,7 +35,7 @@ import { dateWarning, joinWarnings, numberFyWarning } from "@/lib/date-warnings"
 import { amountInWords, formatDate, formatRupees } from "@/lib/format";
 import { todayInIndia } from "@/lib/fy";
 import { formatGstRate } from "@/lib/gst";
-import type { FreightBillView } from "@/lib/types";
+import type { FreightBillView, UnbilledChallanCharge } from "@/lib/types";
 import { BillStatusChip } from "./BillStatusChip";
 import { CancelReasonDialog } from "./CancelReasonDialog";
 import { PaymentForm, type PaymentPartyOption } from "./PaymentForm";
@@ -50,6 +51,7 @@ export function BillForm({
   bill,
   initial,
   data,
+  unbilledCharges = [],
   parties,
   company,
 }: {
@@ -57,6 +59,8 @@ export function BillForm({
   initial: BillFormValues;
   /** The initial party's LRs (edit page, or /bills/new?party=). */
   data: BillPartyData | null;
+  /** New bill only: the initial party's party-billable challan charges not on a live bill yet. */
+  unbilledCharges?: UnbilledChallanCharge[];
   parties: PaymentPartyOption[];
   company: { label: string; freightBillPrefix: string; freightGstRateBp: number };
 }) {
@@ -64,6 +68,8 @@ export function BillForm({
   const [values, setValues] = useState(initial);
   const [rows, setRows] = useState<BillLrRow[]>(data?.rows ?? []);
   const [intraState, setIntraState] = useState(data?.intraState ?? true);
+  const [charges, setCharges] = useState<UnbilledChallanCharge[]>(unbilledCharges);
+  const [chargeIds, setChargeIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<BillFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -118,12 +124,18 @@ export function BillForm({
   function changeParty(partyId: string) {
     setValues((v) => ({ ...v, partyId, lines: {} }));
     setRows([]);
+    setCharges([]);
+    setChargeIds([]);
     setErrors({});
     if (!partyId) return;
     startLoadingParty(async () => {
-      const d = await loadBillPartyAction(partyId);
+      const [d, c] = await Promise.all([
+        loadBillPartyAction(partyId),
+        loadUnbilledChallanChargesAction(partyId),
+      ]);
       setRows(d.rows);
       setIntraState(d.intraState);
+      setCharges(c);
     });
   }
 
@@ -143,10 +155,20 @@ export function BillForm({
       showErrors(built.errors);
       return null;
     }
+    const picked = bill ? [] : charges.filter((c) => chargeIds.includes(c.chargeId));
+    const missing = picked.filter((c) => !ticked.some((r) => r.lrId === c.lrId));
+    if (missing.length) {
+      showErrors(
+        {},
+        `Tick LR ${[...new Set(missing.map((c) => c.lrNo))].join(", ")} to bill its challan charge, or untick the charge.`,
+      );
+      return null;
+    }
     const r = await saveBillAction({
       id: bill?.id,
       expectedVersion: bill?.version,
       input: built.input,
+      chargeIds: picked.map((c) => c.chargeId),
     });
     if (r.ok) {
       setErrors({});
@@ -486,6 +508,50 @@ export function BillForm({
           </dl>
         </div>
       </section>
+
+      {!bill && (values.partyId ? charges.length > 0 : false) && (
+        <section className={section} aria-label="Unbilled challan charges">
+          <h2 className="m-0 text-base font-semibold text-text-strong">Unbilled challan charges</h2>
+          <p className="m-0 mt-1 text-[13px] text-muted">
+            Detention and other POD charges entered on market-truck challans for this party. Tick to add
+            each amount to its LR&apos;s line — the LR must be ticked above.
+          </p>
+          <ul className="m-0 mt-3 list-none p-0">
+            {charges.map((c) => {
+              const on = chargeIds.includes(c.chargeId);
+              const lrTicked = ticked.some((r) => r.lrId === c.lrId);
+              return (
+                <li key={c.chargeId} className="border-b border-border py-1 last:border-0">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4">
+                    <Checkbox
+                      checked={on}
+                      onChange={(t) =>
+                        setChargeIds((p) => (t ? [...p, c.chargeId] : p.filter((x) => x !== c.chargeId)))
+                      }
+                    >
+                      <span>
+                        {c.label} · LR <span className="font-mono">{c.lrNo}</span> · Challan{" "}
+                        <span className="font-mono">{c.challanNo}</span>
+                      </span>
+                    </Checkbox>
+                    <span className="flex items-center gap-3 text-sm">
+                      <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[13px] text-primary">
+                        {c.column === "detention" ? "Detention" : "Other"}
+                      </span>
+                      <b>{formatRupees(c.partyAmountPaise)}</b>
+                    </span>
+                  </div>
+                  {on && !lrTicked && (
+                    <p className="m-0 mb-1 ml-7 text-[13px] text-warning">
+                      LR {c.lrNo} isn&apos;t ticked above — tick it, or this charge can&apos;t be billed.
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <p className="m-0 text-[13px] text-muted">
         Payments, TDS and dues are recorded in <Link href="/bills">Bills &amp; payments</Link>.
