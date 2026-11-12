@@ -13,6 +13,24 @@ import { getActiveCompanyId } from "@/lib/data/session";
 import type { DriverLinkStatus, TripEvent, TripEventType } from "@/lib/types";
 import { toFailure, type ActionFailure } from "./failure";
 
+/** Expected errors keep their message; anything else (e.g. missing secret / base URL) becomes a friendly one. */
+function linkFailure(e: unknown): ActionFailure {
+  try {
+    return linkFailure(e);
+  } catch {
+    console.error("driver-link action failed", e);
+    const msg = e instanceof Error ? e.message : "";
+    const setup = /APP_BASE_URL|secret|DRIVER_LINK/i.test(msg);
+    return {
+      ok: false,
+      kind: "error",
+      message: setup
+        ? "Driver link is not set up – contact admin"
+        : "Something went wrong. Please try again.",
+    };
+  }
+}
+
 /** The driver's link URL (same URL on every call until revoked / expired). */
 export async function getDriverLinkAction(
   driverId: string,
@@ -24,7 +42,7 @@ export async function getDriverLinkAction(
     revalidatePath("/market-trucks/challans/[id]", "page");
     return { ok: true, url: link.url };
   } catch (e) {
-    return toFailure(e);
+    return linkFailure(e);
   }
 }
 
@@ -38,7 +56,7 @@ export async function revokeDriverLinkAction(
     revalidatePath("/market-trucks/challans/[id]", "page");
     return { ok: true, revoked: r.revoked };
   } catch (e) {
-    return toFailure(e);
+    return linkFailure(e);
   }
 }
 
@@ -50,7 +68,7 @@ export async function driverLinkStatusAction(
   try {
     return { ok: true, status: await getDriverLinkStatus(companyId, driverId) };
   } catch (e) {
-    return toFailure(e);
+    return linkFailure(e);
   }
 }
 
@@ -67,6 +85,6 @@ export async function addStaffTripEventAction(
     revalidatePath("/market-trucks/challans");
     return { ok: true, event };
   } catch (e) {
-    return toFailure(e);
+    return linkFailure(e);
   }
 }

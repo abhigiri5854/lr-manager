@@ -49,6 +49,7 @@ export function DriverLinkPanel({
   const [status, setStatus] = useState<DriverLinkStatus | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [waHref, setWaHref] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -75,17 +76,13 @@ export function DriverLinkPanel({
   function send() {
     setError(null);
     setNotice(null);
-    // Open the tab now (inside the click) so the browser doesn't block it after the await.
-    const tab = window.open("", "_blank");
+    setWaHref(null);
     startTransition(async () => {
       const r = await getDriverLinkAction(driverId);
-      if (!r.ok) {
-        tab?.close();
-        return setError(r.message);
-      }
+      if (!r.ok) return setError(r.message);
       const href = whatsappLink(whatsappText(driverName, r.url), mobile);
-      if (tab) tab.location.href = href;
-      else window.location.href = href;
+      const w = window.open(href, "_blank");
+      if (!w) setWaHref(href); // popup blocked: let the user click
       await reloadStatus();
     });
   }
@@ -183,6 +180,13 @@ export function DriverLinkPanel({
         <p role="alert" className="m-0 text-[13px] text-danger">
           {error}
         </p>
+      )}
+      {waHref && (
+        <div>
+          <Button variant="secondary" href={waHref} newTab>
+            Open WhatsApp
+          </Button>
+        </div>
       )}
       {notice && (
         <p role="status" className="m-0 text-[13px] text-success">

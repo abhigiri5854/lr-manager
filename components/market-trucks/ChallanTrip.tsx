@@ -24,7 +24,7 @@ export function ChallanTrip({
   challanId: string;
   events: TripEvent[];
   driver: { id: string; name: string; mobile: string | null } | null;
-  /** master.edit */
+  /** master.edit — Send/Copy/Revoke and the add-update form; the timeline and last seen need only freight.view */
   canEdit: boolean;
 }) {
   const [events, setEvents] = useState(initial);
