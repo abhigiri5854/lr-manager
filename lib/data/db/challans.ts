@@ -9,6 +9,7 @@ import type {
   ChallanView,
   LrView,
   Page,
+  TripEventType,
 } from "@/lib/types";
 import type { ChallanValues } from "@/lib/validators/challan";
 import type { ChallanListFilters } from "@/lib/validators/challan-list";
@@ -551,6 +552,8 @@ export type ChallanRegisterRow = {
   /** Whole days from unloaded to POD received, or to today while the POD is pending; null when not unloaded. */
   podAgeDays: number | null;
   podReceived: boolean;
+  /** Latest trip event (by time); null when none yet. */
+  latestTripEvent: { type: TripEventType; at: string } | null;
 };
 
 const REGISTER_EXPORT_MAX = 5000;
@@ -586,8 +589,15 @@ export async function listChallanRegister(
                                    (now() at time zone 'Asia/Kolkata')::date)
                           - (c.unloaded_at at time zone 'Asia/Kolkata')::date
                 end as pod_age_days,
-                (c.pod_received_at is not null) as pod_received
-           from ${from()} where ${where()}
+                (c.pod_received_at is not null) as pod_received,
+                te.type as trip_type, te.at as trip_at
+           from ${from()}
+           left join lateral (
+             select t.type, t.at from trip_events t
+              where t.company_id = c.company_id and t.challan_id = c.id
+              order by t.at desc limit 1
+           ) te on true
+          where ${where()}
           order by c.challan_at desc, c.id desc
           ${params.all ? tx`limit ${REGISTER_EXPORT_MAX}` : tx`limit ${pageSize} offset ${offset}`}`,
       tx`select count(*) as n from ${from()} where ${where()}`,
@@ -608,6 +618,12 @@ export async function listChallanRegister(
         balancePaise: toPaise(r.balance as string),
         podAgeDays: r.pod_age_days === null ? null : Number(r.pod_age_days),
         podReceived: !!r.pod_received,
+        latestTripEvent: r.trip_type
+          ? {
+              type: r.trip_type as TripEventType,
+              at: r.trip_at instanceof Date ? r.trip_at.toISOString() : String(r.trip_at),
+            }
+          : null,
       })),
       total: Number(n),
       page,

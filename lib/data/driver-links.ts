@@ -75,7 +75,7 @@ export async function revokeDriverLink(companyId: string, driverId: string): Pro
 
 /** Loaded / en route / reached on a challan, from staff and the driver's link. */
 export async function listTripEvents(companyId: string, challanId: string): Promise<TripEvent[]> {
-  await assertCan(companyId, "master.edit");
+  await assertCan(companyId, "freight.view");
   return onDatabase() ? dbs.listTripEvents(companyId, challanId) : [];
 }
 

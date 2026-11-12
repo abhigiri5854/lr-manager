@@ -38,6 +38,20 @@ export async function listMarketDriverRows(
   });
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function getMarketDriverById(
+  companyId: string,
+  id: string,
+): Promise<MarketDriver | null> {
+  if (!UUID.test(id)) return null;
+  return withUserRead(async (tx) => {
+    const [r] = await tx`select * from market_drivers
+        where company_id = ${companyId} and id = ${id} and cancelled_at is null`;
+    return r ? toMarketDriver(r) : null;
+  });
+}
+
 export async function insertMarketDriver(
   companyId: string,
   v: MarketDriverValues,

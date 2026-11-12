@@ -1,146 +1,63 @@
-﻿pnpm.exe : $ vitest run --config vitest.db.config.mts --exclude "db/tests/**/*.slow.test.ts"
+﻿pnpm.exe : $ vitest run --config vitest.db.config.mts --exclude "db/tests/**/*.slow.test.ts" db/tests/driver-links.test.ts 
+db/tests/challan-pod.test.ts
 At C:\Users\asus\AppData\Roaming\npm\pnpm.ps1:14 char:3
 +   & "$basedir/node_modules/pnpm/pnpm.exe"   $args
 +   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ($ vitest run --...*.slow.test.ts":String) [], RemoteException
+    + CategoryInfo          : NotSpecified: ($ vitest run --...lan-pod.test.ts:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  
 
 [1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/soap/tms[39m
 
- [32mΓ£ô[39m db/tests/lib-data-billing.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 106385[2mms[22m[39m
-   [32mΓ£ô[39m tax invoices on the database [2m(1)[22m
-     [33m[2mΓ£ô[22m[39m draft ΓåÆ edit ΓåÆ finalise (number, snapshot, item rate) ΓåÆ cancel; imported numbers stay unique[33m 19492[2mms[22m[39m
-   [32mΓ£ô[39m freight bills and payments on the database [2m(1)[22m
-     [33m[2mΓ£ô[22m[39m bill ΓåÆ finalise ΓåÆ payments drive the LR status and the dashboard's money[33m 26824[2mms[22m[39m
-   [32mΓ£ô[39m Smart import on the database [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m Excel: upload ΓåÆ map ΓåÆ save mapping ΓåÆ import valid rows (system audit, LR series moved)[33m 35841[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m invoice photo: prefill ΓåÆ save creates pending records + draft, linked to the file[33m 24083[2mms[22m[39m
- [32mΓ£ô[39m db/tests/challan-pod.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 90222[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/driver-links.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 105532[2mms[22m[39m
+   [32mΓ£ô[39m owner side: the driver's link [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m resend returns the same URL; max one active link; revoke kills it and a new one differs[33m 8296[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m needs master.edit: a driver login is refused[33m 4494[2mms[22m[39m
+   [32mΓ£ô[39m token side: revoked / expired [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m an expired token gets nothing; the owner's next link replaces it[33m 6535[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a revoked token gets nothing and can't write[33m 5016[2mms[22m[39m
+   [32mΓ£ô[39m token side: own trips only [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m driver A can't see or act on driver B's challan[33m 5624[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m another company's challan is impossible, and its owner can't read these events[33m 7327[2mms[22m[39m
+   [32mΓ£ô[39m token side: settled challans [2m(1)[22m
+     [33m[2mΓ£ô[22m[39m settled recently: shown read-only, refuses events and POD; settled long ago: not shown[33m 4946[2mms[22m[39m
+   [32mΓ£ô[39m token side: POD from the link [2m(3)[22m
+     [33m[2mΓ£ô[22m[39m attaches to the LR's POD and moves the challan to pod_received; a second photo is added[33m 4906[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m more packages than loaded, or a future delivery date, is refused and nothing is saved[33m 4184[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a non-image / non-PDF file is refused before anything is stored[33m 3105[2mms[22m[39m
+   [32mΓ£ô[39m trips never carry money but the advance [2m(1)[22m
+     [33m[2mΓ£ô[22m[39m no hire, freight, rate, margin or balance anywhere in the payload[33m 3436[2mms[22m[39m
+   [32mΓ£ô[39m trip events [2m(4)[22m
+     [33m[2mΓ£ô[22m[39m staff events work; the driver's repeated event updates its one row; staff can't fake a driver event[33m 7004[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a driver event without location is still saved, location null[33m 4130[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a repeated driver event without location keeps the stored location[33m 3638[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a draft or cancelled challan takes no staff event[33m 3640[2mms[22m[39m
+   [32mΓ£ô[39m POD file cleanup [2m(1)[22m
+     [33m[2mΓ£ô[22m[39m a file stored but refused by the database is deleted again[33m 3860[2mms[22m[39m
+   [32mΓ£ô[39m last seen (ping) [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m saves a ping; a second within 5 minutes is ignored; later it saves again; the owner sees it[33m 4855[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a ping on a revoked link is ignored; the owner sees it revoked[33m 5265[2mms[22m[39m
+   [32mΓ£ô[39m driver history [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m respects the company's day limit and shows only this driver's own trips[33m 10503[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a revoked or unknown link gets no history[33m 4626[2mms[22m[39m
+ [32mΓ£ô[39m db/tests/challan-pod.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 83163[2mms[22m[39m
    [32mΓ£ô[39m settling a challan [2m(3)[22m
-     [33m[2mΓ£ô[22m[39m settles with zero truck payments, then the settled challan refuses POD changes[33m 13523[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a driver records the POD late ΓåÆ settling applies the late-POD fee[33m 8113[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m settling recomputes the late-POD fee but keeps a manual override's amount[33m 9383[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m settles with zero truck payments, then the settled challan refuses POD changes[33m 13457[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a driver records the POD late ΓåÆ settling applies the late-POD fee[33m 7534[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m settling recomputes the late-POD fee but keeps a manual override's amount[33m 9088[2mms[22m[39m
    [32mΓ£ô[39m LR POD ΓåÆ challan sync [2m(4)[22m
-     [33m[2mΓ£ô[22m[39m office POD save sets the challan's unloading / POD dates, status and delivered packages[33m 10478[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m more packages than the challan loaded is refused and nothing is saved[33m 4648[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a driver's POD on their own trip reaches the challan; a settled challan refuses the driver too[33m 7038[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m an LR on no challan saves its POD as before[33m 3991[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m office POD save sets the challan's unloading / POD dates, status and delivered packages[33m 8915[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m more packages than the challan loaded is refused and nothing is saved[33m 4180[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a driver's POD on their own trip reaches the challan; a settled challan refuses the driver too[33m 7585[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m an LR on no challan saves its POD as before[33m 3790[2mms[22m[39m
    [32mΓ£ô[39m party-billable POD charges on freight bills [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m a charge can't be billed twice; cancelling its bill makes it billable again[33m 15896[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m (c) a company B user can't list or bill company A's unbilled charges[33m 10520[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a charge can't be billed twice; cancelling its bill makes it billable again[33m 14287[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m (c) a company B user can't list or bill company A's unbilled charges[33m 8715[2mms[22m[39m
    [32mΓ£ô[39m charge type bill column [2m(1)[22m
-     [33m[2mΓ£ô[22m[39m bill_column decides the freight-bill column, not the code / label[33m 6445[2mms[22m[39m
- [32mΓ£ô[39m db/tests/lib-data-lrs.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 89784[2mms[22m[39m
-   [32mΓ£ô[39m LRs on the database [2m(6)[22m
-     [33m[2mΓ£ô[22m[39m create a draft and book it: number from the series, snapshot, audit, lines kept[33m 7826[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m edit: a lines-only change still bumps the version; stale version conflicts; draft ΓåÆ booked[33m 6120[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m register: search (incl. truck no.), party / status filters, paging, export[33m 8471[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m dispatch needs a truck; cancel needs the owner and a reason; cancelled LRs leave the register[33m 8990[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a final freight bill locks the LR[33m 7276[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m consignor defaults, consignee 'To' and duplicate invoice lookups[33m 5617[2mms[22m[39m
-   [32mΓ£ô[39m POD on the database [2m(4)[22m
-     [33m[2mΓ£ô[22m[39m delivery ΓåÆ pending ΓåÆ signed copy ΓåÆ POD received; cancel puts it back[33m 14013[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m short / damaged need remarks; any delivery date is accepted[33m 9139[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a driver records POD only on their own trip[33m 10962[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m dashboard: counts, e-way and POD alerts, recent LRs, repeat routes[33m 11225[2mms[22m[39m
- [32mΓ£ô[39m db/tests/permissions.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 63828[2mms[22m[39m
-   [32mΓ£ô[39m role_permissions = lib/permissions.ts [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m has exactly the PERMISSIONS map[33m 821[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m app.can agrees with can() for every role and action[33m 5266[2mms[22m[39m
-   [32mΓ£ô[39m writes follow the role [2m(8)[22m
-     [33m[2mΓ£ô[22m[39m LRs: booking staff may create, accountant may not[33m 5175[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m freight bills: accountant may create, booking staff may not[33m 3852[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m cancelling is owner-only (record.cancel)[33m 5533[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m booking staff can't cancel an LR; the owner can[33m 3599[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m import files can be removed by anyone with import.run (not record.cancel)[33m 3862[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m users & roles: only company.manage changes memberships; the last owner stays[33m 3894[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m the self party can't be cancelled or edited from Parties, even by the owner[33m 4715[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m number series: each series needs its edit permission[33m 5097[2mms[22m[39m
-   [32mΓ£ô[39m drivers and POD [2m(4)[22m
-     [33m[2mΓ£ô[22m[39m a driver reads no masters and no LRs directly, only their trips[33m 4676[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a driver records POD and delivery on their own trips only[33m 6123[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m without lr.edit you may only record delivery on an LR[33m 5710[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m an accountant's payment marks the LR paid without lr.edit[33m 5411[2mms[22m[39m
- [32mΓ£ô[39m db/tests/lr-stamps.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 35131[2mms[22m[39m
-   [32mΓ£ô[39m cached LR stamps in the database [2m(3)[22m
-     [33m[2mΓ£ô[22m[39m follow every POD, bill and payment write[33m 31761[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m users can't write the stamps directly[33m 3094[2mms[22m[39m
- [32mΓ£ô[39m db/tests/lib-data.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 36594[2mms[22m[39m
-   [32mΓ£ô[39m lib/data on the database [2m(8)[22m
-     [33m[2mΓ£ô[22m[39m session: user and memberships come from the database[33m 4428[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m parties: create, SQL search + paging, version conflict, audit rows[33m 5623[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m another company's data is invisible and can't be written (RLS behind assertCan)[33m 5158[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m roles: staff can edit masters but not cancel; cancel is blocked while a live LR uses it[33m 5621[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m items: 40% GST is accepted; codes are unique case-insensitively[33m 3933[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m trucks: normalised unique number, trip and cancel rule from LRs[33m 4901[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m company profile: LR series only moves forward; members list from the database[33m 4609[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m the sample-data store is off outside unit tests[33m 2147[2mms[22m[39m
- [32mΓ£ô[39m db/tests/audit.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 28862[2mms[22m[39m
-   [32mΓ£ô[39m audit_log [2m(5)[22m
-     [33m[2mΓ£ô[22m[39m a member writes rows as themselves and office roles read them[33m 4530[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m can't be written as someone else[33m 3358[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m system rows need a batch the writer created; actor and user_id must agree[33m 3840[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m can't be updated or deleted by a user (not even the owner)[33m 4092[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m can't be updated or deleted even by the database owner role[33m 3559[2mms[22m[39m
-   [32mΓ£ô[39m no hard deletes [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m business rows can't be deleted, by users or the owner role; cancel instead[33m 4533[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m draft lines may be replaced, but not once the bill is final[33m 4873[2mms[22m[39m
- [32mΓ£ô[39m db/tests/constraints.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 31618[2mms[22m[39m
-   [32mΓ£ô[39m unique per company [2m(15)[22m
-     [33m[2mΓ£ô[22m[39m party GSTIN: unique among live parties; free again once cancelled; other companies unaffected[33m 3636[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m party GSTIN must have the GSTIN shape[33m 1238[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m one self party per company[33m 1120[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m truck number: unique among live trucks, normalised (no spaces / lower case)[33m 1861[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m driver mobile: unique among live drivers[33m 1188[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m item code: unique per company, case-insensitive[33m 1437[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m LR number: unique including cancelled LRs[33m 2081[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m freight bill number (FY + seq): unique including cancelled bills[33m 1951[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m tax invoice number: unique per seller + FY (two sellers may share a number)[33m 2515[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m one live POD per LR[33m 1164[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m an LR is on at most one live freight bill; free again once that bill is cancelled[33m 4326[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a payment can only settle bills of its own party[33m 2861[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a booked LR needs its date and snapshot[33m 1217[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a finalised bill's snapshot can't change[33m 1973[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m updates bump version and stamp updated_by; optimistic lock sees the change[33m 2934[2mms[22m[39m
- [32mΓ£ô[39m db/tests/rls.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 31579[2mms[22m[39m
-   [32mΓ£ô[39m RLS: company isolation [2m(9)[22m
-     [33m[2mΓ£ô[22m[39m A's owner reads only A's rows, in every company-scoped table[33m 4955[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m works the same through db/client asUser (drizzle, pooler, prepare: false)[33m 3646[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m A's owner can't insert into B[33m 3188[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m A's owner can't update or cancel B's rows (they are invisible: 0 rows)[33m 2914[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m A's owner can't move a row into B[33m 3390[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m composite FKs stop a row in A pointing at B's party, even for the system[33m 2538[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m A's owner can't take B's document numbers or read B's series[33m 4271[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m B's users are invisible to A, and A can't add itself to B[33m 3834[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m anon can read nothing[33m 2740[2mms[22m[39m
- [32mΓ£ô[39m db/tests/hire-number-series.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 28461[2mms[22m[39m
-   [32mΓ£ô[39m hire_number_series privileges [2m(3)[22m
-     [33m[2mΓ£ô[22m[39m owner can create and edit a series in their company[33m 4520[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m staff in the same company can read but not create or edit (Owner-only, company.manage)[33m 5603[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a user of another company can't see or edit it[33m 7257[2mms[22m[39m
-   [32mΓ£ô[39m hire_number_series update guard [2m(3)[22m
-     [33m[2mΓ£ô[22m[39m lowering next_no fails even for the Owner[33m 3549[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m changing branch, financial year or document type fails[33m 4367[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m raising next_no and changing prefix / padding work[33m 3071[2mms[22m[39m
- [32mΓ£ô[39m db/tests/numbering.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 12836[2mms[22m[39m
-   [32mΓ£ô[39m number_series [2m(4)[22m
-     [33m[2mΓ£ô[22m[39m a rolled-back save gives its number back (no gap)[33m 3774[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m LR numbers run on across FYs; bills restart; prefix is copied per FY[33m 4339[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m raise_number never goes backwards[33m 2505[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m an LR series that was never set up is an error[33m 2126[2mms[22m[39m
- [32mΓ£ô[39m db/tests/one-company.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 18234[2mms[22m[39m
-   [32mΓ£ô[39m one active membership per user [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m refuses a second company for the same login[33m 2311[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m allows a new company after the first membership is cancelled[33m 2843[2mms[22m[39m
-   [32mΓ£ô[39m app.login_lookup [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m finds a person only under their own company's code (same answer otherwise)[33m 3084[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m lets the same mobile exist in two companies[33m 2989[2mms[22m[39m
-   [32mΓ£ô[39m forged company id [2m(1)[22m
-     [33m[2mΓ£ô[22m[39m A's user can't read or write B's rows, whatever company id is claimed or inserted[33m 6894[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m bill_column decides the freight-bill column, not the code / label[33m 5456[2mms[22m[39m
 
-[2m Test Files [22m [1m[32m12 passed[39m[22m[90m (12)[39m
-[2m      Tests [22m [1m[32m95 passed[39m[22m[90m (95)[39m
-[2m   Start at [22m 20:32:47
-[2m   Duration [22m 608.18s[2m (tests 95%, import 4%)[22m
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m30 passed[39m[22m[90m (30)[39m
+[2m   Start at [22m 22:05:44
+[2m   Duration [22m 196.67s[2m (tests 97%, import 3%, transform 1%)[22m
 

@@ -20,6 +20,14 @@ export function listMarketDriverRows(
   return dbmd.listMarketDriverRows(companyId, params);
 }
 
+export async function getMarketDriverById(
+  companyId: string,
+  id: string,
+): Promise<MarketDriver | null> {
+  await assertCan(companyId, "freight.view");
+  return dbmd.getMarketDriverById(companyId, id);
+}
+
 export async function createMarketDriver(
   companyId: string,
   input: MarketDriverInput,
