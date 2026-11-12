@@ -1,0 +1,16 @@
+{
+  "id": "/d/",
+  "name": "LR Manager – Driver",
+  "short_name": "Driver",
+  "start_url": "/d",
+  "scope": "/d/",
+  "display": "standalone",
+  "lang": "hi",
+  "background_color": "#F4F6FA",
+  "theme_color": "#1F3A8A",
+  "icons": [
+    { "src": "/icons/driver-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/driver-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/driver-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

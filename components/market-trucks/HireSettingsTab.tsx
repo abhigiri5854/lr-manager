@@ -184,7 +184,7 @@ export function HireSettingsTab({ settings }: { settings: HireSettings }) {
 
       <Card title="Driver link" description="What a driver sees on the personal link.">
         <Grid>
-          {numberField("driverHistoryDays", "History shown (days)", "Settled and cancelled trips stay on the driver's history page this long.", { step: "1" })}
+          {numberField("driverHistoryDays", "Driver history (days)", "Settled and cancelled trips stay on the driver's history page this long.", { step: "1" })}
         </Grid>
       </Card>
 

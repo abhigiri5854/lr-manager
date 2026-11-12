@@ -14,7 +14,7 @@ import { MarketSearch } from "./MarketSearch";
 
 const BASE = "/market-trucks/drivers";
 
-const columns: Column<MarketDriver>[] = [
+const makeColumns = (canEdit: boolean): Column<MarketDriver>[] => [
   { key: "name", header: "Name", cell: (r) => r.name, wrap: true, sticky: true },
   { key: "mobile", header: "Mobile", cell: (r) => r.mobile ?? "—" },
   { key: "dl", header: "Licence no.", cell: (r) => r.dlNo ?? "—", mono: true },
@@ -31,7 +31,7 @@ const columns: Column<MarketDriver>[] = [
         "—"
       ),
   },
-  { key: "edit", header: "", cell: (r) => <EditMarketDriverButton driver={r} />, align: "right" },
+  { key: "edit", header: "", cell: (r) => <EditMarketDriverButton driver={r} canEdit={canEdit} />, align: "right" },
 ];
 
 function emptyText(query: MarketListQuery, page: Page<unknown>) {
@@ -58,10 +58,13 @@ export function MarketDriverList({
   query,
   page,
   loading,
+  canEdit = false,
 }: {
   query: MarketListQuery;
   page?: Page<MarketDriver>;
   loading?: boolean;
+  /** master.edit — shows the app-link buttons in the edit dialog. */
+  canEdit?: boolean;
 }) {
   const data = page ?? { rows: [], total: 0, page: 1, pageSize: 50 };
   return (
@@ -75,7 +78,7 @@ export function MarketDriverList({
       <Card padding="table">
         <DataTable
           label="Market drivers"
-          columns={columns}
+          columns={makeColumns(canEdit)}
           rows={data.rows}
           rowKey={(r) => r.id}
           empty={loading ? "Loading…" : emptyText(query, data)}

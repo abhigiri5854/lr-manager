@@ -7,7 +7,8 @@ import {
 } from "@/components/market-trucks/MarketDriverList";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { listMarketDriverRows } from "@/lib/data/market-drivers";
-import { getActiveCompanyId } from "@/lib/data/session";
+import { getActiveCompanyId, getActiveRole } from "@/lib/data/session";
+import { can } from "@/lib/permissions";
 import { parseMarketListQuery } from "@/lib/validators/market-list";
 
 export const metadata: Metadata = { title: "Market drivers" };
@@ -17,7 +18,8 @@ async function ListLoader({ searchParams }: Pick<PageProps<"/market-trucks/drive
   const query = parseMarketListQuery(await searchParams);
   const companyId = await getActiveCompanyId();
   const page = await listMarketDriverRows(companyId, { search: query.q, page: query.page });
-  return <MarketDriverList query={query} page={page} />;
+  const role = await getActiveRole();
+  return <MarketDriverList query={query} page={page} canEdit={can(role, "master.edit")} />;
 }
 
 export default function MarketDriversPage({ searchParams }: PageProps<"/market-trucks/drivers">) {

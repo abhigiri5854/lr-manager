@@ -6,13 +6,14 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
 import type { ChallanRegisterRow } from "@/lib/data/db/challans";
 import { formatDate, formatPaise } from "@/lib/format";
-import type { ChallanStatus, Page } from "@/lib/types";
+import type { ChallanStatus, Page, TripEventType } from "@/lib/types";
 import {
   challanListSearch,
   hasChallanFilters,
   type ChallanListQuery,
 } from "@/lib/validators/challan-list";
 import { ChallanFilters } from "./ChallanFilters";
+import { TRIP_LABEL, TRIP_TONE } from "./trip-labels";
 
 const BASE = "/market-trucks/challans";
 
@@ -26,7 +27,10 @@ const STATUS_TONE: Record<ChallanStatus, ChipTone> = {
 };
 
 
-const columns: Column<ChallanRegisterRow>[] = [
+/** Latest trip event type per challan; supplied by the register query when it joins trip_events. */
+type Row = ChallanRegisterRow & { latestTripEvent?: TripEventType | null };
+
+const columns: Column<Row>[] = [
   { key: "no", header: "Challan no.", cell: (r) => r.challanNo, mono: true, sticky: true },
   { key: "date", header: "Date", cell: (r) => formatDate(r.challanDate) },
   { key: "vehicle", header: "Vehicle", cell: (r) => r.vehicleNo ?? "—", mono: true },
@@ -43,7 +47,14 @@ const columns: Column<ChallanRegisterRow>[] = [
   {
     key: "status",
     header: "Status",
-    cell: (r) => <Chip tone={STATUS_TONE[r.status]}>{r.status.replace("_", " ")}</Chip>,
+    cell: (r) => (
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <Chip tone={STATUS_TONE[r.status]}>{r.status.replace("_", " ")}</Chip>
+        {r.latestTripEvent && (
+          <Chip tone={TRIP_TONE[r.latestTripEvent]}>{TRIP_LABEL[r.latestTripEvent]}</Chip>
+        )}
+      </span>
+    ),
   },
   {
     key: "pod",

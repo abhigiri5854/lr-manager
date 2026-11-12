@@ -13,6 +13,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except the login and register pages and Next's own files.
-  matcher: ["/((?!login|register|_next/static|_next/image|favicon.ico).*)"],
+  // Everything except the login and register pages, the session-less driver app (/d, /d/*, its icons)
+  // and Next's own files. The driver app's token is its credential (lib/data/driver-links.ts).
+  matcher: ["/((?!login|register|d$|d/|icons/|_next/static|_next/image|favicon.ico).*)"],
 };
