@@ -786,6 +786,7 @@ export function InvoiceForm({
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
+            e.stopPropagation(); // bubbles through the Dialog portal
             cancelInvoice();
           }}
           className="flex flex-col gap-4"

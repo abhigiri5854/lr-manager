@@ -499,11 +499,10 @@ export function ChallanForm({
                             error={err(`lrs.${i}.ewbNo`)}
                             hint="Optional"
                           />
-                          <Field
+                          <DateField
                             label="Generated on"
-                            type="date"
                             value={l.ewbDate}
-                            onChange={(e) => setLine(i, { ewbDate: e.target.value })}
+                            onChange={(v) => setLine(i, { ewbDate: v })}
                             error={err(`lrs.${i}.ewbDate`)}
                           />
                           <Field

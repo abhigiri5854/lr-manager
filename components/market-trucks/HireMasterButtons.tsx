@@ -126,6 +126,7 @@ function MasterForm<I, R extends object>({
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
+        e.stopPropagation(); // bubbles through the Dialog portal
         submit(e.currentTarget);
       }}
       className="grid grid-cols-2 gap-3"

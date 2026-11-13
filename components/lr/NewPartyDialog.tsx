@@ -79,6 +79,7 @@ export function NewPartyDialog({
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
+          e.stopPropagation(); // React bubbles through the Dialog portal to a parent form
           submit(e.currentTarget);
         }}
         className="flex flex-col gap-4"

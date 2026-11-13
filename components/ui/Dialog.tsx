@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 type DialogProps = {
   open: boolean;
@@ -11,19 +12,33 @@ type DialogProps = {
   children: ReactNode;
 };
 
+const noop = () => () => {};
+/** False on the server and during hydration, true afterwards (a portal needs document.body). */
+const useMounted = () =>
+  useSyncExternalStore(
+    noop,
+    () => true,
+    () => false,
+  );
+
 /** Modal on the native <dialog> (focus trap, Esc to close). Same look as the "Cancel LR" dialog. */
 export function Dialog({ open, onClose, title, description, children }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const mounted = useMounted();
 
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
     if (open && !d.open) d.showModal();
     if (!open && d.open) d.close();
-  }, [open]);
+  }, [open, mounted]);
 
-  return (
+  // Rendered into <body>, never inside the caller's DOM: a dialog opened from within a page <form>
+  // would otherwise put its own <form> inside that one (invalid HTML; the inner submit then submits
+  // natively). React events still bubble through the portal, so dialog forms call stopPropagation().
+  if (!mounted) return null;
+  return createPortal(
     <dialog
       ref={ref}
       aria-labelledby={titleId}
@@ -35,6 +50,7 @@ export function Dialog({ open, onClose, title, description, children }: DialogPr
       </h2>
       {description && <p className="mt-2 mb-0 text-sm text-muted">{description}</p>}
       <div className="mt-4">{open && children}</div>
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import { createTruckAction } from "@/app/(app)/lr/form-actions";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -39,10 +38,7 @@ export function NewTruckDialog({
     });
   }
 
-  // Portal to <body>: the dialog is rendered from inside the LR <form>, and a <form> inside a
-  // <form> is invalid HTML (hydration error, and the inner submit would submit the LR form).
-  if (!open || typeof document === "undefined") return null;
-  return createPortal(
+  return (
     <Dialog
       open={open}
       onClose={() => {
@@ -82,7 +78,6 @@ export function NewTruckDialog({
           </Button>
         </div>
       </form>
-    </Dialog>,
-    document.body,
+    </Dialog>
   );
 }
