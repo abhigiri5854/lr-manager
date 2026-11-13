@@ -24,7 +24,18 @@ import { listPaymentsForChallan } from "@/lib/data/truck-payments";
 import { todayInIndia } from "@/lib/fy";
 import { can } from "@/lib/permissions";
 
-export const metadata: Metadata = { title: "Challan" };
+export async function generateMetadata({
+  params,
+}: PageProps<"/market-trucks/challans/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const challan = await getChallan(await getActiveCompanyId(), id);
+    if (challan) return { title: `Challan ${challan.challanNo}` };
+  } catch {
+    // fall back to the generic title
+  }
+  return { title: "Challan" };
+}
 
 /** Per request: reads the URL, the active company and role. */
 async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]">, "params">) {

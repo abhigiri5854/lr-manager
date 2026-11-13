@@ -51,7 +51,9 @@ export function PodUpload({
       setFile(null);
       await onDone();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : e instanceof NetworkError ? t("offline") : t("loadError"));
+      // The server's date rule arrives as English text with the LR date in brackets; show it translated.
+      const lrDate = e instanceof ApiError ? /before the LR date \((\d{2}-\d{2}-\d{4})\)/.exec(e.message)?.[1] : undefined;
+      setError(lrDate ? t("deliveryBeforeLr", { date: lrDate }) : e instanceof ApiError ? e.message : e instanceof NetworkError ? t("offline") : t("loadError"));
     } finally {
       setProgress(null);
     }

@@ -73,7 +73,7 @@ async function load(tx: Tx, companyId: string, id: string, lock: boolean): Promi
          left join truck_parties pp on pp.company_id = c.company_id and pp.id = c.payee_party_id
         where c.company_id = ${companyId} and c.id = ${id}
         ${lock ? tx`for update of c` : tx``}`,
-    tx`select cl.lr_id, cl.loaded_pkgs, cl.delivered_pkgs, cl.freight_allocated, l.lr_no,
+    tx`select cl.lr_id, cl.loaded_pkgs, cl.delivered_pkgs, cl.freight_allocated, l.lr_no, l.lr_date,
               p.id as pod_id, p.version as pod_version, p.document_paths as pod_paths,
               p.condition as pod_condition, p.remarks as pod_remarks,
               (select coalesce(sum(o.delivered_pkgs), 0)::int
@@ -436,6 +436,23 @@ async function recordChallanPodIn(
         path: "unloadedAt",
         message: "These LRs have a POD — cancel it on the LR's POD screen before clearing the unloading date",
       });
+    // Same rule as the driver POD (app.driver_pod_attach): delivery (unloading) date not before the LR date.
+    // Only the challan POD screen (lrPods): the LR POD → challan sync keeps the LR POD screen's own rule.
+    if (lrPods && dates.unloadedAt && dates.unloadedAt !== isoOrNull(c.unloaded_at)) {
+      const deliveredOn = indiaDate(dates.unloadedAt);
+      const earliest = s.lines
+        .map((l) => str(l.lr_date))
+        .filter((d): d is string => !!d && deliveredOn < d.slice(0, 10))
+        .sort()
+        .pop();
+      if (earliest) {
+        const [y, m, d] = earliest.slice(0, 10).split("-");
+        issues.push({
+          path: "unloadedAt",
+          message: `Delivery date can't be before the LR date (${d}-${m}-${y})`,
+        });
+      }
+    }
     if (issues.length) throw new ValidationError(issues);
 
     const plan = planAutoLines(s.charges, computeAutos(s, dates, delivered));

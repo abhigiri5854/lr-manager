@@ -10,6 +10,12 @@ export function formatRupees(paise: number): string {
   return paise < 0 ? `-₹${formatPaise(-paise)}` : `₹${formatPaise(paise)}`;
 }
 
+/** Display a percentage without trailing zeros: "1.000" → "1", "0.750" → "0.75". Display only. */
+export function formatPercent(v: string | number): string {
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : String(v);
+}
+
 const inrWhole = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 
 /** Drops ".00" for whole rupees: 5000 → "₹50", 123456789 → "₹12,34,567.89". */

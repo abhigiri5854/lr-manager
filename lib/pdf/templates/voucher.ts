@@ -1,6 +1,6 @@
 // Truck payment voucher PDF: same design language as the challan PDF (letterhead, tinted section
 // bars, ruled tables, signature row). One A4 page. Payee details are the snapshot frozen at approval.
-import { amountInWords, formatDate, formatPaise } from "@/lib/format";
+import { amountInWords, formatDate, formatPaise, formatPercent } from "@/lib/format";
 import { toPaise } from "@/lib/hire";
 import type { PaymentPdfData } from "../load";
 import {
@@ -81,7 +81,7 @@ ${columns([
 ])}
 ${allocationTable(d)}
 <div style="padding:10px 12px;border-top:1px solid var(--rule);margin-top:-1px;line-height:1.7;break-inside:avoid">
-<b>Net paid: ₹${money(p.amount)}</b>${toPaise(p.tdsAmount) > 0 ? ` (after TDS ₹${money(p.tdsAmount)} at ${esc(p.tdsPercent)}% on balance)` : ""}<br>
+<b>Net paid: ₹${money(p.amount)}</b>${toPaise(p.tdsAmount) > 0 ? ` (after TDS ₹${money(p.tdsAmount)} at ${esc(formatPercent(p.tdsPercent))}% on balance)` : ""}<br>
 <span style="color:var(--muted)">${esc(amountInWords(toPaise(p.amount)))}</span>
 </div>
 <div class="grow"></div>

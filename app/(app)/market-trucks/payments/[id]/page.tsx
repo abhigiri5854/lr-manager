@@ -15,7 +15,7 @@ import { getCompany } from "@/lib/data/companies";
 import { getActiveCompanyId, getActiveRole } from "@/lib/data/session";
 import { getTruckPayment } from "@/lib/data/truck-payments";
 import { todayInIndia } from "@/lib/fy";
-import { formatDate, formatPaise } from "@/lib/format";
+import { formatDate, formatPaise, formatPercent } from "@/lib/format";
 import { toPaise } from "@/lib/hire";
 import { can } from "@/lib/permissions";
 import { paymentShareText, whatsappLink } from "@/lib/truck-payment-share";
@@ -100,7 +100,7 @@ async function Payment({ params }: Pick<PageProps<"/market-trucks/payments/[id]"
           <Row label="Reference">{p.refNo ?? "—"}</Row>
           {p.chequeDate && <Row label="Cheque date">{formatDate(p.chequeDate)}</Row>}
           <Row label="Amount">{rupees(p.grossAmount)}</Row>
-          <Row label={`TDS${Number(p.tdsPercent) > 0 ? ` (${p.tdsPercent}%)` : ""}`}>{rupees(p.tdsAmount)}</Row>
+          <Row label={`TDS${Number(p.tdsPercent) > 0 ? ` (${formatPercent(p.tdsPercent)}%)` : ""}`}>{rupees(p.tdsAmount)}</Row>
           <Row label="Net paid">{rupees(p.amount)}</Row>
           {p.podOverrideReason && <Row label="Balance before POD">{p.podOverrideReason}</Row>}
           {p.narration && <Row label="Note">{p.narration}</Row>}

@@ -57,3 +57,6 @@ scripts/dev-reset-passwords.ts
 .env.prod
 .vercel
 .env*
+
+/*.png
+.playwright-mcp/
