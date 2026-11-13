@@ -24,7 +24,9 @@ vi.mock("next/navigation", () => ({
 
 process.env.DATA_SOURCE = "db";
 process.env.DRIVER_LINK_SECRET ??= "db-tests-driver-link-secret-0123456789abcdef";
-process.env.APP_BASE_URL ??= "https://lr.test";
+// Force the base URL (call-time read in appBaseUrl()) so the URL assertions don't depend on .env.local.
+const prevAppBaseUrl = process.env.APP_BASE_URL;
+process.env.APP_BASE_URL = "https://lr.test";
 
 const session = await import("@/lib/data/session");
 const ps = await import("@/lib/data/party-statements");
@@ -39,6 +41,8 @@ beforeAll(() => {
 });
 afterEach(() => fx.cleanup());
 afterAll(async () => {
+  if (prevAppBaseUrl === undefined) delete process.env.APP_BASE_URL;
+  else process.env.APP_BASE_URL = prevAppBaseUrl;
   await sql.end();
   const g = globalThis as { __lrmSql?: { end: () => Promise<void> } };
   await g.__lrmSql?.end();

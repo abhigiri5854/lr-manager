@@ -1,11 +1,11 @@
 import { can } from "@/lib/permissions";
 import type { ReportFilters } from "@/lib/validators/hire-report";
 import * as db from "./db/market-dashboard";
-import { listHireOutstanding, listPodPending, listTripMargin } from "./hire-reports";
+import { getHireOutstandingTotals, getPodPendingTotals, getTripMarginTotals } from "./hire-reports";
 import { getActiveRole } from "./session";
 
 // Dashboard "Market trucks" row. Each box is loaded only if the user has its permission (else null);
-// the reads reuse the report functions, so the numbers match the reports exactly.
+// the three report boxes use the reports' totals-only reads (same SQL pieces as the report totals).
 
 const EXPIRY_DAYS = 15;
 
@@ -19,8 +19,6 @@ function thisMonthIst() {
   return { from: `${y}-${pad(m + 1)}-01`, to: `${y}-${pad(m + 1)}-${pad(last)}` };
 }
 
-const NONE = { page: 1 } as const;
-
 export async function getMarketDashboard(companyId: string) {
   const role = await getActiveRole();
   const view = can(role, "freight.view");
@@ -28,10 +26,10 @@ export async function getMarketDashboard(companyId: string) {
   const approve = can(role, "payment.approve");
   const month = thisMonthIst();
   const [outstanding, pod, expiring, margin, moving, pending, ewb] = await Promise.all([
-    view ? listHireOutstanding(companyId, { positive: true } as ReportFilters, NONE) : null,
-    view ? listPodPending(companyId, {} as ReportFilters, NONE) : null,
+    view ? getHireOutstandingTotals(companyId, { positive: true } as ReportFilters) : null,
+    view ? getPodPendingTotals(companyId, {} as ReportFilters) : null,
     view ? db.getExpiringDocs(companyId, EXPIRY_DAYS) : null,
-    bill ? listTripMargin(companyId, { ...month } as ReportFilters, NONE) : null,
+    bill ? getTripMarginTotals(companyId, { ...month } as ReportFilters) : null,
     view ? db.getTrucksOnTheMove(companyId) : null,
     approve ? db.countPaymentsAwaitingApproval(companyId) : null,
     view ? db.getEwbSummary(companyId) : null,

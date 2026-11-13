@@ -17,6 +17,19 @@ export async function listPodPending(companyId: string, f: ReportFilters, p: Par
   await assertCan(companyId, "freight.view");
   return db.listPodPending(companyId, f, p);
 }
+// Totals-only reads for the dashboard boxes (no rows query); same permission as the full lists.
+export async function getHireOutstandingTotals(companyId: string, f: ReportFilters) {
+  await assertCan(companyId, "freight.view");
+  return db.getHireOutstandingTotals(companyId, f);
+}
+export async function getPodPendingTotals(companyId: string, f: ReportFilters) {
+  await assertCan(companyId, "freight.view");
+  return db.getPodPendingTotals(companyId, f);
+}
+export async function getTripMarginTotals(companyId: string, f: ReportFilters) {
+  await assertCan(companyId, "bill.edit");
+  return db.getTripMarginTotals(companyId, f);
+}
 export async function listTdsRegister(companyId: string, f: ReportFilters, p: Params) {
   await assertCan(companyId, "bill.edit");
   return db.listTdsRegister(companyId, f, p);

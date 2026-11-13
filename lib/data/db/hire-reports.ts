@@ -65,16 +65,11 @@ export type HireOutstandingRow = {
 };
 export type HireOutstandingTotals = Omit<HireOutstandingRow, "partyId" | "partyName">;
 
-/** Per payee from v_challan_balance (draft challans left out: nothing is owed on them yet). */
-export async function listHireOutstanding(
-  companyId: string,
-  f: ReportFilters,
-  params: Params,
-): Promise<ReportPage<HireOutstandingRow, HireOutstandingTotals>> {
-  const { page, pageSize, offset } = paging(params);
+// Per report: the query pieces and the totals mapping are shared by the full report (rows + totals)
+// and the dashboard's totals-only read (get…Totals), so the two cannot drift apart.
+const outstandingGroups = (tx: Tx, companyId: string, f: ReportFilters) => {
   const party = contains(f.party);
-  return withUserRead(async (tx) => {
-    const g = () => tx`
+  return tx`
       select vb.payee_party_id as party_id, pp.name as party_name, count(*) as challans,
              sum(vb.hire_amount + vb.additions - vb.deductions) as hire,
              sum(vb.tds_amount) as tds, sum(vb.paid) as paid, sum(vb.balance) as balance
@@ -86,13 +81,43 @@ export async function listHireOutstanding(
          ${party ? tx`and lower(pp.name) like ${party}` : tx``}
        group by vb.payee_party_id, pp.name
        ${f.positive ? tx`having sum(vb.balance) > 0` : tx``}`;
+};
+const outstandingTotalsRow = (tx: Tx, companyId: string, f: ReportFilters) =>
+  tx`with g as (${outstandingGroups(tx, companyId, f)})
+     select count(*) as n, coalesce(sum(challans), 0) as challans, coalesce(sum(hire), 0) as hire,
+            coalesce(sum(tds), 0) as tds, coalesce(sum(paid), 0) as paid,
+            coalesce(sum(balance), 0) as balance from g`;
+const outstandingTotals = (t: Row): HireOutstandingTotals => ({
+  challans: num(t.challans),
+  hirePaise: paise(t.hire),
+  tdsPaise: paise(t.tds),
+  paidPaise: paise(t.paid),
+  balancePaise: paise(t.balance),
+});
+
+/** Totals only (no rows query): same `total` and `totals` as listHireOutstanding. For the dashboard. */
+export async function getHireOutstandingTotals(
+  companyId: string,
+  f: ReportFilters,
+): Promise<{ total: number; totals: HireOutstandingTotals }> {
+  return withUserRead(async (tx) => {
+    const [t] = await outstandingTotalsRow(tx, companyId, f);
+    return { total: num(t.n), totals: outstandingTotals(t) };
+  });
+}
+
+/** Per payee from v_challan_balance (draft challans left out: nothing is owed on them yet). */
+export async function listHireOutstanding(
+  companyId: string,
+  f: ReportFilters,
+  params: Params,
+): Promise<ReportPage<HireOutstandingRow, HireOutstandingTotals>> {
+  const { page, pageSize, offset } = paging(params);
+  return withUserRead(async (tx) => {
     const [rows, [t]] = await Promise.all([
-      tx`with g as (${g()}) select * from g
+      tx`with g as (${outstandingGroups(tx, companyId, f)}) select * from g
           order by balance desc, lower(party_name), party_id ${lim(tx, params, pageSize, offset)}`,
-      tx`with g as (${g()})
-         select count(*) as n, coalesce(sum(challans), 0) as challans, coalesce(sum(hire), 0) as hire,
-                coalesce(sum(tds), 0) as tds, coalesce(sum(paid), 0) as paid,
-                coalesce(sum(balance), 0) as balance from g`,
+      outstandingTotalsRow(tx, companyId, f),
     ]);
     return pageOf(
       rows.map((r) => ({
@@ -108,13 +133,7 @@ export async function listHireOutstanding(
       page,
       pageSize,
       params,
-      {
-        challans: num(t.challans),
-        hirePaise: paise(t.hire),
-        tdsPaise: paise(t.tds),
-        paidPaise: paise(t.paid),
-        balancePaise: paise(t.balance),
-      },
+      outstandingTotals(t),
     );
   });
 }
@@ -142,18 +161,10 @@ export type PodPendingRow = {
 };
 export type PodPendingTotals = { n: number; b0_7: number; b8_15: number; b16_30: number; b30p: number };
 
-export async function listPodPending(
-  companyId: string,
-  f: ReportFilters,
-  params: Params,
-): Promise<ReportPage<PodPendingRow, PodPendingTotals>> {
-  const { page, pageSize, offset } = paging(params);
+const podFrom = (tx: Tx, companyId: string, f: ReportFilters) => {
   const party = contains(f.party);
   const vehicle = contains(f.vehicle?.replace(/\s+/g, ""));
-  return withUserRead(async (tx) => {
-    const since = () => tx`(coalesce(c.unloaded_at, c.dispatched_at, c.challan_at) at time zone 'Asia/Kolkata')::date`;
-    const age = () => tx`((now() at time zone 'Asia/Kolkata')::date - ${since()})`;
-    const from = () => tx`challans c
+  return tx`challans c
         join branches b on b.company_id = c.company_id and b.id = c.branch_id
         left join market_vehicles v on v.company_id = c.company_id and v.id = c.vehicle_id
         left join truck_parties pp on pp.company_id = c.company_id and pp.id = c.payee_party_id
@@ -162,19 +173,51 @@ export async function listPodPending(
          ${branchIs(tx, f)}
          ${party ? tx`and lower(pp.name) like ${party}` : tx``}
          ${vehicle ? tx`and lower(v.vehicle_no) like ${vehicle}` : tx``}`;
+};
+const podSince = (tx: Tx) =>
+  tx`(coalesce(c.unloaded_at, c.dispatched_at, c.challan_at) at time zone 'Asia/Kolkata')::date`;
+const podAge = (tx: Tx) => tx`((now() at time zone 'Asia/Kolkata')::date - ${podSince(tx)})`;
+const podTotalsRow = (tx: Tx, companyId: string, f: ReportFilters) =>
+  tx`select count(*) as n,
+            count(*) filter (where ${podAge(tx)} <= 7) as b1,
+            count(*) filter (where ${podAge(tx)} between 8 and 15) as b2,
+            count(*) filter (where ${podAge(tx)} between 16 and 30) as b3,
+            count(*) filter (where ${podAge(tx)} > 30) as b4
+       from ${podFrom(tx, companyId, f)}`;
+const podTotals = (t: Row): PodPendingTotals => ({
+  n: num(t.n),
+  b0_7: num(t.b1),
+  b8_15: num(t.b2),
+  b16_30: num(t.b3),
+  b30p: num(t.b4),
+});
+
+/** Totals only (no rows query): same `totals` as listPodPending. For the dashboard. */
+export async function getPodPendingTotals(
+  companyId: string,
+  f: ReportFilters,
+): Promise<{ totals: PodPendingTotals }> {
+  return withUserRead(async (tx) => {
+    const [t] = await podTotalsRow(tx, companyId, f);
+    return { totals: podTotals(t) };
+  });
+}
+
+export async function listPodPending(
+  companyId: string,
+  f: ReportFilters,
+  params: Params,
+): Promise<ReportPage<PodPendingRow, PodPendingTotals>> {
+  const { page, pageSize, offset } = paging(params);
+  return withUserRead(async (tx) => {
     const [rows, [t]] = await Promise.all([
       tx`select c.id, c.challan_no, (c.challan_at at time zone 'Asia/Kolkata')::date::text as challan_date,
                 b.name as branch_name, v.vehicle_no, pp.id as party_id, pp.name as party_name,
-                c.source, c.destination, ${since()}::text as since_date,
-                (c.unloaded_at is not null) as unloaded, ${age()} as age_days
-           from ${from()}
+                c.source, c.destination, ${podSince(tx)}::text as since_date,
+                (c.unloaded_at is not null) as unloaded, ${podAge(tx)} as age_days
+           from ${podFrom(tx, companyId, f)}
           order by age_days desc, c.challan_no, c.id ${lim(tx, params, pageSize, offset)}`,
-      tx`select count(*) as n,
-                count(*) filter (where ${age()} <= 7) as b1,
-                count(*) filter (where ${age()} between 8 and 15) as b2,
-                count(*) filter (where ${age()} between 16 and 30) as b3,
-                count(*) filter (where ${age()} > 30) as b4
-           from ${from()}`,
+      podTotalsRow(tx, companyId, f),
     ]);
     return pageOf(
       rows.map((r) => ({
@@ -195,7 +238,7 @@ export async function listPodPending(
       page,
       pageSize,
       params,
-      { n: num(t.n), b0_7: num(t.b1), b8_15: num(t.b2), b16_30: num(t.b3), b30p: num(t.b4) },
+      podTotals(t),
     );
   });
 }
@@ -324,16 +367,8 @@ const pctOf = (margin: number, revenue: number) =>
 const isLow = (margin: number, revenue: number, minPct: number) =>
   (revenue > 0 ? (margin * 100) / revenue : margin < 0 ? -1 : 0) < minPct;
 
-export async function listTripMargin(
-  companyId: string,
-  f: ReportFilters,
-  params: Params,
-): Promise<ReportPage<TripMarginRow, TripMarginTotals>> {
-  const { page, pageSize, offset } = paging(params);
-  return withUserRead(async (tx) => {
-    const [co] = await tx`select coalesce(min_margin_pct, 0) as m from companies where id = ${companyId}`;
-    const minPct = Number(co?.m ?? 0);
-    const from = () => tx`challans c
+const marginFrom = (tx: Tx, companyId: string, f: ReportFilters) =>
+  tx`challans c
         join v_challan_balance vb on vb.company_id = c.company_id and vb.challan_id = c.id
         join branches b on b.company_id = c.company_id and b.id = c.branch_id
         left join market_vehicles v on v.company_id = c.company_id and v.id = c.vehicle_id
@@ -342,20 +377,63 @@ export async function listTripMargin(
          ${dateIs(tx, f)}
          ${branchIs(tx, f)}
          ${f.vtype ? tx`and c.vehicle_type_id = ${f.vtype}::uuid` : tx``}`;
+const minMarginPct = async (tx: Tx, companyId: string) => {
+  const [co] = await tx`select coalesce(min_margin_pct, 0) as m from companies where id = ${companyId}`;
+  return Number(co?.m ?? 0);
+};
+/** `minPct` is the company's low-margin setting: a value already read, or (totals-only) read in the same statement. */
+const marginTotalsRow = (tx: Tx, companyId: string, f: ReportFilters, minPct: number | null) => {
+  const min =
+    minPct === null
+      ? tx`(select coalesce(min_margin_pct, 0) from companies where id = ${companyId})::numeric`
+      : tx`${minPct}::numeric`;
+  return tx`select count(*) as n, coalesce(sum(x.rev), 0) as rev, coalesce(sum(x.cost), 0) as cost,
+            count(*) filter (where (case when x.rev > 0 then (x.rev - x.cost) * 100 / x.rev
+                                         when x.rev - x.cost < 0 then -1 else 0 end) < ${min}) as low,
+            coalesce(${min}, 0) as min_pct
+       from (select vb.trip_revenue as rev, (vb.hire_amount + vb.additions - vb.deductions) as cost
+               from ${marginFrom(tx, companyId, f)}) x`;
+};
+const marginTotals = (t: Row, minPct: number): TripMarginTotals => {
+  const revenue = paise(t.rev);
+  const cost = paise(t.cost);
+  return {
+    revenuePaise: revenue,
+    costPaise: cost,
+    marginPaise: revenue - cost,
+    marginPct: pctOf(revenue - cost, revenue),
+    lowCount: num(t.low),
+    minMarginPct: minPct,
+  };
+};
+
+/** Totals only (no rows query): same `totals` as listTripMargin. For the dashboard. */
+export async function getTripMarginTotals(
+  companyId: string,
+  f: ReportFilters,
+): Promise<{ totals: TripMarginTotals }> {
+  return withUserRead(async (tx) => {
+    const [t] = await marginTotalsRow(tx, companyId, f, null);
+    return { totals: marginTotals(t, Number(t.min_pct ?? 0)) };
+  });
+}
+
+export async function listTripMargin(
+  companyId: string,
+  f: ReportFilters,
+  params: Params,
+): Promise<ReportPage<TripMarginRow, TripMarginTotals>> {
+  const { page, pageSize, offset } = paging(params);
+  return withUserRead(async (tx) => {
+    const minPct = await minMarginPct(tx, companyId);
     const [rows, [t]] = await Promise.all([
       tx`select c.id, c.challan_no, (c.challan_at at time zone 'Asia/Kolkata')::date::text as challan_date,
                 b.name as branch_name, v.vehicle_no, vt.name as vehicle_type, c.source, c.destination,
                 vb.trip_revenue as revenue, (vb.hire_amount + vb.additions - vb.deductions) as cost
-           from ${from()}
+           from ${marginFrom(tx, companyId, f)}
           order by c.challan_at desc, c.id desc ${lim(tx, params, pageSize, offset)}`,
-      tx`select count(*) as n, coalesce(sum(x.rev), 0) as rev, coalesce(sum(x.cost), 0) as cost,
-                count(*) filter (where (case when x.rev > 0 then (x.rev - x.cost) * 100 / x.rev
-                                             when x.rev - x.cost < 0 then -1 else 0 end) < ${minPct}::numeric) as low
-           from (select vb.trip_revenue as rev, (vb.hire_amount + vb.additions - vb.deductions) as cost
-                   from ${from()}) x`,
+      marginTotalsRow(tx, companyId, f, minPct),
     ]);
-    const revenue = paise(t.rev);
-    const cost = paise(t.cost);
     return pageOf(
       rows.map((r) => {
         const rev = paise(r.revenue);
@@ -380,14 +458,7 @@ export async function listTripMargin(
       page,
       pageSize,
       params,
-      {
-        revenuePaise: revenue,
-        costPaise: cost,
-        marginPaise: revenue - cost,
-        marginPct: pctOf(revenue - cost, revenue),
-        lowCount: num(t.low),
-        minMarginPct: minPct,
-      },
+      marginTotals(t, minPct),
     );
   });
 }
