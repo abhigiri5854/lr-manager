@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { createTruckAction } from "@/app/(app)/lr/form-actions";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -38,7 +39,10 @@ export function NewTruckDialog({
     });
   }
 
-  return (
+  // Portal to <body>: the dialog is rendered from inside the LR <form>, and a <form> inside a
+  // <form> is invalid HTML (hydration error, and the inner submit would submit the LR form).
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
     <Dialog
       open={open}
       onClose={() => {
@@ -52,6 +56,8 @@ export function NewTruckDialog({
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
+          // React bubbles events through portals to the LR form's onSubmit; stop that.
+          e.stopPropagation();
           submit(e.currentTarget);
         }}
         className="flex flex-col gap-4"
@@ -68,7 +74,7 @@ export function NewTruckDialog({
           error={error}
         />
         <div className="flex flex-wrap justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={pending}>
@@ -76,6 +82,7 @@ export function NewTruckDialog({
           </Button>
         </div>
       </form>
-    </Dialog>
+    </Dialog>,
+    document.body,
   );
 }

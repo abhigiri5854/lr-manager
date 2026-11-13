@@ -241,7 +241,7 @@ export function HireReport({ data, filters }: { data: ReportData; filters: Repor
         { key: "pan", header: "PAN", cell: (r) => r.pan ?? "—", mono: true },
         { key: "pant", header: "PAN type", cell: (r) => r.panType ?? "—" },
         { key: "sec", header: "Section", cell: (r) => r.section ?? "—" },
-        { key: "gross", header: "Gross ₹", cell: (r) => formatPaise(r.grossPaise), total: formatPaise(t.grossPaise), align: "right" },
+        { key: "base", header: "TDS base ₹", cell: (r) => formatPaise(r.tdsBasePaise), align: "right" },
         { key: "pct", header: "TDS %", cell: (r) => pct(r.tdsPercent), align: "right" },
         { key: "tds", header: "TDS ₹", cell: (r) => formatPaise(r.tdsPaise), total: formatPaise(t.tdsPaise), align: "right" },
         { key: "net", header: "Net ₹", cell: (r) => formatPaise(r.netPaise), total: formatPaise(t.netPaise), align: "right" },

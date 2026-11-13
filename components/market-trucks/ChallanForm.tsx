@@ -325,10 +325,8 @@ export function ChallanForm({
       if (result.ok) {
         version.current = result.challan.version;
         savedId.current = result.challan.id;
-        if (!challan) {
+        if (!challan || action === "dispatch") {
           router.push(`/market-trucks/challans/${result.challan.id}`);
-        } else if (action === "dispatch") {
-          router.refresh();
         } else {
           setSavedNote(`Draft saved · ${result.challan.challanNo}`);
         }

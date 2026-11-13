@@ -282,7 +282,17 @@ export function DateField({
   }, [open]);
 
   function edit(raw: string) {
-    const next = formatDateTyping(raw, text);
+    // One keystroke goes through the typing formatter (it handles backspace and auto-dashes).
+    // Anything else (paste, autofill, programmatic fill, "/" or "." separators, digits only)
+    // is rebuilt from its digits as dd-mm-yyyy.
+    const singleKey = Math.abs(raw.length - text.length) === 1 && !/[/.\s]/.test(raw);
+    let next: string;
+    if (singleKey) next = formatDateTyping(raw, text);
+    else {
+      const d = raw.replace(/\D/g, "").slice(0, 8);
+      next = [d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("-");
+      if (d.length === 2 && raw.trim().length > 2) next += "-";
+    }
     setText(next);
     const p = next ? parseDisplayDate(next) : null;
     const iso = p?.ok ? p.iso : "";
@@ -324,7 +334,6 @@ export function DateField({
           inputMode="numeric"
           autoComplete="off"
           placeholder="dd-mm-yyyy"
-          maxLength={10}
           value={text}
           required={required}
           disabled={disabled}

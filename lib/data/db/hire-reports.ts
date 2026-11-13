@@ -212,6 +212,8 @@ export type TdsRegisterRow = {
   pan: string | null;
   panType: string | null;
   section: string | null;
+  /** The challan's gross hire credit (the TDS base). */
+  tdsBasePaise: number;
   grossPaise: number;
   tdsPercent: number | null;
   tdsPaise: number;
@@ -242,9 +244,11 @@ export async function listTdsRegister(
       ${party ? tx`and lower(t.party_name) like ${party}` : tx``}`;
     const [rows, quarters] = await Promise.all([
       tx`select t.allocation_id, t.paid_on::text as paid_on, t.payment_no, t.challan_no, t.party_id,
-                t.party_name, t.pan, t.pan_type, t.section_label, t.gross_amount, t.tds_percent,
+                t.party_name, t.pan, t.pan_type, t.tds_base, t.gross_amount, tpay.tds_percent as entered_percent,
                 t.tds_amount, t.net_amount, (t.tds_amount = 0 and t.has_declaration) as declaration
-           from v_tds_register t where ${where()}
+           from v_tds_register t
+           join truck_payments tpay on tpay.company_id = t.company_id and tpay.id = t.payment_id
+          where ${where()}
           order by t.paid_on, t.payment_no, t.challan_no, t.allocation_id
           ${lim(tx, params, pageSize, offset)}`,
       tx`select t.quarter, count(*) as n, sum(t.gross_amount) as gross, sum(t.tds_amount) as tds,
@@ -269,9 +273,10 @@ export async function listTdsRegister(
         partyName: r.party_name as string,
         pan: str(r.pan),
         panType: str(r.pan_type),
-        section: str(r.section_label),
+        section: "194C",
+        tdsBasePaise: paise(r.tds_base),
         grossPaise: paise(r.gross_amount),
-        tdsPercent: r.tds_percent === null ? null : Number(r.tds_percent),
+        tdsPercent: r.entered_percent === null ? null : Number(r.entered_percent),
         tdsPaise: paise(r.tds_amount),
         netPaise: paise(r.net_amount),
         declaration: !!r.declaration,

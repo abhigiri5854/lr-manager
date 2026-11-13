@@ -6,7 +6,8 @@
 // net_payable − paid): an allocation stores `amount` = cash paid (net) and `tds_amount` separately,
 // so the part of the challan it settles is amount + tds_amount ("gross").
 import { tdsPaise } from "./calc";
-import { fromPaise, toMilli, type Money } from "./money";
+import { formatRupees } from "../format";
+import { toMilli, type Money } from "./money";
 
 export type PaymentAllocationKind = "advance" | "balance";
 export type TruckPaymentMode = "bank" | "upi" | "cash" | "cheque" | "diesel";
@@ -56,7 +57,7 @@ export interface PaymentCalc {
   issues: PaymentIssue[];
 }
 
-const rupees = (paise: number) => `₹${fromPaise(paise)}`;
+const rupees = formatRupees;
 
 /**
  * TDS % is manual (default 0) and applies to BALANCE lines only: tds = round(challan gross credit ×

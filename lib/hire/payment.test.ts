@@ -111,7 +111,7 @@ describe("overpayIssues", () => {
 
   it("blocks one paisa over (drafts and pending payments count as committed)", () => {
     const issues = overpayIssues([line(40_000_01)], room({ committedPaise: 20_000_00 }));
-    expect(issues[0].message).toContain("only ₹40000.00 left");
+    expect(issues[0].message).toContain("only ₹40,000.00 left");
   });
 
   it("sums advance + balance lines on the same challan", () => {
