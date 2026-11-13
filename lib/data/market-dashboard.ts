@@ -27,13 +27,14 @@ export async function getMarketDashboard(companyId: string) {
   const bill = can(role, "bill.edit");
   const approve = can(role, "payment.approve");
   const month = thisMonthIst();
-  const [outstanding, pod, expiring, margin, moving, pending] = await Promise.all([
+  const [outstanding, pod, expiring, margin, moving, pending, ewb] = await Promise.all([
     view ? listHireOutstanding(companyId, { positive: true } as ReportFilters, NONE) : null,
     view ? listPodPending(companyId, {} as ReportFilters, NONE) : null,
     view ? db.getExpiringDocs(companyId, EXPIRY_DAYS) : null,
     bill ? listTripMargin(companyId, { ...month } as ReportFilters, NONE) : null,
     view ? db.getTrucksOnTheMove(companyId) : null,
     approve ? db.countPaymentsAwaitingApproval(companyId) : null,
+    view ? db.getEwbSummary(companyId) : null,
   ]);
   return {
     outstanding: outstanding && {
@@ -48,6 +49,7 @@ export async function getMarketDashboard(companyId: string) {
     },
     moving,
     pendingPayments: pending,
+    ewb,
   };
 }
 

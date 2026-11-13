@@ -295,6 +295,13 @@ export type ChallanLrLine = {
   /** kg */
   loadedWt: Decimal | null;
   freightAllocated: string;
+  /** E-way bill on this line (challan_lrs.ewb_*); all null when not entered. */
+  ewbNo: string | null;
+  /** yyyy-mm-dd */
+  ewbDate: string | null;
+  /** ISO instant */
+  ewbValidUpto: string | null;
+  ewbDistanceKm: number | null;
 };
 
 /** A hire-stage charge on a challan (direction comes from its charge type). */

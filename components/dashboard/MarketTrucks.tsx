@@ -65,7 +65,7 @@ function Box({
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export function MarketTrucks({ data }: { data: MarketDashboard }) {
-  const { outstanding, pod, expiring, margin, moving, pendingPayments } = data;
+  const { outstanding, pod, expiring, margin, moving, pendingPayments, ewb } = data;
   const boxes: ReactNode[] = [];
 
   if (outstanding)
@@ -124,6 +124,24 @@ export function MarketTrucks({ data }: { data: MarketDashboard }) {
           </ul>
         )}
       </Box>,
+    );
+
+  if (ewb)
+    boxes.push(
+      <Box
+        key="ewb"
+        href={`${BASE}/eway`}
+        label="E-way bills expired / under 24 h"
+        value={ewb.expired + ewb.under24h}
+        warning={ewb.expired + ewb.under24h + ewb.openTasks > 0}
+        sub={
+          <span className="flex flex-wrap gap-x-3">
+            <span className={cx(ewb.expired > 0 && "font-semibold text-danger")}>Expired: {ewb.expired}</span>
+            <span>Under 24 h: {ewb.under24h}</span>
+            <span>Part-B tasks: {ewb.openTasks}</span>
+          </span>
+        }
+      />,
     );
 
   if (margin)

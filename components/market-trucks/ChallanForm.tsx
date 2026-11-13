@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   challanInsightsAction,
   saveChallanAction,
@@ -30,10 +30,21 @@ import {
   challanRuleErrors,
   type ChallanInput,
 } from "@/lib/validators/challan";
+import { istLocalFromIso } from "@/lib/validators/challan-ewb";
 import { QuickAddDriverDrawer } from "./QuickAddDriverDrawer";
 import { QuickAddVehicleDrawer } from "./QuickAddVehicleDrawer";
 
-type Line = { pick: ChallanLrPick; pkgs: string; wt: string; wtTouched: boolean };
+type Line = {
+  pick: ChallanLrPick;
+  pkgs: string;
+  wt: string;
+  wtTouched: boolean;
+  /** E-way bill: no., generated date (yyyy-mm-dd), valid upto (India time, yyyy-mm-ddThh:mm), km */
+  ewbNo: string;
+  ewbDate: string;
+  ewbValidUpto: string;
+  ewbKm: string;
+};
 type Charge = { key: string; chargeTypeId: string; amount: string; note: string };
 type Named = { id: string; name: string };
 type VehiclePick = { id: string; vehicleNo: string; ownerName: string | null };
@@ -86,7 +97,18 @@ export function ChallanForm({
     (challan?.lrs ?? []).flatMap((l) => {
       const pick = pickById.get(l.lrId);
       return pick
-        ? [{ pick, pkgs: String(l.loadedPkgs), wt: l.loadedWt ?? "", wtTouched: true }]
+        ? [
+            {
+              pick,
+              pkgs: String(l.loadedPkgs),
+              wt: l.loadedWt ?? "",
+              wtTouched: true,
+              ewbNo: l.ewbNo ?? "",
+              ewbDate: l.ewbDate ?? "",
+              ewbValidUpto: istLocalFromIso(l.ewbValidUpto),
+              ewbKm: l.ewbDistanceKm === null ? "" : String(l.ewbDistanceKm),
+            },
+          ]
         : [];
     }),
   );
@@ -161,7 +183,19 @@ export function ChallanForm({
       return rest;
     });
     const pkgs = String(pick.remainingPkgs);
-    changeLines([...lines, { pick, pkgs, wt: defaultWt(pick, pkgs), wtTouched: false }]);
+    changeLines([
+      ...lines,
+      {
+        pick,
+        pkgs,
+        wt: defaultWt(pick, pkgs),
+        wtTouched: false,
+        ewbNo: "",
+        ewbDate: "",
+        ewbValidUpto: "",
+        ewbKm: "",
+      },
+    ]);
   }
 
   function setLine(i: number, patch: Partial<Line>) {
@@ -256,7 +290,15 @@ export function ChallanForm({
       rate: rate.trim() || "0",
       qtyTonnes: qty.trim(),
       remarks,
-      lrs: lines.map((l) => ({ lrId: l.pick.lrId, loadedPkgs: l.pkgs, loadedWt: l.wt.trim() })),
+      lrs: lines.map((l) => ({
+        lrId: l.pick.lrId,
+        loadedPkgs: l.pkgs,
+        loadedWt: l.wt.trim(),
+        ewbNo: l.ewbNo.trim(),
+        ewbDate: l.ewbDate.trim(),
+        ewbValidUpto: l.ewbValidUpto.trim(),
+        ewbDistanceKm: l.ewbKm.trim(),
+      })),
       charges: charges.map((c) => ({ chargeTypeId: c.chargeTypeId, amount: c.amount, note: c.note })),
       action,
     };
@@ -396,7 +438,8 @@ export function ChallanForm({
                 </thead>
                 <tbody>
                   {lines.map((l, i) => (
-                    <tr key={l.pick.lrId} className="border-t border-border align-top">
+                    <Fragment key={l.pick.lrId}>
+                    <tr className="border-t border-border align-top">
                       <td className="py-2 pr-3">
                         <b className="font-mono">{l.pick.lrNo}</b>
                         <div className="text-[13px] text-muted">
@@ -446,6 +489,44 @@ export function ChallanForm({
                         </Button>
                       </td>
                     </tr>
+                    <tr>
+                      <td colSpan={5} className="pb-3 pr-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                          <Field
+                            label={`E-way no., ${l.pick.lrNo}`}
+                            inputMode="numeric"
+                            maxLength={12}
+                            value={l.ewbNo}
+                            onChange={(e) => setLine(i, { ewbNo: e.target.value })}
+                            error={err(`lrs.${i}.ewbNo`)}
+                            hint="Optional"
+                          />
+                          <Field
+                            label="Generated on"
+                            type="date"
+                            value={l.ewbDate}
+                            onChange={(e) => setLine(i, { ewbDate: e.target.value })}
+                            error={err(`lrs.${i}.ewbDate`)}
+                          />
+                          <Field
+                            label="Valid upto"
+                            type="datetime-local"
+                            value={l.ewbValidUpto}
+                            onChange={(e) => setLine(i, { ewbValidUpto: e.target.value })}
+                            error={err(`lrs.${i}.ewbValidUpto`)}
+                            hint="Blank = computed from date + km"
+                          />
+                          <Field
+                            label="Distance (km)"
+                            inputMode="numeric"
+                            value={l.ewbKm}
+                            onChange={(e) => setLine(i, { ewbKm: e.target.value })}
+                            error={err(`lrs.${i}.ewbDistanceKm`)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

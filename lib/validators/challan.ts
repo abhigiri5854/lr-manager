@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isoDate, optional, optionalText, uuid, type RuleError } from "./common";
+import { ewbFields, ewbRuleErrors } from "./challan-ewb";
 
 // Challan create / edit (TIER1-MARKET-TRUCKS.md §6 screen 1, §9: TRIP / PER_TONNE, Pay to OWNER / BROKER).
 const money = z
@@ -19,6 +20,8 @@ export const challanLrFields = z.object({
   lrId: uuid,
   loadedPkgs: z.coerce.number("Enter number of packages, e.g. 10").int("Whole packages only").min(1, "At least 1 package"),
   loadedWt: optional(kg),
+  /** E-way details: key left out on a draft re-save = keep what the line had; empty = clear. */
+  ...ewbFields,
 });
 
 export const challanChargeFields = z.object({
@@ -56,6 +59,7 @@ export function challanRuleErrors(v: ChallanValues): RuleError[] {
   ids.forEach((id, i) => {
     if (ids.indexOf(id) !== i) out.push({ path: `lrs.${i}.lrId`, message: "This LR is added twice" });
   });
+  v.lrs.forEach((l, i) => out.push(...ewbRuleErrors(l, `lrs.${i}.`)));
   if (v.rateBasis === "per_tonne" && !v.qtyTonnes)
     out.push({ path: "qtyTonnes", message: "Tonnes are needed for a per-tonne rate" });
   if (v.payeeKind === "broker" && !v.brokerId)

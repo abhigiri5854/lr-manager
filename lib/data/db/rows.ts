@@ -270,6 +270,17 @@ export function toChallanLrLine(r: Row): ChallanLrLine {
     loadedPkgs: r.loaded_pkgs,
     loadedWt: r.loaded_wt,
     freightAllocated: r.freight_allocated,
+    ewbNo: r.ewb_no ?? null,
+    // Queries alias the date as text (ewb_date_text); a raw Date is converted as a fallback.
+    ewbDate:
+      r.ewb_date_text ?? (r.ewb_date instanceof Date ? r.ewb_date.toISOString().slice(0, 10) : (r.ewb_date ?? null)),
+    ewbValidUpto:
+      r.ewb_valid_upto instanceof Date
+        ? r.ewb_valid_upto.toISOString()
+        : r.ewb_valid_upto
+          ? new Date(r.ewb_valid_upto).toISOString()
+          : null,
+    ewbDistanceKm: r.ewb_distance_km ?? null,
   };
 }
 

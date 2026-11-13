@@ -12,6 +12,8 @@ import type {
   TripEventType,
 } from "@/lib/types";
 import type { ChallanValues } from "@/lib/validators/challan";
+import { VEHICLE_CHANGE_STATUSES, type ChallanVehicleChangeValues } from "@/lib/validators/challan-vehicle";
+import { isoFromIstLocal, type ChallanLrEwbValues } from "@/lib/validators/challan-ewb";
 import type { ChallanListFilters } from "@/lib/validators/challan-list";
 import { newId } from "../_store";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
@@ -210,7 +212,7 @@ async function loadChallan(tx: Tx, companyId: string, id: string): Promise<Chall
          left join truck_parties bk on bk.company_id = c.company_id and bk.id = c.broker_id
          left join truck_parties pp on pp.company_id = c.company_id and pp.id = c.payee_party_id
         where c.company_id = ${companyId} and c.id = ${id}`,
-    tx`select cl.*, l.lr_no from challan_lrs cl
+    tx`select cl.*, cl.ewb_date::text as ewb_date_text, l.lr_no from challan_lrs cl
          join lrs l on l.company_id = cl.company_id and l.id = cl.lr_id
         where cl.company_id = ${companyId} and cl.challan_id = ${id}
         order by cl.created_at, cl.id`,
@@ -341,6 +343,9 @@ export async function saveChallan(
         pick.totalPkgs > 0
           ? Math.round((pick.freightPaise * l.loadedPkgs) / pick.totalPkgs)
           : pick.freightPaise;
+      // E-way details: a caller that leaves all four out (draft re-save) keeps what this LR's line had.
+      const prev = existing?.lrs.find((x) => x.lrId === l.lrId);
+      const omitted = [l.ewbNo, l.ewbDate, l.ewbValidUpto, l.ewbDistanceKm].every((x) => x === undefined);
       lines.push({
         lrId: lr.id,
         lrNo: lr.lrNo,
@@ -348,6 +353,14 @@ export async function saveChallan(
         loadedWt: wt,
         wt,
         freightAllocated: fromPaise(freight),
+        ewbNo: omitted ? (prev?.ewbNo ?? null) : (l.ewbNo ?? null),
+        ewbDate: omitted ? (prev?.ewbDate ?? null) : (l.ewbDate ?? null),
+        ewbValidUpto: omitted
+          ? (prev?.ewbValidUpto ?? null)
+          : l.ewbValidUpto
+            ? isoFromIstLocal(l.ewbValidUpto)
+            : null,
+        ewbDistanceKm: omitted ? (prev?.ewbDistanceKm ?? null) : (l.ewbDistanceKm ?? null),
       });
     });
 
@@ -401,6 +414,10 @@ export async function saveChallan(
       loaded_pkgs: l.loadedPkgs,
       loaded_wt: l.wt,
       freight_allocated: l.freightAllocated,
+      ewb_no: l.ewbNo,
+      ewb_date: l.ewbDate,
+      ewb_valid_upto: l.ewbValidUpto,
+      ewb_distance_km: l.ewbDistanceKm,
     }));
     let row: Row;
     if (!id) {
@@ -450,10 +467,13 @@ export async function saveChallan(
 
     withCommit(
       tx,
-      tx`insert into challan_lrs (company_id, challan_id, lr_id, loaded_pkgs, loaded_wt, freight_allocated, created_by)
-         select ${companyId}::uuid, ${cid}::uuid, x.lr_id, x.loaded_pkgs, x.loaded_wt, x.freight_allocated, auth.uid()
+      tx`insert into challan_lrs (company_id, challan_id, lr_id, loaded_pkgs, loaded_wt, freight_allocated,
+                                  ewb_no, ewb_date, ewb_valid_upto, ewb_distance_km, created_by)
+         select ${companyId}::uuid, ${cid}::uuid, x.lr_id, x.loaded_pkgs, x.loaded_wt, x.freight_allocated,
+                x.ewb_no, x.ewb_date, x.ewb_valid_upto, x.ewb_distance_km, auth.uid()
            from jsonb_to_recordset(${tx.json(lineRows as never)}::jsonb)
-                as x(lr_id uuid, loaded_pkgs int, loaded_wt numeric, freight_allocated numeric)`,
+                as x(lr_id uuid, loaded_pkgs int, loaded_wt numeric, freight_allocated numeric,
+                     ewb_no text, ewb_date date, ewb_valid_upto timestamptz, ewb_distance_km int)`,
     );
     // Charges can't be deleted (no delete grant). On a draft they are updated in place, row by row;
     // extra new ones are inserted. Only rows left over after removals are soft-cancelled, which
@@ -525,11 +545,204 @@ export async function saveChallan(
         loadedPkgs: l.loadedPkgs,
         loadedWt: l.loadedWt,
         freightAllocated: l.freightAllocated,
+        ewbNo: l.ewbNo,
+        ewbDate: l.ewbDate,
+        ewbValidUpto: l.ewbValidUpto,
+        ewbDistanceKm: l.ewbDistanceKm,
       })),
       keptCharges ? oldCharges : charges,
     );
     audit(tx, companyId, "challans", cid, id ? "update" : "create", existing, saved);
     return saved;
+  });
+}
+
+// ---------- vehicle change + Part-B tasks (T1-11) ----------
+
+export type VehicleChangeResult = {
+  version: number;
+  vehicleNo: string;
+  /** Part-B tasks created (one per LR with an e-way no.) */
+  tasks: number;
+  warnings: string[];
+};
+
+/**
+ * Dispatched / on-the-road / POD-received challan gets another vehicle (and optionally driver). One
+ * statement updates the challan and inserts one ewb_tasks row per live LR line that has an e-way no.
+ * (own line first, else an LR invoice's). The payee is left alone; a warning says when the new
+ * vehicle's owner is not the payee.
+ */
+export async function changeChallanVehicle(
+  companyId: string,
+  id: string,
+  expectedVersion: number,
+  v: ChallanVehicleChangeValues,
+): Promise<VehicleChangeResult> {
+  if (!UUID.test(id)) throw new NotFoundError("Challan");
+  return withUser(async (tx) => {
+    const [existing, vehicles, drivers] = await Promise.all([
+      loadChallan(tx, companyId, id),
+      tx`select mv.id, mv.vehicle_no, mv.owner_party_id, mv.vehicle_type_id, p.name as owner_name
+           from market_vehicles mv
+           left join truck_parties p on p.company_id = mv.company_id and p.id = mv.owner_party_id
+          where mv.company_id = ${companyId} and mv.id = ${v.newVehicleId} and mv.cancelled_at is null`,
+      rowsIf(v.newDriverId, () =>
+        tx`select id from market_drivers
+            where company_id = ${companyId} and id = ${v.newDriverId ?? null} and cancelled_at is null`,
+      ),
+    ]);
+    if (!existing || existing.cancelledAt) throw new NotFoundError("Challan");
+    if (existing.version !== expectedVersion) throw new ConflictError();
+    const issues: { path: string; message: string }[] = [];
+    if (!(VEHICLE_CHANGE_STATUSES as readonly string[]).includes(existing.status))
+      issues.push({
+        path: "",
+        message:
+          existing.status === "settled"
+            ? "A settled challan can't change vehicle; reopen it first"
+            : "The vehicle can change only after the challan is dispatched",
+      });
+    const [vehicle] = vehicles;
+    if (!vehicle) issues.push({ path: "newVehicleId", message: "Vehicle not found in this company" });
+    else if (vehicle.id === existing.vehicleId)
+      issues.push({ path: "newVehicleId", message: "That vehicle is already on this challan" });
+    if (v.newDriverId && !drivers.length)
+      issues.push({ path: "newDriverId", message: "Driver not found in this company" });
+    if (issues.length) throw new ValidationError(issues);
+
+    const [row] = await tx`
+      with u as (
+        update challans
+           set vehicle_id = ${v.newVehicleId}::uuid,
+               vehicle_type_id = ${(vehicle.vehicle_type_id as string | null) ?? null}::uuid,
+               driver_id = coalesce(${v.newDriverId ?? null}::uuid, driver_id)
+         where company_id = ${companyId} and id = ${id} and version = ${expectedVersion}
+        returning id, version),
+      t as (
+        insert into ewb_tasks (company_id, challan_id, lr_id, ewb_no, old_vehicle_id, new_vehicle_id, note, created_by)
+        select ${companyId}::uuid, ${id}::uuid, cl.lr_id, e.no, ${existing.vehicleId ?? null}::uuid,
+               ${v.newVehicleId}::uuid, ${v.reason}::text, auth.uid()
+          from challan_lrs cl
+         cross join lateral (
+           select coalesce(cl.ewb_no, (
+             select i.eway_bill_no from lr_invoices i
+              where i.company_id = cl.company_id and i.lr_id = cl.lr_id and i.eway_bill_no is not null
+              order by i.position limit 1)) as no) e
+         where cl.company_id = ${companyId} and cl.challan_id = ${id}
+           and cl.transferred_to_challan_id is null and e.no is not null
+           and exists (select 1 from u)
+        returning id)
+      select u.version, (select count(*) from t)::int as tasks from u`;
+    if (!row) throw new ConflictError();
+
+    const warnings: string[] = [];
+    if (existing.payeeKind === "owner" && existing.payeePartyId && vehicle.owner_party_id !== existing.payeePartyId)
+      warnings.push(
+        `${vehicle.vehicle_no} belongs to ${vehicle.owner_name ?? "another owner"}, not the payee on this challan. Payments still go to ${existing.payeeName ?? "the existing payee"}.`,
+      );
+    audit(
+      tx,
+      companyId,
+      "challans",
+      id,
+      "update",
+      { vehicleId: existing.vehicleId ?? null, driverId: existing.driverId ?? null },
+      {
+        vehicleId: v.newVehicleId,
+        driverId: v.newDriverId ?? existing.driverId ?? null,
+        vehicleChangeReason: v.reason,
+        partBTasks: row.tasks as number,
+      },
+    );
+    return {
+      version: row.version as number,
+      vehicleNo: vehicle.vehicle_no as string,
+      tasks: row.tasks as number,
+      warnings,
+    };
+  });
+}
+
+/**
+ * Edit one LR line's e-way bill (no., generated date, valid upto, distance). Allowed on a draft or a
+ * challan that is dispatched / on the road / POD received, never settled or cancelled. The challan's
+ * version is checked (not bumped); the change is audited on the challan.
+ */
+export async function updateChallanLrEwb(
+  companyId: string,
+  id: string,
+  expectedVersion: number,
+  v: ChallanLrEwbValues,
+): Promise<ChallanLrLine> {
+  if (!UUID.test(id)) throw new NotFoundError("Challan");
+  return withUser(async (tx) => {
+    const existing = await loadChallan(tx, companyId, id);
+    if (!existing || existing.cancelledAt) throw new NotFoundError("Challan");
+    if (existing.version !== expectedVersion) throw new ConflictError();
+    if (existing.status !== "draft" && !(VEHICLE_CHANGE_STATUSES as readonly string[]).includes(existing.status))
+      throw new ValidationError([
+        {
+          path: "",
+          message:
+            existing.status === "settled"
+              ? "A settled challan's e-way bill can't change; reopen it first"
+              : "E-way details can't change on this challan",
+        },
+      ]);
+    const before = existing.lrs.find((l) => l.lrId === v.lrId);
+    if (!before) throw new ValidationError([{ path: "lrId", message: "That LR is not on this challan" }]);
+    const [r] = await tx`
+      with u as (
+        update challan_lrs
+           set ewb_no = ${v.ewbNo ?? null}::text, ewb_date = ${v.ewbDate ?? null}::date,
+               ewb_valid_upto = ${v.ewbValidUpto ? isoFromIstLocal(v.ewbValidUpto) : null}::timestamptz,
+               ewb_distance_km = ${v.ewbDistanceKm ?? null}::int
+         where company_id = ${companyId} and challan_id = ${id} and lr_id = ${v.lrId}::uuid
+        returning *)
+      select u.*, u.ewb_date::text as ewb_date_text, l.lr_no
+        from u join lrs l on l.company_id = u.company_id and l.id = u.lr_id`;
+    if (!r) throw new NotFoundError("Challan line");
+    const saved = toChallanLrLine(r);
+    const pick = (l: ChallanLrLine) => ({
+      lrId: l.lrId,
+      ewbNo: l.ewbNo,
+      ewbDate: l.ewbDate,
+      ewbValidUpto: l.ewbValidUpto,
+      ewbDistanceKm: l.ewbDistanceKm,
+    });
+    audit(tx, companyId, "challans", id, "update", pick(before), pick(saved));
+    return saved;
+  });
+}
+
+/** Marks one open Part-B task done (user + time recorded by the database); a note is appended. */
+export async function markEwbTaskDone(
+  companyId: string,
+  taskId: string,
+  note: string | null,
+): Promise<{ id: string; doneAt: string }> {
+  if (!UUID.test(taskId)) throw new NotFoundError("Task");
+  return withUser(async (tx) => {
+    const [r] = await tx`
+      update ewb_tasks
+         set done_at = now(), done_by = auth.uid(),
+             note = case when ${note}::text is null then note
+                         else coalesce(note || ' — ', '') || ${note}::text end
+       where company_id = ${companyId} and id = ${taskId} and done_at is null
+      returning id, challan_id, lr_id, done_at`;
+    if (!r) throw new NotFoundError("Open Part-B task");
+    const doneAt = r.done_at instanceof Date ? r.done_at.toISOString() : String(r.done_at);
+    audit(
+      tx,
+      companyId,
+      "ewb_tasks",
+      r.id as string,
+      "update",
+      { doneAt: null },
+      { doneAt, challanId: r.challan_id as string, lrId: r.lr_id as string, note },
+    );
+    return { id: r.id as string, doneAt };
   });
 }
 

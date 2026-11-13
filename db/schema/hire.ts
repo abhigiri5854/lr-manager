@@ -382,6 +382,8 @@ export const challanLrs = pgTable(
     ewbNo: text("ewb_no"),
     ewbDate: date("ewb_date", { mode: "string" }),
     ewbValidUpto: ts("ewb_valid_upto"),
+    /** Distance for the computed expiry when ewb_valid_upto is empty (0026_ewb_tasks.sql). */
+    ewbDistanceKm: integer("ewb_distance_km"),
     /** Set when the LR moves to another challan (vehicle change / transshipment). */
     transferredToChallanId: uuid("transferred_to_challan_id"),
     createdAt: ts("created_at").notNull().defaultNow(),
@@ -402,9 +404,40 @@ export const challanLrs = pgTable(
       sql`delivered_pkgs is null or delivered_pkgs <= loaded_pkgs`,
     ),
     check("challan_lrs_ewb_check", sql`ewb_no is null or ewb_no ~ '^[0-9]{12}$'`),
+    check("challan_lrs_ewb_distance_check", sql`ewb_distance_km is null or ewb_distance_km >= 0`),
     index("challan_lrs_company_ewb_idx")
       .on(t.companyId, t.ewbValidUpto)
       .where(sql`ewb_valid_upto is not null and transferred_to_challan_id is null`),
+  ],
+).enableRLS();
+
+/** "Update Part-B" tasks: one per LR with an e-way bill when a dispatched challan changes vehicle (0026). */
+export const ewbTasks = pgTable(
+  "ewb_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: companyId(),
+    challanId: uuid("challan_id").notNull(),
+    lrId: uuid("lr_id").notNull(),
+    ewbNo: text("ewb_no"),
+    oldVehicleId: uuid("old_vehicle_id"),
+    newVehicleId: uuid("new_vehicle_id").notNull(),
+    note: text("note"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    createdBy: uuid("created_by").references(byUser),
+    doneAt: ts("done_at"),
+    doneBy: uuid("done_by").references(byUser),
+  },
+  (t) => [
+    check("ewb_tasks_done_check", sql`(done_at is null) = (done_by is null)`),
+    ...companyFk("ewb_tasks_challan", t.companyId, t.challanId, challans, false),
+    ...companyFk("ewb_tasks_lr", t.companyId, t.lrId, lrs, false),
+    ...companyFk("ewb_tasks_old_vehicle", t.companyId, t.oldVehicleId, marketVehicles),
+    ...companyFk("ewb_tasks_new_vehicle", t.companyId, t.newVehicleId, marketVehicles, false),
+    index("ewb_tasks_open_idx")
+      .on(t.companyId, t.createdAt.desc())
+      .where(sql`done_at is null`),
+    index("ewb_tasks_challan_idx").on(t.companyId, t.challanId),
   ],
 ).enableRLS();
 

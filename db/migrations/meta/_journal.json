@@ -183,6 +183,13 @@
       "when": 1794627342000,
       "tag": "0025_hire_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794713742000,
+      "tag": "0026_ewb_tasks",
+      "breakpoints": true
     }
   ]
 }

@@ -1,20 +1,71 @@
-﻿pnpm.exe : $ vitest run --config vitest.db.config.mts --exclude "db/tests/**/*.slow.test.ts" db/tests/hire-reports.test.ts
+﻿pnpm.exe : $ vitest run --config vitest.db.config.mts --exclude "db/tests/**/*.slow.test.ts" db/tests/ewb-tasks.test.ts
 At C:\Users\asus\AppData\Roaming\npm\pnpm.ps1:14 char:3
 +   & "$basedir/node_modules/pnpm/pnpm.exe"   $args
 +   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ($ vitest run --...reports.test.ts:String) [], RemoteException
+    + CategoryInfo          : NotSpecified: ($ vitest run --...b-tasks.test.ts:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  
 
 [1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/soap/tms[39m
 
- [32mΓ£ô[39m db/tests/hire-reports.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 6480[2mms[22m[39m
-   [32mΓ£ô[39m v_tds_register [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m shows TDS ├╖ (cash paid + TDS) for a part BALANCE payment, gross = amount + TDS, July = Q2[33m 2840[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m lists a declared party's BALANCE payment at 0% TDS, but not an undeclared one[33m 3567[2mms[22m[39m
+ [31mΓ¥»[39m db/tests/ewb-tasks.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 55092[2mms[22m[39m
+   [31mΓ¥»[39m vehicle change creates Part-B tasks [2m(3)[22m
+     [33m[2mΓ£ô[22m[39m one task per LR with an e-way no. (own line or LR invoice), none for the rest[33m 8464[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m warns when the new vehicle's owner is not the payee, and leaves the payee alone[33m 4888[2mms[22m[39m
+[31m     [31m├ù[31m refuses a settled challan[39m[33m 3490[2mms[22m[39m
+   [32mΓ£ô[39m Part-B tasks: mark done and company isolation [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m records who and when; a done task can't be done twice[33m 6458[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m another company can't see or finish them[33m 8094[2mms[22m[39m
+   [31mΓ¥»[39m e-way entry per LR line [2m(3)[22m
+     [33m[2mΓ£ô[22m[39m saves the fields; only date + distance gives a computed expiry; a typed valid-upto wins[33m 7910[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a draft re-save keeps the line's e-way fields unless the caller sends them[33m 8191[2mms[22m[39m
+[31m     [31m├ù[31m a settled challan refuses the edit; a draft allows it[39m[33m 3431[2mms[22m[39m
+   [32mΓ£ô[39m e-way lines [2m(1)[22m
+     [33m[2mΓ£ô[22m[39m falls back to LR invoice data, computes the expiry from date + distance, marks entered vs computed[33m 3988[2mms[22m[39m
 
-[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[32m2 passed[39m[22m[90m (2)[39m
-[2m   Start at [22m 11:15:30
-[2m   Duration [22m 8.24s[2m (tests 83%, import 15%, transform 2%)[22m
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m[1m[41m Failed Tests 2 [49m[22m[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m
 
+[41m[1m FAIL [22m[49m db/tests/ewb-tasks.test.ts[2m > [22mvehicle change creates Part-B tasks[2m > [22mrefuses a settled challan
+[31m[1mPostgresError[22m: Only a challan with its POD received can be settled[39m
+[90m [2mΓ¥»[22m ErrorResponse node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:[2m815:30[22m[39m
+[90m [2mΓ¥»[22m handle node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:[2m489:6[22m[39m
+[90m [2mΓ¥»[22m Socket.data node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:[2m324:9[22m[39m
+[90m [2mΓ¥»[22m cachedError node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/query.js:[2m170:23[22m[39m
+[90m [2mΓ¥»[22m new Query node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/query.js:[2m36:24[22m[39m
+[90m [2mΓ¥»[22m sql node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/index.js:[2m112:11[22m[39m
+[36m [2mΓ¥»[22m db/tests/ewb-tasks.test.ts:[2m149:14[22m[39m
+    [90m147|[39m     const v2 = await vehicle(t.companyId, "BR01BB6666");
+    [90m148|[39m     const ch = await challanWithEwb(t.companyId, v1);
+    [90m149|[39m     await sql`update challans set status = 'settled', pod_received_at ΓÇª
+    [90m   |[39m              [31m^[39m
+    [90m150|[39m     const [{ version }] = await sql`select version from challans whereΓÇª
+    [90m151|[39m     await expect(
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/2]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m db/tests/ewb-tasks.test.ts[2m > [22me-way entry per LR line[2m > [22ma settled challan refuses the edit; a 
+draft allows it
+[31m[1mPostgresError[22m: Only a challan with its POD received can be settled[39m
+[90m [2mΓ¥»[22m ErrorResponse node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:[2m815:30[22m[39m
+[90m [2mΓ¥»[22m handle node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:[2m489:6[22m[39m
+[90m [2mΓ¥»[22m Socket.data node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/connection.js:[2m324:9[22m[39m
+[90m [2mΓ¥»[22m cachedError node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/query.js:[2m170:23[22m[39m
+[90m [2mΓ¥»[22m new Query node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/query.js:[2m36:24[22m[39m
+[90m [2mΓ¥»[22m sql node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/index.js:[2m112:11[22m[39m
+[36m [2mΓ¥»[22m db/tests/ewb-tasks.test.ts:[2m317:14[22m[39m
+    [90m315|[39m     const v1 = await vehicle(t.companyId, "BR01EE1414");
+    [90m316|[39m     const ch = await challanWithEwb(t.companyId, v1);
+    [90m317|[39m     await sql`update challans set status = 'settled', pod_received_at ΓÇª
+    [90m   |[39m              [31m^[39m
+    [90m318|[39m     const [{ version }] = await sql`select version from challans whereΓÇª
+    [90m319|[39m     await expect(
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/2]ΓÄ»[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (9)[39m
+[2m   Start at [22m 11:39:58
+[2m   Duration [22m 58.62s[2m (tests 95%, import 4%, transform 1%)[22m
+
+[ELIFECYCLE] Command failed with exit code 1.

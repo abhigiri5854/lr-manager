@@ -73,6 +73,12 @@ export const navGroups: NavGroup[] = [
         action: "freight.view",
       },
       {
+        label: "E-way bills",
+        href: "/market-trucks/eway",
+        isActive: startsWith("/market-trucks/eway"),
+        action: "freight.view",
+      },
+      {
         label: "Truck parties",
         href: "/market-trucks/parties",
         isActive: startsWith("/market-trucks/parties"),

@@ -1,5 +1,7 @@
 // Small read-only summaries for the dashboard "Market trucks" row. Company-scoped, one query each.
+import { ewbBucket } from "@/lib/hire/ewb-expiry";
 import { withUserRead } from "./conn";
+import { listEwbLines, listOpenEwbTasks } from "./ewb";
 
 const num = (v: unknown) => Number(v ?? 0);
 
@@ -99,6 +101,21 @@ export async function getTrucksOnTheMove(companyId: string) {
       ),
     };
   });
+}
+
+/** E-way bills on live challans already expired or expiring within 24 h, plus open Part-B tasks. */
+export async function getEwbSummary(companyId: string) {
+  const now = new Date();
+  const [lines, tasks] = await Promise.all([listEwbLines(companyId), listOpenEwbTasks(companyId)]);
+  let expired = 0;
+  let under24h = 0;
+  for (const l of lines) {
+    if (!l.validUpto) continue;
+    const b = ewbBucket(l.validUpto, now);
+    if (b === "expired") expired++;
+    else if (b === "under6h" || b === "under24h") under24h++;
+  }
+  return { expired, under24h, openTasks: tasks.length };
 }
 
 export async function countPaymentsAwaitingApproval(companyId: string) {

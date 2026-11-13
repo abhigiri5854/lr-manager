@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ChallanForm } from "@/components/market-trucks/ChallanForm";
+import { ChallanEwb } from "@/components/market-trucks/ChallanEwb";
+import { ChangeVehicle } from "@/components/market-trucks/ChangeVehicle";
+import { EwbTasks } from "@/components/market-trucks/EwbTasks";
+import { getOpenEwbTasks } from "@/lib/data/ewb";
+import { VEHICLE_CHANGE_STATUSES } from "@/lib/validators/challan-vehicle";
 import { ChallanPayments } from "@/components/market-trucks/ChallanPayments";
 import { ChallanPod } from "@/components/market-trucks/ChallanPod";
 import { ChallanTrip } from "@/components/market-trucks/ChallanTrip";
@@ -39,7 +44,7 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
   const challan = await getChallan(companyId, id);
   if (!challan || challan.cancelledAt) notFound();
   const canTrip = can(role, "master.edit");
-  const [picks, branches, chargeTypes, payments, settlement, tripEvents, driverRows] = await Promise.all([
+  const [picks, branches, chargeTypes, payments, settlement, tripEvents, driverRows, ewbTasks] = await Promise.all([
     getChallanLrPicks(companyId, challan.id, challan.lrs.map((l) => l.lrId)),
     listBranches(companyId),
     listChargeTypes(companyId),
@@ -47,7 +52,10 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
     getChallanSettlement(companyId, challan.id),
     listTripEvents(companyId, challan.id),
     challan.driverId ? getMarketDriverById(companyId, challan.driverId) : Promise.resolve(null),
+    getOpenEwbTasks(companyId, challan.id),
   ]);
+  const canChangeVehicle =
+    canTrip && (VEHICLE_CHANGE_STATUSES as readonly string[]).includes(challan.status);
   const driverRow = driverRows;
   return (
     <>
@@ -62,7 +70,17 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
         }
         breadcrumb={[{ label: "Dashboard", href: "/" }, { label: `Challan ${challan.challanNo}` }]}
         breadcrumbPlacement="inline"
+        actions={
+          canChangeVehicle ? (
+            <ChangeVehicle
+              challanId={challan.id}
+              version={challan.version}
+              currentVehicleNo={challan.vehicleNo ?? null}
+            />
+          ) : undefined
+        }
       />
+      <EwbTasks tasks={ewbTasks} canEdit={canTrip} />
       <ChallanForm
         challan={challan}
         initialPicks={picks}
@@ -74,6 +92,14 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
         )}
         today={todayInIndia()}
       />
+      {challan.status !== "draft" && (
+        <ChallanEwb
+          challanId={challan.id}
+          version={challan.version}
+          lines={challan.lrs}
+          canEdit={canTrip && challan.status !== "settled"}
+        />
+      )}
       {challan.status !== "draft" && (
         <ChallanTrip
           challanId={challan.id}

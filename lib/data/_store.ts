@@ -224,7 +224,8 @@ export type TableName =
   | "truck_payments"
   | "driver_links"
   | "share_links"
-  | "trip_events";
+  | "trip_events"
+  | "ewb_tasks";
 
 // ---------- small utilities ----------
 export const now = () => new Date().toISOString();

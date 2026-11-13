@@ -3,7 +3,19 @@
 // Server actions for the challan screen. Role checks happen in lib/data (lr.edit to save).
 import { revalidatePath } from "next/cache";
 import type { ChallanInsightQuery, ChallanInsights } from "@/lib/challan-insights";
-import { getChallanInsights, saveChallan, searchBrokers, searchChallanLrs } from "@/lib/data/challans";
+import {
+  changeChallanVehicle,
+  getChallanInsights,
+  markEwbTaskDone,
+  saveChallan,
+  searchBrokers,
+  searchChallanLrs,
+  updateChallanLrEwb,
+} from "@/lib/data/challans";
+import type { ChallanLrLine } from "@/lib/types";
+import type { ChallanLrEwbInput } from "@/lib/validators/challan-ewb";
+import type { VehicleChangeResult } from "@/lib/data/db/challans";
+import type { ChallanVehicleChangeInput } from "@/lib/validators/challan-vehicle";
 import {
   recordChallanPod,
   reopenChallan,
@@ -106,6 +118,54 @@ export async function reopenChallanAction(
     const state = await reopenChallan(await getActiveCompanyId(), id, expectedVersion, input);
     touched(id);
     return { ok: true, state };
+  } catch (e) {
+    return toFailure(e);
+  }
+}
+
+// ---------- vehicle change + Part-B tasks (master.edit, checked in lib/data) ----------
+export async function changeChallanVehicleAction(
+  id: string,
+  expectedVersion: number,
+  input: ChallanVehicleChangeInput,
+): Promise<({ ok: true } & VehicleChangeResult) | ActionFailure> {
+  try {
+    const r = await changeChallanVehicle(await getActiveCompanyId(), id, expectedVersion, input);
+    touched(id);
+    revalidatePath("/market-trucks/eway");
+    revalidatePath("/");
+    return { ok: true, ...r };
+  } catch (e) {
+    return toFailure(e);
+  }
+}
+
+export async function updateChallanLrEwbAction(
+  id: string,
+  expectedVersion: number,
+  input: ChallanLrEwbInput,
+): Promise<{ ok: true; line: ChallanLrLine } | ActionFailure> {
+  try {
+    const line = await updateChallanLrEwb(await getActiveCompanyId(), id, expectedVersion, input);
+    touched(id);
+    revalidatePath("/market-trucks/eway");
+    revalidatePath("/");
+    return { ok: true, line };
+  } catch (e) {
+    return toFailure(e);
+  }
+}
+
+export async function markEwbTaskDoneAction(
+  taskId: string,
+  note?: string | null,
+): Promise<{ ok: true } | ActionFailure> {
+  try {
+    await markEwbTaskDone(await getActiveCompanyId(), taskId, note);
+    revalidatePath("/market-trucks/eway");
+    revalidatePath("/market-trucks/challans/[id]", "page");
+    revalidatePath("/");
+    return { ok: true };
   } catch (e) {
     return toFailure(e);
   }

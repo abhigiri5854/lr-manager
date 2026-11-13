@@ -142,6 +142,10 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   createTruckParty: ["master.edit", () => truckParties.createTruckParty(c(), {} as never)],
   updateTruckParty: ["master.edit", () => truckParties.updateTruckParty(c(), X, 1, {})],
   saveChallan: ["lr.edit", () => challans.saveChallan(c(), null, null, {} as never)],
+  // E-way checklist (T1-11): vehicle change + Part-B tasks = master.edit.
+  changeChallanVehicle: ["master.edit", () => challans.changeChallanVehicle(c(), X, 1, {} as never)],
+  updateChallanLrEwb: ["master.edit", () => challans.updateChallanLrEwb(c(), X, 1, {} as never)],
+  markEwbTaskDone: ["master.edit", () => challans.markEwbTaskDone(c(), X)],
   // Truck payments: making / submitting / paying = bill.edit; approving / reversing = payment.approve.
   createTruckPayment: ["bill.edit", () => truckPayments.createTruckPayment(c(), {} as never)],
   submitTruckPayment: ["bill.edit", () => truckPayments.submitTruckPayment(c(), X, 1, {})],

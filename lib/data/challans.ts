@@ -1,11 +1,20 @@
 import type { ChallanInsightQuery, ChallanInsights } from "@/lib/challan-insights";
-import type { ChallanLrPick, ChallanView } from "@/lib/types";
+import type { ChallanLrLine, ChallanLrPick, ChallanView } from "@/lib/types";
+import {
+  challanLrEwbFields,
+  ewbRuleErrors,
+  type ChallanLrEwbInput,
+} from "@/lib/validators/challan-ewb";
 import {
   challanFields,
   challanRuleErrors,
   type ChallanInput,
 } from "@/lib/validators/challan";
 import type { ChallanListFilters } from "@/lib/validators/challan-list";
+import {
+  challanVehicleChangeFields,
+  type ChallanVehicleChangeInput,
+} from "@/lib/validators/challan-vehicle";
 import { parseInput } from "./_store";
 import * as dbc from "./db/challans";
 import { ValidationError } from "./errors";
@@ -52,6 +61,46 @@ export async function saveChallan(
     await Promise.allSettled(saved.lrs.map((l) => dispatchLrOnChallan(companyId, l.lrId, saved.id)));
   }
   return saved;
+}
+
+/**
+ * Another vehicle (and optionally driver) on a dispatched / POD-received challan; creates one
+ * "Update Part-B" task per LR with an e-way no. Needs master.edit.
+ */
+export async function changeChallanVehicle(
+  companyId: string,
+  id: string,
+  expectedVersion: number,
+  input: ChallanVehicleChangeInput,
+): Promise<dbc.VehicleChangeResult> {
+  await assertCan(companyId, "master.edit");
+  const values = parseInput(challanVehicleChangeFields, input);
+  return dbc.changeChallanVehicle(companyId, id, expectedVersion, values);
+}
+
+/** E-way bill details of one LR line (draft or on the road, not settled). Needs master.edit. */
+export async function updateChallanLrEwb(
+  companyId: string,
+  id: string,
+  expectedVersion: number,
+  input: ChallanLrEwbInput,
+): Promise<ChallanLrLine> {
+  await assertCan(companyId, "master.edit");
+  const values = parseInput(challanLrEwbFields, input);
+  const issues = ewbRuleErrors(values, "");
+  if (issues.length) throw new ValidationError(issues);
+  return dbc.updateChallanLrEwb(companyId, id, expectedVersion, values);
+}
+
+/** Marks a Part-B task done. Needs master.edit. */
+export async function markEwbTaskDone(
+  companyId: string,
+  taskId: string,
+  note?: string | null,
+): Promise<{ id: string; doneAt: string }> {
+  await assertCan(companyId, "master.edit");
+  const text = note?.trim().slice(0, 300) || null;
+  return dbc.markEwbTaskDone(companyId, taskId, text);
 }
 
 /** Register rows (50 per page) for the filters. Reading is freight.view (RLS + the page check). */
