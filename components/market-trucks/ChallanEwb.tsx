@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 import { updateChallanLrEwbAction } from "@/app/(app)/market-trucks/challans/actions";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { DateField } from "@/components/ui/DateField";
 import { Field } from "@/components/ui/Field";
 import { formatDate } from "@/lib/format";
 import { formatDateTime } from "@/lib/driver-app/format";
@@ -81,7 +82,7 @@ function Row({
               value={no}
               onChange={(e) => setNo(e.target.value)}
             />
-            <Field label="Generated on" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateField label="Generated on" value={date} onChange={setDate} />
             <Field
               label="Valid upto"
               type="datetime-local"

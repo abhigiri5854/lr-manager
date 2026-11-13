@@ -101,7 +101,7 @@ export function TripDetail({
           <p className="font-mono text-xl font-semibold">
             {t("challan")} {trip.challanNo}
           </p>
-          <span className={chipNeutral}>{humanStatus(trip.status)}</span>
+          <span className={chipNeutral}>{humanStatus(trip.status, t)}</span>
         </div>
         <p className="mt-1 font-mono text-lg">{trip.vehicleNo ?? "—"}</p>
         <p className="text-base">

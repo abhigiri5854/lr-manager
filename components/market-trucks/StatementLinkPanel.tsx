@@ -43,6 +43,7 @@ export function StatementLinkPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [waHref, setWaHref] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [acting, setActing] = useState<"send" | "copy" | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -90,6 +91,7 @@ export function StatementLinkPanel({
   }
 
   function send() {
+    setActing("send");
     run(async () => {
       const r = await getStatementLinkAction(partyId);
       if (!r.ok) return setError(r.message);
@@ -101,6 +103,7 @@ export function StatementLinkPanel({
   }
 
   function copy() {
+    setActing("copy");
     run(async () => {
       const r = await getStatementLinkAction(partyId);
       if (!r.ok) return setError(r.message);
@@ -149,10 +152,10 @@ export function StatementLinkPanel({
       {canEdit && (
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={send} disabled={pending || noMobile}>
-            Send statement on WhatsApp
+            {pending && acting === "send" ? "…" : "Send statement on WhatsApp"}
           </Button>
           <Button variant="secondary" onClick={copy} disabled={pending}>
-            Copy link
+            {pending && acting === "copy" ? "…" : "Copy link"}
           </Button>
           {active && (
             <Button variant="secondary" onClick={() => setConfirmRevoke(true)} disabled={pending}>

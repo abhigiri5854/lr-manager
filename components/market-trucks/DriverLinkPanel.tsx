@@ -51,6 +51,7 @@ export function DriverLinkPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [waHref, setWaHref] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [acting, setActing] = useState<"send" | "copy" | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -74,6 +75,7 @@ export function DriverLinkPanel({
   };
 
   function send() {
+    setActing("send");
     setError(null);
     setNotice(null);
     setWaHref(null);
@@ -88,6 +90,7 @@ export function DriverLinkPanel({
   }
 
   function copy() {
+    setActing("copy");
     setError(null);
     setNotice(null);
     startTransition(async () => {
@@ -161,10 +164,10 @@ export function DriverLinkPanel({
       {canEdit && (
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={send} disabled={pending || noMobile}>
-            Send app link on WhatsApp
+            {pending && acting === "send" ? "…" : "Send app link on WhatsApp"}
           </Button>
           <Button variant="secondary" onClick={copy} disabled={pending}>
-            Copy link
+            {pending && acting === "copy" ? "…" : "Copy link"}
           </Button>
           {active && (
             <Button variant="secondary" onClick={() => setConfirmRevoke(true)} disabled={pending}>

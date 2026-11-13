@@ -2,10 +2,16 @@
 
 import type { DriverTrip } from "@/lib/types";
 import { formatDate } from "@/lib/driver-app/format";
+import type { Key } from "@/lib/driver-app/i18n";
 import { useDriver } from "./DriverProvider";
 import { card, chipNeutral, chipOk, chipWarn } from "./ui";
 
-export const humanStatus = (s: string) => s.replace(/_/g, " ");
+/** Trip status chip text in the driver's language (falls back to the raw status). */
+export const humanStatus = (s: string, t: (k: Key) => string): string => {
+  const key = `st_${s}` as Key;
+  const label = t(key);
+  return label && label !== key ? label : s.replace(/_/g, " ");
+};
 
 export function TripCard({ trip, onOpen }: { trip: DriverTrip; onOpen: () => void }) {
   const { t } = useDriver();
@@ -20,7 +26,7 @@ export function TripCard({ trip, onOpen }: { trip: DriverTrip; onOpen: () => voi
         <p className="font-mono text-xl font-semibold">
           {t("challan")} {trip.challanNo}
         </p>
-        <span className={chipNeutral}>{humanStatus(trip.status)}</span>
+        <span className={chipNeutral}>{humanStatus(trip.status, t)}</span>
       </div>
       <p className="mt-1 font-mono text-lg">{trip.vehicleNo ?? "—"}</p>
       <p className="text-base">

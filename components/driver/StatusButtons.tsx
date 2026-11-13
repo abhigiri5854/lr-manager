@@ -45,6 +45,7 @@ export function StatusButtons({ token, trip, reload }: { token: string; trip: Dr
               <button
                 type="button"
                 disabled={trip.readOnly || busy !== null}
+                aria-busy={busy === type}
                 onClick={() => void tap(type)}
                 className={`${at && !queued ? btnOutline : btnPrimary} w-full`}
               >

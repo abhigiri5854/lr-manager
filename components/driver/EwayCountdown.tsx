@@ -26,7 +26,8 @@ export function EwayCountdown({ no, expiresAt }: { no: string; expiresAt: string
       <span className="text-muted">{t("eway")}: </span>
       <span className="font-mono font-semibold">{no}</span>
       {expiresAt && left !== null && (
-        <span className={`ml-2 font-semibold ${urgent ? "text-red-700" : "text-success"}`}>
+        <span className={`font-semibold ${urgent ? "text-red-700" : "text-success"}`}>
+          <span className="font-normal text-muted"> · </span>
           {expired ? t("ewayExpired") : t("ewayLeft", { left: formatLeft(left) })}
           <span className="ml-1 font-normal text-muted">({formatDateTime(expiresAt)})</span>
         </span>
