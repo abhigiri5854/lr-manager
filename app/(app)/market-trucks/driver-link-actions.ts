@@ -16,7 +16,7 @@ import { toFailure, type ActionFailure } from "./failure";
 /** Expected errors keep their message; anything else (e.g. missing secret / base URL) becomes a friendly one. */
 function linkFailure(e: unknown): ActionFailure {
   try {
-    return linkFailure(e);
+    return toFailure(e);
   } catch {
     console.error("driver-link action failed", e);
     const msg = e instanceof Error ? e.message : "";
