@@ -169,6 +169,13 @@
       "when": 1794454542000,
       "tag": "0023_driver_links",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794540942000,
+      "tag": "0024_party_statement_links",
+      "breakpoints": true
     }
   ]
 }

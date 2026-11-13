@@ -49,7 +49,7 @@ export { DriverLinkError, TooManyRequestsError };
 const DB_ONLY = "Driver links need the database";
 
 /** Where links point. Required (never taken from the request's Host header). */
-function appBaseUrl(): string {
+export function appBaseUrl(): string {
   const base = process.env.APP_BASE_URL?.trim();
   if (!base || !/^https?:\/\/[^/\s]+/.test(base)) {
     throw new Error("APP_BASE_URL must be set (.env.local), e.g. https://lr.example.com, to build driver links");

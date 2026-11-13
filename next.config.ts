@@ -41,6 +41,15 @@ const nextConfig: NextConfig = {
     ].join("; ");
     return [
       {
+        // Truck-owner statement (/s/<token>): the token is the credential; the page is printable, so no CSP here.
+        source: "/s/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
+      {
         source: "/d/:path*",
         headers: [
           { key: "Referrer-Policy", value: "no-referrer" },

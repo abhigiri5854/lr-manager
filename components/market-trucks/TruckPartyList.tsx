@@ -17,7 +17,13 @@ import { truckPartyRoleLabel } from "./labels";
 const BASE = "/market-trucks/parties";
 
 const columns: Column<TruckPartyRow>[] = [
-  { key: "name", header: "Name", cell: (r) => r.name, wrap: true, sticky: true },
+  {
+    key: "name",
+    header: "Name",
+    cell: (r) => <Link href={`${BASE}/${r.id}`}>{r.name}</Link>,
+    wrap: true,
+    sticky: true,
+  },
   { key: "role", header: "Role", cell: (r) => truckPartyRoleLabel[r.role] },
   { key: "mobile", header: "Mobile", cell: (r) => r.mobile ?? "—" },
   { key: "pan", header: "PAN", cell: (r) => r.pan ?? "—", mono: true },

@@ -223,6 +223,7 @@ export type TableName =
   | "challan_charges"
   | "truck_payments"
   | "driver_links"
+  | "share_links"
   | "trip_events";
 
 // ---------- small utilities ----------

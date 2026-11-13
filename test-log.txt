@@ -1,63 +1,104 @@
-﻿pnpm.exe : $ vitest run --config vitest.db.config.mts --exclude "db/tests/**/*.slow.test.ts" db/tests/driver-links.test.ts 
-db/tests/challan-pod.test.ts
+﻿pnpm.exe : $ vitest run --config vitest.db.config.mts --exclude "db/tests/**/*.slow.test.ts" db/tests/party-statements.test.ts 
+db/tests/driver-links.test.ts
 At C:\Users\asus\AppData\Roaming\npm\pnpm.ps1:14 char:3
 +   & "$basedir/node_modules/pnpm/pnpm.exe"   $args
 +   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ($ vitest run --...lan-pod.test.ts:String) [], RemoteException
+    + CategoryInfo          : NotSpecified: ($ vitest run --...r-links.test.ts:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  
 
 [1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/soap/tms[39m
 
- [32mΓ£ô[39m db/tests/driver-links.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 105532[2mms[22m[39m
-   [32mΓ£ô[39m owner side: the driver's link [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m resend returns the same URL; max one active link; revoke kills it and a new one differs[33m 8296[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m needs master.edit: a driver login is refused[33m 4494[2mms[22m[39m
+ [31mΓ¥»[39m db/tests/driver-links.test.ts [2m([22m[2m20 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 95559[2mms[22m[39m
+   [31mΓ¥»[39m owner side: the driver's link [2m(2)[22m
+[31m     [31m├ù[31m resend returns the same URL; max one active link; revoke kills it and a new one differs[39m[33m 5075[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m needs master.edit: a driver login is refused[33m 3603[2mms[22m[39m
    [32mΓ£ô[39m token side: revoked / expired [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m an expired token gets nothing; the owner's next link replaces it[33m 6535[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a revoked token gets nothing and can't write[33m 5016[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m an expired token gets nothing; the owner's next link replaces it[33m 5379[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a revoked token gets nothing and can't write[33m 4613[2mms[22m[39m
    [32mΓ£ô[39m token side: own trips only [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m driver A can't see or act on driver B's challan[33m 5624[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m another company's challan is impossible, and its owner can't read these events[33m 7327[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m driver A can't see or act on driver B's challan[33m 4710[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m another company's challan is impossible, and its owner can't read these events[33m 6525[2mms[22m[39m
    [32mΓ£ô[39m token side: settled challans [2m(1)[22m
-     [33m[2mΓ£ô[22m[39m settled recently: shown read-only, refuses events and POD; settled long ago: not shown[33m 4946[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m settled recently: shown read-only, refuses events and POD; settled long ago: not shown[33m 5140[2mms[22m[39m
    [32mΓ£ô[39m token side: POD from the link [2m(3)[22m
-     [33m[2mΓ£ô[22m[39m attaches to the LR's POD and moves the challan to pod_received; a second photo is added[33m 4906[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m more packages than loaded, or a future delivery date, is refused and nothing is saved[33m 4184[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a non-image / non-PDF file is refused before anything is stored[33m 3105[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m attaches to the LR's POD and moves the challan to pod_received; a second photo is added[33m 4813[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m more packages than loaded, or a future delivery date, is refused and nothing is saved[33m 3960[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a non-image / non-PDF file is refused before anything is stored[33m 2945[2mms[22m[39m
    [32mΓ£ô[39m trips never carry money but the advance [2m(1)[22m
-     [33m[2mΓ£ô[22m[39m no hire, freight, rate, margin or balance anywhere in the payload[33m 3436[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m no hire, freight, rate, margin or balance anywhere in the payload[33m 3323[2mms[22m[39m
    [32mΓ£ô[39m trip events [2m(4)[22m
-     [33m[2mΓ£ô[22m[39m staff events work; the driver's repeated event updates its one row; staff can't fake a driver event[33m 7004[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a driver event without location is still saved, location null[33m 4130[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a repeated driver event without location keeps the stored location[33m 3638[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a draft or cancelled challan takes no staff event[33m 3640[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m staff events work; the driver's repeated event updates its one row; staff can't fake a driver event[33m 6732[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a driver event without location is still saved, location null[33m 3793[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a repeated driver event without location keeps the stored location[33m 3539[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a draft or cancelled challan takes no staff event[33m 3967[2mms[22m[39m
    [32mΓ£ô[39m POD file cleanup [2m(1)[22m
-     [33m[2mΓ£ô[22m[39m a file stored but refused by the database is deleted again[33m 3860[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a file stored but refused by the database is deleted again[33m 3732[2mms[22m[39m
    [32mΓ£ô[39m last seen (ping) [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m saves a ping; a second within 5 minutes is ignored; later it saves again; the owner sees it[33m 4855[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a ping on a revoked link is ignored; the owner sees it revoked[33m 5265[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m saves a ping; a second within 5 minutes is ignored; later it saves again; the owner sees it[33m 4652[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a ping on a revoked link is ignored; the owner sees it revoked[33m 4955[2mms[22m[39m
    [32mΓ£ô[39m driver history [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m respects the company's day limit and shows only this driver's own trips[33m 10503[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a revoked or unknown link gets no history[33m 4626[2mms[22m[39m
- [32mΓ£ô[39m db/tests/challan-pod.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 83163[2mms[22m[39m
-   [32mΓ£ô[39m settling a challan [2m(3)[22m
-     [33m[2mΓ£ô[22m[39m settles with zero truck payments, then the settled challan refuses POD changes[33m 13457[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a driver records the POD late ΓåÆ settling applies the late-POD fee[33m 7534[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m settling recomputes the late-POD fee but keeps a manual override's amount[33m 9088[2mms[22m[39m
-   [32mΓ£ô[39m LR POD ΓåÆ challan sync [2m(4)[22m
-     [33m[2mΓ£ô[22m[39m office POD save sets the challan's unloading / POD dates, status and delivered packages[33m 8915[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m more packages than the challan loaded is refused and nothing is saved[33m 4180[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m a driver's POD on their own trip reaches the challan; a settled challan refuses the driver too[33m 7585[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m an LR on no challan saves its POD as before[33m 3790[2mms[22m[39m
-   [32mΓ£ô[39m party-billable POD charges on freight bills [2m(2)[22m
-     [33m[2mΓ£ô[22m[39m a charge can't be billed twice; cancelling its bill makes it billable again[33m 14287[2mms[22m[39m
-     [33m[2mΓ£ô[22m[39m (c) a company B user can't list or bill company A's unbilled charges[33m 8715[2mms[22m[39m
-   [32mΓ£ô[39m charge type bill column [2m(1)[22m
-     [33m[2mΓ£ô[22m[39m bill_column decides the freight-bill column, not the code / label[33m 5456[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m respects the company's day limit and shows only this driver's own trips[33m 9753[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a revoked or unknown link gets no history[33m 4211[2mms[22m[39m
+ [31mΓ¥»[39m db/tests/party-statements.test.ts [2m([22m[2m8 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 34906[2mms[22m[39m
+   [31mΓ¥»[39m owner side: the party's link [2m(2)[22m
+[31m     [31m├ù[31m resend returns the same URL; max one active link; revoke kills it and a new one differs[39m[33m 3692[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m needs master.edit to make / revoke: a driver login is refused; a party with no link has no status[33m 3716[2mms[22m[39m
+   [32mΓ£ô[39m token side: revoked / expired [2m(2)[22m
+     [33m[2mΓ£ô[22m[39m an expired link gets nothing; the owner's next link replaces it[33m 4797[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a revoked or never-issued token gets nothing[33m 3394[2mms[22m[39m
+   [32mΓ£ô[39m statement content [2m(4)[22m
+     [33m[2mΓ£ô[22m[39m party A never sees party B's or another company's data; totals match the raw rows[33m 8245[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m a reversed / cancelled payment, a draft and a cancelled challan don't count[33m 4664[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m no freight, margin or consignor / consignee fields anywhere in the payload[33m 3374[2mms[22m[39m
+     [33m[2mΓ£ô[22m[39m the statement function isn't callable by signed-in users[33m 2880[2mms[22m[39m
 
-[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
-[2m      Tests [22m [1m[32m30 passed[39m[22m[90m (30)[39m
-[2m   Start at [22m 22:05:44
-[2m   Duration [22m 196.67s[2m (tests 97%, import 3%, transform 1%)[22m
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m[1m[41m Failed Tests 2 [49m[22m[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m
 
+[41m[1m FAIL [22m[49m db/tests/driver-links.test.ts[2m > [22mowner side: the driver's link[2m > [22mresend returns the same URL; max 
+one active link; revoke kills it and a new one differs
+[31m[1mAssertionError[22m: expected 'http://localhost:3000/d/6RbmUeLGxZYH_ΓÇª' to match /^https:\/\/lr\.test\/d\/[A-Za-z0-9_-ΓÇª/\[39m
+
+[32m- Expected:[39m
+/^https:\/\/lr\.test\/d\/[A-Za-z0-9_-]{43}$/
+
+[31m+ Received:[39m
+"http://localhost:3000/d/6RbmUeLGxZYH_A1mA6Yf5k2bLFECS6-90D_owjrmiaA"
+
+[36m [2mΓ¥»[22m db/tests/driver-links.test.ts:[2m129:22[22m[39m
+    [90m127|[39m   it("resend returns the same URL; max one active link; revoke kills iΓÇª
+    [90m128|[39m     const { t, driver, link, token } = await setup();
+    [90m129|[39m     expect(link.url).toMatch(/^https:\/\/lr\.test\/d\/[A-Za-z0-9_-]{43ΓÇª
+    [90m   |[39m                      [31m^[39m
+    [90m130|[39m     const again = await dl.getOrCreateDriverLink(t.companyId, driver);
+    [90m131|[39m     expect(again.url).toBe(link.url);
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/2]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m db/tests/party-statements.test.ts[2m > [22mowner side: the party's link[2m > [22mresend returns the same URL; 
+max one active link; revoke kills it and a new one differs
+[31m[1mAssertionError[22m: expected 'http://localhost:3000/s/EaY3IwoRfps81ΓÇª' to match /^https:\/\/lr\.test\/s\/[A-Za-z0-9_-ΓÇª/\[39m
+
+[32m- Expected:[39m
+/^https:\/\/lr\.test\/s\/[A-Za-z0-9_-]{43}$/
+
+[31m+ Received:[39m
+"http://localhost:3000/s/EaY3IwoRfps81__Vh8azwXeG6ljqip9yzYMWlT-uNVk"
+
+[36m [2mΓ¥»[22m db/tests/party-statements.test.ts:[2m150:22[22m[39m
+    [90m148|[39m   it("resend returns the same URL; max one active link; revoke kills iΓÇª
+    [90m149|[39m     const { t, party, link, token } = await setup();
+    [90m150|[39m     expect(link.url).toMatch(/^https:\/\/lr\.test\/s\/[A-Za-z0-9_-]{43ΓÇª
+    [90m   |[39m                      [31m^[39m
+    [90m151|[39m     const again = await ps.getOrCreatePartyStatementLink(t.companyId, ΓÇª
+    [90m152|[39m     expect(again.url).toBe(link.url);
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/2]ΓÄ»[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m26 passed[39m[22m[90m (28)[39m
+[2m   Start at [22m 10:54:00
+[2m   Duration [22m 136.84s[2m (tests 96%, import 3%, transform 1%)[22m
+
+[ELIFECYCLE] Command failed with exit code 1.

@@ -14,6 +14,7 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Everything except the login and register pages, the session-less driver app (/d, /d/*, its icons)
-  // and Next's own files. The driver app's token is its credential (lib/data/driver-links.ts).
-  matcher: ["/((?!login|register|d$|d/|icons/|_next/static|_next/image|favicon.ico).*)"],
+  // the session-less truck-owner statement (/s/*) and Next's own files. The driver app's and the statement's
+  // token is the credential (lib/data/driver-links.ts, lib/data/party-statements.ts).
+  matcher: ["/((?!login|register|d$|d/|s/|icons/|_next/static|_next/image|favicon.ico).*)"],
 };

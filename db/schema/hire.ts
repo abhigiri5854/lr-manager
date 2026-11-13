@@ -585,6 +585,8 @@ export const shareLinks = pgTable(
     companyId: companyId(),
     partyId: uuid("party_id").notNull(),
     tokenHash: text("token_hash").notNull(),
+    /** AES-GCM encrypted token (lib/driver-link.ts) so the owner can resend the same link (0024). */
+    tokenEnc: text("token_enc"),
     expiresAt: ts("expires_at").notNull(),
     revokedAt: ts("revoked_at"),
     lastOpenedAt: ts("last_opened_at"),
@@ -594,6 +596,10 @@ export const shareLinks = pgTable(
   (t) => [
     ...companyFk("share_links_party", t.companyId, t.partyId, truckParties),
     uniqueIndex("share_links_token_key").on(t.tokenHash),
+    // Max one active link per party.
+    uniqueIndex("share_links_active_key")
+      .on(t.companyId, t.partyId)
+      .where(sql`revoked_at is null`),
   ],
 ).enableRLS();
 

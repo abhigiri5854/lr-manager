@@ -26,6 +26,7 @@ import * as items from "./items";
 import * as lrs from "./lrs";
 import * as members from "./members";
 import * as parties from "./parties";
+import * as partyStatements from "./party-statements";
 import * as pod from "./pod";
 import * as trucks from "./trucks";
 import * as uploads from "./uploads";
@@ -160,6 +161,12 @@ const WRITES: Record<string, [Action, () => Promise<unknown>]> = {
   getOrCreateDriverLink: ["master.edit", () => driverLinks.getOrCreateDriverLink(c(), X)],
   revokeDriverLink: ["master.edit", () => driverLinks.revokeDriverLink(c(), X)],
   addStaffTripEvent: ["master.edit", () => driverLinks.addStaffTripEvent(c(), X, "loaded")],
+  // Truck-owner statement links, owner side: master.edit.
+  getOrCreatePartyStatementLink: [
+    "master.edit",
+    () => partyStatements.getOrCreatePartyStatementLink(c(), X),
+  ],
+  revokePartyStatementLink: ["master.edit", () => partyStatements.revokePartyStatementLink(c(), X)],
 };
 
 // SESSION-LESS writes: the driver's link token is the credential (no login, no role). They must
@@ -172,6 +179,8 @@ const SESSIONLESS: Record<string, () => Promise<unknown>> = {
   recordDriverPing: () => driverLinks.recordDriverPing(BAD_TOKEN, 25.6, 85.1, null),
   uploadDriverPod: () =>
     driverLinks.uploadDriverPod(BAD_TOKEN, X, X, { name: "pod.png", type: "image/png", bytes: pngBytes }),
+  // Truck owner's statement link: malformed token refused with the same error.
+  partyStatement: () => partyStatements.partyStatement(BAD_TOKEN),
 };
 
 /** Resolves to true when the call was refused for permissions. */
@@ -189,7 +198,7 @@ describe("every lib/data write checks lib/permissions", () => {
       .flatMap((f) =>
         [
           ...readFileSync(join(dir, f), "utf8").matchAll(
-            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit|submit|approve|mark|reverse|record|settle|reopen|getOrCreate|revoke|addStaff)\w*)/g,
+            /export async function ((?:create|update|cancel|book|dispatch|finalise|invite|upload|change|remove|delete|set|reset|save|apply|commit|submit|approve|mark|reverse|record|settle|reopen|getOrCreate|revoke|addStaff|partyStatement)\w*)/g,
           ),
         ].map((m) => m[1]),
       );
