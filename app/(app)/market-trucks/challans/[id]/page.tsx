@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { cache, Suspense } from "react";
 import { ChallanForm } from "@/components/market-trucks/ChallanForm";
 import { ChallanEwb } from "@/components/market-trucks/ChallanEwb";
 import { ChangeVehicle } from "@/components/market-trucks/ChangeVehicle";
@@ -24,12 +24,15 @@ import { listPaymentsForChallan } from "@/lib/data/truck-payments";
 import { todayInIndia } from "@/lib/fy";
 import { can } from "@/lib/permissions";
 
+/** One read per render: the title and the page body share the same challan. */
+const loadChallan = cache(getChallan);
+
 export async function generateMetadata({
   params,
 }: PageProps<"/market-trucks/challans/[id]">): Promise<Metadata> {
   const { id } = await params;
   try {
-    const challan = await getChallan(await getActiveCompanyId(), id);
+    const challan = await loadChallan(await getActiveCompanyId(), id);
     if (challan) return { title: `Challan ${challan.challanNo}` };
   } catch {
     // fall back to the generic title
@@ -52,7 +55,7 @@ async function Challan({ params }: Pick<PageProps<"/market-trucks/challans/[id]"
   }
   const { id } = await params;
   const companyId = await getActiveCompanyId();
-  const challan = await getChallan(companyId, id);
+  const challan = await loadChallan(companyId, id);
   if (!challan || challan.cancelledAt) notFound();
   const canTrip = can(role, "master.edit");
   const [picks, branches, chargeTypes, payments, settlement, tripEvents, driverRows, ewbTasks] = await Promise.all([
